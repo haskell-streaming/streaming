@@ -1,0 +1,134 @@
+
+
+>>> import Data.List
+>>> :browse
+(\\) :: Eq a => [a] -> [a] -> [a]
+delete :: Eq a => a -> [a] -> [a]
+deleteBy :: (a -> a -> Bool) -> a -> [a] -> [a]
+deleteFirstsBy :: (a -> a -> Bool) -> [a] -> [a] -> [a]
+dropWhileEnd :: (a -> Bool) -> [a] -> [a]
+elemIndex :: Eq a => a -> [a] -> Maybe Int
+elemIndices :: Eq a => a -> [a] -> [Int]
+find :: (a -> Bool) -> [a] -> Maybe a
+findIndex :: (a -> Bool) -> [a] -> Maybe Int
+findIndices :: (a -> Bool) -> [a] -> [Int]
+foldl' :: (b -> a -> b) -> b -> [a] -> b
+foldl1 :: (a -> a -> a) -> [a] -> a
+foldl1' :: (a -> a -> a) -> [a] -> a
+genericDrop :: Integral i => i -> [a] -> [a]
+genericIndex :: Integral i => [a] -> i -> a
+genericLength :: Num i => [a] -> i
+genericReplicate :: Integral i => i -> a -> [a]
+genericSplitAt :: Integral i => i -> [a] -> ([a], [a])
+genericTake :: Integral i => i -> [a] -> [a]
+group :: Eq a => [a] -> [[a]]
+groupBy :: (a -> a -> Bool) -> [a] -> [[a]]
+inits :: [a] -> [[a]]
+insert :: Ord a => a -> [a] -> [a]
+insertBy :: (a -> a -> Ordering) -> a -> [a] -> [a]
+intercalate :: [a] -> [[a]] -> [a]
+intersect :: Eq a => [a] -> [a] -> [a]
+intersectBy :: (a -> a -> Bool) -> [a] -> [a] -> [a]
+intersperse :: a -> [a] -> [a]
+isInfixOf :: Eq a => [a] -> [a] -> Bool
+isPrefixOf :: Eq a => [a] -> [a] -> Bool
+isSuffixOf :: Eq a => [a] -> [a] -> Bool
+lines :: String -> [String]
+mapAccumL :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
+mapAccumR :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
+maximum :: Ord a => [a] -> a
+maximumBy :: (a -> a -> Ordering) -> [a] -> a
+minimum :: Ord a => [a] -> a
+minimumBy :: (a -> a -> Ordering) -> [a] -> a
+nub :: Eq a => [a] -> [a]
+nubBy :: (a -> a -> Bool) -> [a] -> [a]
+partition :: (a -> Bool) -> [a] -> ([a], [a])
+permutations :: [a] -> [[a]]
+product :: Num a => [a] -> a
+sort :: Ord a => [a] -> [a]
+sortBy :: (a -> a -> Ordering) -> [a] -> [a]
+stripPrefix :: Eq a => [a] -> [a] -> Maybe [a]
+subsequences :: [a] -> [[a]]
+sum :: Num a => [a] -> a
+tails :: [a] -> [[a]]
+transpose :: [[a]] -> [[a]]
+unfoldr :: (b -> Maybe (a, b)) -> b -> [a]
+union :: Eq a => [a] -> [a] -> [a]
+unionBy :: (a -> a -> Bool) -> [a] -> [a] -> [a]
+unlines :: [String] -> String
+unwords :: [String] -> String
+unzip4 :: [(a, b, c, d)] -> ([a], [b], [c], [d])
+unzip5 :: [(a, b, c, d, e)] -> ([a], [b], [c], [d], [e])
+unzip6 :: [(a, b, c, d, e, f)] -> ([a], [b], [c], [d], [e], [f])
+unzip7 ::
+  [(a, b, c, d, e, f, g)] -> ([a], [b], [c], [d], [e], [f], [g])
+words :: String -> [String]
+zip4 :: [a] -> [b] -> [c] -> [d] -> [(a, b, c, d)]
+zip5 :: [a] -> [b] -> [c] -> [d] -> [e] -> [(a, b, c, d, e)]
+zip6 ::
+  [a] -> [b] -> [c] -> [d] -> [e] -> [f] -> [(a, b, c, d, e, f)]
+zip7 ::
+  [a]
+  -> [b]
+  -> [c]
+  -> [d]
+  -> [e]
+  -> [f]
+  -> [g]
+  -> [(a, b, c, d, e, f, g)]
+zipWith4 ::
+  (a -> b -> c -> d -> e) -> [a] -> [b] -> [c] -> [d] -> [e]
+zipWith5 ::
+  (a -> b -> c -> d -> e -> f)
+  -> [a] -> [b] -> [c] -> [d] -> [e] -> [f]
+zipWith6 ::
+  (a -> b -> c -> d -> e -> f -> g)
+  -> [a] -> [b] -> [c] -> [d] -> [e] -> [f] -> [g]
+zipWith7 ::
+  (a -> b -> c -> d -> e -> f -> g -> h)
+  -> [a] -> [b] -> [c] -> [d] -> [e] -> [f] -> [g] -> [h]
+(!!) :: [a] -> Int -> a
+(++) :: [a] -> [a] -> [a]
+all :: (a -> Bool) -> [a] -> Bool
+and :: [Bool] -> Bool
+any :: (a -> Bool) -> [a] -> Bool
+break :: (a -> Bool) -> [a] -> ([a], [a])
+concat :: [[a]] -> [a]
+concatMap :: (a -> [b]) -> [a] -> [b]
+cycle :: [a] -> [a]
+drop :: Int -> [a] -> [a]
+dropWhile :: (a -> Bool) -> [a] -> [a]
+elem :: Eq a => a -> [a] -> Bool
+filter :: (a -> Bool) -> [a] -> [a]
+foldl :: (b -> a -> b) -> b -> [a] -> b
+foldr :: (a -> b -> b) -> b -> [a] -> b
+foldr1 :: (a -> a -> a) -> [a] -> a
+head :: [a] -> a
+init :: [a] -> [a]
+iterate :: (a -> a) -> a -> [a]
+last :: [a] -> a
+length :: [a] -> Int
+lookup :: Eq a => a -> [(a, b)] -> Maybe b
+map :: (a -> b) -> [a] -> [b]
+notElem :: Eq a => a -> [a] -> Bool
+null :: [a] -> Bool
+or :: [Bool] -> Bool
+repeat :: a -> [a]
+replicate :: Int -> a -> [a]
+reverse :: [a] -> [a]
+scanl :: (b -> a -> b) -> b -> [a] -> [b]
+scanl1 :: (a -> a -> a) -> [a] -> [a]
+scanr :: (a -> b -> b) -> b -> [a] -> [b]
+scanr1 :: (a -> a -> a) -> [a] -> [a]
+span :: (a -> Bool) -> [a] -> ([a], [a])
+splitAt :: Int -> [a] -> ([a], [a])
+tail :: [a] -> [a]
+take :: Int -> [a] -> [a]
+takeWhile :: (a -> Bool) -> [a] -> [a]
+unzip :: [(a, b)] -> ([a], [b])
+unzip3 :: [(a, b, c)] -> ([a], [b], [c])
+zip :: [a] -> [b] -> [(a, b)]
+zip3 :: [a] -> [b] -> [c] -> [(a, b, c)]
+zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+zipWith3 :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+
