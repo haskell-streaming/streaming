@@ -58,23 +58,23 @@ library
   default-language:    Haskell2010
   ghc-options:      -O2 
   
--- benchmark benchmarks
---     default-language: Haskell2010
---     type:             exitcode-stdio-1.0
---     hs-source-dirs:   benchmarks
---     main-is:          Benchmarks.hs
---     ghc-options:      -O2 -rtsopts -threaded  -ddump-rule-firings
---
---     build-depends:
---       base == 4.*,
---       criterion,
---       transformers,
---       pipes,
---       vector,
---       series,
---       free >=4.9 && <4.11,
---   --    logict,
---       remorse
---   --    fuse
---   -- darcs get http://hub.darcs.net/ertes-ag/fuse
+benchmark benchmarks
+    default-language: Haskell2010
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   benchmarks
+    main-is:          Benchmarks.hs
+    ghc-options:      -O2 -rtsopts -threaded  -ddump-rule-firings
+
+    build-depends:
+      base == 4.*,
+      criterion,
+      transformers,
+      pipes,
+      vector,
+      series,
+      free >=4.9 && <4.13
+  --    logict
+  --    remorse
+  --    fuse
+  -- darcs get http://hub.darcs.net/ertes-ag/fuse
 

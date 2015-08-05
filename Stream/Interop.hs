@@ -20,11 +20,11 @@ producerToStream =  loop where
                Request x f  -> closed x
 
 
-seriesToProducer :: Monad m =>  Stream (Of a) m r -> Producer a m r 
-seriesToProducer = loop where
-  loop = \case Delay m              -> M (liftM loop m)  
+streamToProducer :: Monad m =>  Stream (Of a) m r -> Producer a m r 
+streamToProducer = loop where
+  loop = \case Delay m        -> M (liftM loop m)  
                Step (a :> as) -> Respond a (\() -> loop as)
-               Return r              -> Pure r
+               Return r       -> Pure r
 
 -- -----
 

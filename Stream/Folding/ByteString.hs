@@ -61,7 +61,7 @@ hGet size h =  Folding $ \construct wrap done ->
 stdout :: MonadIO m => Folding (Of ByteString) m () -> m ()
 stdout (Folding phi) = 
   phi (\(bs :> rest) -> 
-         do x  <- liftIO $ try (B.putStr bs)
+         do x  <- liftIO (try (B.putStr bs))
             case x of
                 Left (G.IOError { G.ioe_type  = G.ResourceVanished
                                 , G.ioe_errno = Just ioe })
@@ -74,13 +74,13 @@ stdout (Folding phi) =
 {-# INLINABLE stdout #-}
 
 toHandle :: MonadIO m => IO.Handle -> Folding (Of ByteString) m () -> m ()
-toHandle h = \(Folding phi) ->
+toHandle h (Folding phi) =
   phi (\(bs :> rest) -> liftIO (B.hPut h bs) >> rest)
       join 
       (\_ -> return ())
 {-# INLINE toHandle #-}
 
---
+
 
 -- span
 --     :: Monad m

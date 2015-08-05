@@ -37,9 +37,9 @@ unkurry f = \(a :> b) -> f a b
 
 -- explicit Stream/FreeT data type
 data Stream f m r = Step (f (Stream f m r))
-                 | Delay (m (Stream f m r))
-                 | Return r
-                 deriving (Typeable)
+                  | Delay (m (Stream f m r))
+                  | Return r
+                  deriving (Typeable)
 
 
 deriving instance (Show r, Show (m (Stream f m r))
@@ -121,8 +121,7 @@ instance Applicative (Folding f m) where
                                    (\a -> done (f a))))
 
 instance MonadTrans (Folding f) where
-  lift ma = Folding (\constr wrap done ->
-    wrap (liftM done ma))
+  lift ma = Folding (\constr wrap done -> wrap (liftM done ma))
 
 instance Functor f => MFunctor (Folding f) where
   hoist trans phi = Folding (\construct wrap done ->
@@ -152,15 +151,15 @@ instance (MonadIO m, Functor f) => MonadIO (Folding f m) where
 -- the associated effectfulFolding itself, wrapped as Folding
 
 foldStream  :: (Functor f, Monad m) => Stream f m t -> Folding f m t
-foldStream = \lst -> Folding (\construct wrap done ->
-  let loop = \case Delay mlst      -> wrap (liftM loop mlst)
-                   Step flst -> construct (fmap loop flst)
-                   Return r         -> done r
+foldStream lst = Folding (\construct wrap done ->
+  let loop = \case Delay mlst -> wrap (liftM loop mlst)
+                   Step flst  -> construct (fmap loop flst)
+                   Return r   -> done r
   in  loop lst)
 {-# INLINE[0] foldStream  #-}
 
 buildStream :: Folding f m r -> Stream f m r
-buildStream = \(Folding phi) -> phi Step Delay Return
+buildStream (Folding phi) = phi Step Delay Return
 {-# INLINE[0] buildStream #-}
 
 
@@ -177,14 +176,19 @@ buildStream = \(Folding phi) -> phi Step Delay Return
 -- -------------------------------------
 -- optimization operations: wrapped case
 -- -------------------------------------
+destroy 
+  :: (Functor f, Monad m) =>
+     Stream f m t -> (f b -> b) -> (m b -> b) -> (t -> b) -> b
+destroy = foldStreamx
+{-# INLINE destroy #-}
 
 foldStreamx
   :: (Functor f, Monad m) =>
      Stream f m t -> (f b -> b) -> (m b -> b) -> (t -> b) -> b
 foldStreamx = \lst construct wrap done ->
-   let loop = \case Delay mlst  -> wrap (liftM loop mlst)
-                    Step flst -> construct (fmap loop flst)
-                    Return r     -> done r
+   let loop = \case Delay mlst -> wrap (liftM loop mlst)
+                    Step flst  -> construct (fmap loop flst)
+                    Return r   -> done r
    in  loop lst
 {-# INLINE[1] foldStreamx #-}
 

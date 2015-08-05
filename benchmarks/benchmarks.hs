@@ -4,16 +4,16 @@ module Main (main) where
 
 import Control.Monad (void, forever)
 import Criterion.Main
-import Series.Types
-import Series.Combinators
-import Series.Prelude 
-import qualified Series.FreeT.Prelude as F
-import qualified Series.Prelude.Direct as N 
-import qualified Series.Producer.Prelude as Pr 
-import qualified Series.List.Prelude as L
+import Stream.Types
+import Stream.Combinators
+import Stream.Prelude 
+import qualified Stream.FreeT.Prelude as F
+import qualified Stream.Prelude.Direct as N 
+import qualified Stream.Producer.Prelude as Pr 
+import qualified Stream.List.Prelude as L
 import qualified Control.Monad.Trans.Free as F
-import qualified Remorse.FreeT.Prelude as E
-import qualified Remorse.FreeT as E
+-- import qualified Remorse.FreeT.Prelude as E
+-- import qualified Remorse.FreeT as E
 
 import Prelude hiding (map, filter, drop, take, sum
                       , iterate, repeat, replicate, splitAt
@@ -41,7 +41,7 @@ long_fused  n = runIdentity $ sum (
               (drop 100
                 (map (\x -> 3*x + 1)
                 (filter even
-               ((iterate (\x -> x+1) (10 :: Int) ) :: Series (Of Int) Identity ())
+               ((iterate (\x -> x+1) (10 :: Int) ) :: Stream (Of Int) Identity ())
               )))))  
 {-# INLINE long_fused  #-}
 
@@ -113,17 +113,17 @@ pipe_naive n = runIdentity $
                   >-> PP.drop 100
                   >-> PP.take n
 {-# INLINE pipe_naive #-}
-long_fused_remorse :: Int -> Int
-long_fused_remorse  n = runIdentity $ E.sum_ ( 
-             (E.take n
-              (E.drop 100
-                (E.map (\x -> 3*x + 1)
-                (E.filter even
-               ((E.iterate (\x -> x+1) (10 :: Int) ) :: E.FreeT (E.Of Int) Identity ())
-              )))))  
-{-# INLINE long_fused_remorse  #-}
-
--- -------------------
+-- long_fused_remorse :: Int -> Int
+-- long_fused_remorse  n = runIdentity $ E.sum_ (
+--              (E.take n
+--               (E.drop 100
+--                 (E.map (\x -> 3*x + 1)
+--                 (E.filter even
+--                ((E.iterate (\x -> x+1) (10 :: Int) ) :: E.FreeT (E.Of Int) Identity ())
+--               )))))
+-- {-# INLINE long_fused_remorse  #-}
+--
+-- -- -------------------
 -- longish compositions
 -- -------------------
 longish_naive  :: Int -> Int
@@ -161,15 +161,15 @@ longish_pipe n = runIdentity $
                   >-> PP.take n
 {-# INLINE longish_pipe #-}
 
-longish_remorse :: Int -> Int
-longish_remorse  n = runIdentity $ E.sum_ ( 
-             (E.take n
-              (E.drop 100
-                (E.map (\x -> 3*x + 1)
-               ((E.iterate (\x -> x+1) (10 :: Int) ) :: E.FreeT (E.Of Int) Identity ())
-              ))))
-{-# INLINE longish_remorse  #-}
---
+-- longish_remorse :: Int -> Int
+-- longish_remorse  n = runIdentity $ E.sum_ (
+--              (E.take n
+--               (E.drop 100
+--                 (E.map (\x -> 3*x + 1)
+--                ((E.iterate (\x -> x+1) (10 :: Int) ) :: E.FreeT (E.Of Int) Identity ())
+--               ))))
+-- {-# INLINE longish_remorse  #-}
+-- --
 
 -- -------------------
 -- shortish compositions
@@ -205,24 +205,24 @@ shortish_pipe n = runIdentity $
                   >-> PP.take n
 {-# INLINE shortish_pipe #-}
 
-shortish_remorse :: Int -> Int
-shortish_remorse  n = runIdentity $ E.sum_ ( 
-             (E.take n
-                (E.map (\x -> 3*x + 1)
-               ((E.iterate (\x -> x+1) (10 :: Int) ) :: E.FreeT (E.Of Int) Identity ())
-              )))
-{-# INLINE shortish_remorse  #-}
+-- shortish_remorse :: Int -> Int
+-- shortish_remorse  n = runIdentity $ E.sum_ (
+--              (E.take n
+--                 (E.map (\x -> 3*x + 1)
+--                ((E.iterate (\x -> x+1) (10 :: Int) ) :: E.FreeT (E.Of Int) Identity ())
+--               )))
+-- {-# INLINE shortish_remorse  #-}
 -- -------------------
 -- shorter composition
 -- -------------------
 short_naive :: Int -> Int
-short_naive = \n -> runIdentity $ N.sum (N.take n (N.iterate (\x -> x+1) (10 :: Int) :: Series (Of Int) Identity ()))
+short_naive = \n -> runIdentity $ N.sum (N.take n (N.iterate (\x -> x+1) (10 :: Int) :: Stream (Of Int) Identity ()))
 {-# INLINE short_naive #-}
 short_free :: Int -> Int
 short_free = \n -> runIdentity $ F.sum (F.take n (F.iterate (\x -> x+1) (10 :: Int) :: F.FreeT (Of Int) Identity ()))
 {-# INLINE short_free #-}
 short_fused :: Int -> Int
-short_fused = \n -> runIdentity $ sum (take n (iterate (\x -> x+1) (10 :: Int) :: Series (Of Int) Identity ()))
+short_fused = \n -> runIdentity $ sum (take n (iterate (\x -> x+1) (10 :: Int) :: Stream (Of Int) Identity ()))
 {-# INLINE short_fused #-}
 short_producer :: Int -> Int
 short_producer = \n -> runIdentity $ Pr.sum (Pr.take n (Pr.iterate (\x -> x+1) (10 :: Int) :: Producer Int Identity ()))
