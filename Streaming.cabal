@@ -1,6 +1,6 @@
-name:                stream
+name:                streaming
 version:             0.1.0.0
-synopsis:            Stream is an optimized FreeT
+synopsis:            An optimized FreeT
                      and (consequently) Producer and ListT-like type.
 description:         Stream is an optimized variant of FreeT which 
                      moreover admits a build/foldr style optimization scheme.
@@ -26,17 +26,12 @@ cabal-version:       >=1.10
 
 
 library
-  exposed-modules:     Stream.Combinators, 
-                       Stream.Prelude,
-                       Stream.Prelude.Direct,
-                       Stream.Folding.Prelude, 
-                       Stream.FreeT.Prelude,
-                       Stream.List.Prelude,
-                       Stream.Producer.Prelude,
-                       Stream.Types, 
-                       Stream.ByteString,
-                       Stream.Folding.ByteString, 
-                       Stream.Interop
+  exposed-modules:     Streaming, 
+                       Streaming.Prelude,
+                       Streaming.Internal,
+                       Streaming.Internal.Folding, 
+                       Streaming.Internal.Prelude
+
     -- other-modules:       
   other-extensions:    LambdaCase, RankNTypes, EmptyCase, 
                        StandaloneDeriving, FlexibleContexts, 
@@ -45,36 +40,12 @@ library
                        UndecidableInstances
   
   build-depends:       base >=4.7 && <4.9
-                     , pipes
-                     , foldl
-                     , text
                      , mtl >=2.1 && <2.3
                      , mmorph >=1.0 && <1.2
                      , transformers >=0.3 && <0.5
-                     , free >=4.9 && <4.13
-                     , bytestring
-               --      , remorse
-  
+
   default-language:    Haskell2010
   ghc-options:      -O2 
   
-benchmark benchmarks
-    default-language: Haskell2010
-    type:             exitcode-stdio-1.0
-    hs-source-dirs:   benchmarks
-    main-is:          Benchmarks.hs
-    ghc-options:      -O2 -rtsopts -threaded  -ddump-rule-firings
 
-    build-depends:
-      base == 4.*,
-      criterion,
-      transformers,
-      pipes,
-      vector,
-      series,
-      free >=4.9 && <4.13
-  --    logict
-  --    remorse
-  --    fuse
-  -- darcs get http://hub.darcs.net/ertes-ag/fuse
 
