@@ -30,13 +30,14 @@ There is also a still-incomplete `Prelude` of functions, some
 `FreeT ((,) a) m ()` are possible implementations 
 of `ListT done right`. 
 
--------
--------
+Prelude and build-foldr fusion
+------------------------------
 
-The prelude of functions included here experimentally uses a simple 
-optimization scheme which is modeled on that used in `Data.List`: it
-goes by way of the church encoding of the `Stream` type above, 
-generally newtyped thus:
+
+For the moment, the prelude of functions included here experimentally 
+uses a simple optimization scheme which is modeled on that used in 
+`Data.List`: it goes by way of the church encoding of the `Stream` 
+type above, generally newtyped thus:
 
     newtype Folding f m a = Folding {getFolding::
          forall r. (f r -> r) -> (m r -> r) -> a -> r}
@@ -52,7 +53,7 @@ which is equivalent to
 
 -- just as 
 
-   [a]
+    [a]
    
 is equivalent to 
 
@@ -62,6 +63,8 @@ or
 
     FreeT ((,) a) Identity ()
     
+(A direct implementation can be found in `benchmarks/Stream/Prelude/Direct.hs`.)
+
 The `Data.List` scheme doesn't have the awesome good cases 
 that e.g. stream-fusion optimization has, but it is noteworthy
 for not having bad cases like `concatMap`; it does no harm. 
