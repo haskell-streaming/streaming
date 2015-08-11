@@ -126,8 +126,7 @@ also more reliable than both vector and Data.List (though vector
 is of course much faster where fusion succeeds.) But these cases
 are perhaps somewhat stylized, and in my experience `criterion` is a bit 
 cruel to anything that requires specialization and other optimization. 
-I am surprised though that so far the newtype =
-]wrapping makes the fusion 
+I am surprised though that so far the newtype wrapping makes the fusion 
 rules more reliable.  
 
 One objective is to optimize pipes functions with types like

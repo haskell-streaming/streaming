@@ -8,6 +8,7 @@ module Streaming.Internal where
 
 import Control.Monad
 import Control.Monad.Trans
+import Control.Monad.Trans.Class
 import Control.Applicative
 import Data.Data ( Data, Typeable )
 import Data.Foldable ( Foldable )
@@ -37,7 +38,6 @@ data Stream f m r = Step (f (Stream f m r))
                   | Return r
                   deriving (Typeable)
 
-
 deriving instance (Show r, Show (m (Stream f m r))
                   , Show (f (Stream f m r))) => Show (Stream f m r)
 deriving instance (Eq r, Eq (m (Stream f m r))
@@ -53,9 +53,22 @@ instance (Functor f, Monad m) => Functor (Stream f m) where
 instance (Functor f, Monad m) => Monad (Stream f m) where
   return = Return
   {-# INLINE return #-}
-  (>>=) = flip seriesBind where
-    seriesBind f = buildStream . foldBind (foldStream . f) . foldStream
-    {-# INLINE seriesBind #-}
+  (>>) = \phi psi -> buildStream $ Folding (augmentFolding_ (getFolding (foldStream phi)) 
+                                             (getFolding (foldStream psi)))
+     where
+      augmentFolding_ ::
+           (forall r'.  (f r' -> r') -> (m r' -> r') -> (s -> r') -> r')
+        -> (forall r'.  (f r' -> r') -> (m r' -> r') -> (r -> r') -> r')
+        -> (forall r'.  (f r' -> r') -> (m r' -> r') -> (r -> r') -> r')
+      augmentFolding_ = \phi psi construct wrap done -> 
+                phi construct 
+                    wrap 
+                    (\x  -> psi construct
+                                wrap
+                                done)
+      {-# INLINE augmentFolding_ #-}                  
+  {-# INLINE (>>) #-}                               
+  s >>= f = buildStream (foldBind (foldStream . f) (foldStream s))
   {-# INLINE (>>=) #-}
     -- loop lst where
     -- loop = \case Step f -> Step (fmap loop f)
@@ -65,13 +78,24 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
 instance (Functor f, Monad m) => Applicative (Stream f m) where
   pure = buildStream . return
   {-# INLINE pure #-}
-  (<*>) = ap
+  x <*> y = buildStream $ Folding $ \construct wrap done -> 
+      getFolding (foldStream x) 
+             construct 
+             wrap 
+             (\f ->  getFolding (foldStream y) 
+                        construct 
+                        wrap 
+                        (\s -> done (f s))
+              )
+  {-# INLINE (<*>) #-}    
   
 instance Functor f => MonadTrans (Stream f) where
   lift = buildStream . lift 
+  {-# INLINE lift #-}
 
 instance Functor f => MFunctor (Stream f) where
   hoist trans = buildStream . hoist trans . foldStream
+  {-# INLINE hoist #-}
     -- loop where
     -- loop = \case Step f -> Step (fmap loop f)
     --              Delay m      -> Delay (trans (liftM loop m))
@@ -80,9 +104,13 @@ instance Functor f => MFunctor (Stream f) where
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   liftIO = buildStream . liftIO
   {-# INLINE liftIO #-}
+  
 maps :: (Monad m, Functor f) => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
 maps phi = buildStream . mapsF phi . foldStream
 {-# INLINE maps #-}
+
+
+
 
 -- church encodings:
 -- ----- unwrapped synonym:
@@ -170,11 +198,7 @@ mapsMF morph (Folding phi) = Folding $ \construct wrap done ->
 -- the associated effectfulFolding itself, wrapped as Folding
 
 foldStream  :: (Functor f, Monad m) => Stream f m t -> Folding f m t
-foldStream lst = Folding (\construct wrap done ->
-  let loop = \case Delay mlst -> wrap (liftM loop mlst)
-                   Step flst  -> construct (fmap loop flst)
-                   Return r   -> done r
-  in  loop lst)
+foldStream lst = Folding (destroy lst)
 {-# INLINE[0] foldStream  #-}
 
 buildStream :: Folding f m r -> Stream f m r
@@ -203,7 +227,7 @@ destroy = \lst construct wrap done ->
                     Step flst  -> construct (fmap loop flst)
                     Return r   -> done r 
    in loop lst
-{-# INLINE destroy #-}
+{-# INLINABLE destroy #-}
 
 construct
   :: (forall b . (f b -> b) -> (m b -> b) -> (r -> b) -> b) ->  Stream f m r
@@ -284,3 +308,58 @@ foldList = \xs -> Folding (foldList_ xs)
   "foldList/buildList" forall phi.
     foldList(buildList phi) = phi
     #-}               
+    
+    
+--
+intercalates :: (Monad m, Monad (t m), MonadTrans t) =>
+     t m a -> Stream (t m) m b -> t m b
+intercalates sep = go0
+  where
+    go0 f = case f of 
+      Return r -> return r 
+      Delay m -> lift m >>= go0 
+      Step fstr -> do
+                f' <- fstr
+                go1 f'
+    go1 f = case f of 
+      Return r -> return r 
+      Delay m     -> lift m >>= go1
+      Step fstr ->  do
+                sep
+                f' <- fstr
+                go1 f'
+{-# INLINABLE intercalates #-}
+--
+intercalates' :: (Monad m, Monad (t m), MonadTrans t) =>
+     t m a -> Stream (t m) m b -> t m b
+intercalates' sep s = getFolding (foldStream s)  
+   (\tmstr -> do 
+     str <- tmstr
+     sep
+     str
+     )
+   (join . lift)
+   return
+{-# INLINE intercalates' #-}
+
+iterTM ::
+  (Functor f, Monad m, MonadTrans t,
+   Monad (t m)) =>
+  (f (t m a) -> t m a) -> Stream f m a -> t m a
+iterTM out str = getFolding (foldStream str) out (join . lift) return
+{-# INLINE iterTM #-}
+
+iterT ::
+  (Functor f, Monad m) => (f (m a) -> m a) -> Stream f m a -> m a
+iterT out str = getFolding (foldStream str) out join return
+{-# INLINE iterT #-}
+
+concats ::
+    (MonadTrans t, Monad (t m), Monad m) =>
+    Stream (t m) m a -> t m a
+concats str = getFolding (foldStream str) join (join . lift) return
+{-# INLINE concats #-}
+
+--
+-- intersperseT ::
+--   (Monad m, Functor f) => f a -> Stream f m b -> Stream f m b

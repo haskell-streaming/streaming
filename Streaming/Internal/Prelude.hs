@@ -1,7 +1,6 @@
 {-# LANGUAGE LambdaCase, RankNTypes, ScopedTypeVariables #-}
 module Streaming.Internal.Prelude 
-  (concats, 
-   cons, 
+  (cons, 
    drop, 
    filter,
    filterM,
@@ -32,29 +31,11 @@ import Prelude hiding (map, filter, drop, take, sum
                       , iterate, repeat, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo
                       , mapM, scanr, span, break)
-
+import GHC.Magic (oneShot)
 -- ---------------
 -- Prelude
 -- ---------------
 -- ---------------
-
--- ------
--- concats
--- ------
-
-concats_ :: Monad m =>  Stream (Folding (Of a) m) m r -> Stream (Of a) m r
-concats_  = buildStream 
-                . F.concats 
-                . foldStream
-{-# INLINE concats_ #-}
-
-concats :: Monad m =>  Stream (Stream (Of a) m) m r -> Stream (Of a) m r
-concats  = buildStream 
-                . F.concats 
-                . (\(Folding phi) -> 
-                       Folding (\c w d -> phi (c . foldStream) w d))
-                . foldStream
-{-# INLINE concats #-}
 
 
 -- ------
@@ -76,7 +57,11 @@ yield = buildStream . F.yield
 -- foldl'
 -- -------
 foldl' :: Monad m => forall a b . (b -> a -> b) -> b -> Stream (Of a) m r -> m b
-foldl' op b0 = F.foldl op b0 . foldStream 
+foldl' op b0 s = getFolding (foldStream s)
+      (\(a :> fn) -> oneShot (\b -> b `seq` (fn $! op b a)))
+      (\mf b -> mf >>= \f -> f b)
+      (\_ b -> return $! b)
+      b0
 {-# INLINE foldl' #-}
 
 -- -------
@@ -115,7 +100,7 @@ replicateM n a = buildStream (F.replicateM n a)
 -- iterate
 -- ---------------
 
-iterate :: (a -> a) -> a -> Stream (Of a) m r
+iterate :: Monad m => (a -> a) -> a -> Stream (Of a) m r
 iterate f  = buildStream . F.iterate f 
 {-# INLINE iterate #-}
 

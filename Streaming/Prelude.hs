@@ -1,7 +1,6 @@
 {-# LANGUAGE LambdaCase, RankNTypes, ScopedTypeVariables #-}
 module Streaming.Prelude 
-  (concats, 
-   cons, 
+  (cons, 
    drop, 
    filter,
    filterM,
@@ -11,7 +10,6 @@ module Streaming.Prelude
    iterateM,
    map,
    mapM,
-   maps,
    repeat,
    repeatM,
    replicate,
@@ -38,24 +36,6 @@ import Prelude hiding (map, filter, drop, take, sum
 -- Prelude
 -- ---------------
 -- ---------------
-
--- ------
--- concats
--- ------
-
-concats_ :: Monad m =>  Stream (Folding (Of a) m) m r -> Stream (Of a) m r
-concats_  = buildStream 
-                . F.concats 
-                . foldStream
-{-# INLINE concats_ #-}
-
-concats :: Monad m =>  Stream (Stream (Of a) m) m r -> Stream (Of a) m r
-concats  = buildStream 
-                . F.concats 
-                . (\(Folding phi) -> 
-                       Folding (\c w d -> phi (c . foldStream) w d))
-                . foldStream
-{-# INLINE concats #-}
 
 
 -- ------
@@ -96,7 +76,7 @@ scanr op b = buildStream
 -- ---------------
 
 sum :: (Monad m, Num a) => Stream (Of a) m () -> m a
-sum  = F.sum . foldStream 
+sum  = foldl' (+) 0
 {-# INLINE sum #-}
 
 
@@ -116,7 +96,7 @@ replicateM n a = buildStream (F.replicateM n a)
 -- iterate
 -- ---------------
 
-iterate :: (a -> a) -> a -> Stream (Of a) m r
+iterate :: Monad m => (a -> a) -> a -> Stream (Of a) m r
 iterate f  = buildStream . F.iterate f 
 {-# INLINE iterate #-}
 

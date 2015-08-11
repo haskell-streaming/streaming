@@ -28,15 +28,17 @@ module Streaming.Internal.Folding (
     , take
     , takeWhile
     , yield ) where
-import Streaming.Internal
+import Streaming.Internal hiding (concats)
 import Control.Monad hiding (filterM, mapM, replicateM)
 import Data.Functor.Identity
 import Control.Monad.Trans
+import Control.Monad.Trans.Class
 import qualified System.IO as IO
 import Prelude hiding (map, filter, drop, take, sum
                       , iterate, repeat, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo
                       , mapM, scanr, span, break, foldl)
+import GHC.Magic (oneShot)
 -- ---------------
 -- ---------------
 -- Prelude
@@ -83,12 +85,17 @@ replicateM n a = Folding (take_ (repeatM_ a) n)
 iterate_ :: (a -> a) -> a -> Folding_ (Of a) m r
 iterate_ f a = \construct wrap done -> 
        construct (a :> iterate_ f (f a) construct wrap done) 
-{-# INLINE iterate_ #-}
+{-# INLINABLE iterate_ #-}
 
-iterate :: (a -> a) -> a -> Folding (Of a) m r
-iterate f a = Folding (iterate_ f a)
+iterate :: Monad m => (a -> a) -> a -> Folding (Of a) m r
+iterate f a = foldStream (iterateS f a)
 {-# INLINE iterate #-}
 
+
+iterateS :: Monad m => (a -> a) -> a -> Stream (Of a) m r
+iterateS f = loop where
+  loop a = Step (a :> loop (f a))
+{-# INLINABLE iterateS #-}
 
 iterateM_ :: Monad m => (a -> m a) -> m a -> Folding_ (Of a) m r
 iterateM_ f ma = \construct wrap done -> 
@@ -183,6 +190,10 @@ drop_ phi n0 = \construct wrap done ->
 -- ---------------
 -- concats concat/join
 -- ---------------
+retractT ::
+  (MonadTrans t, Monad (t m), Monad m) =>
+  Folding (t m) m a -> t m a
+retractT (Folding phi) = phi join (join . lift) return
 
 concats :: Monad m => Folding (Folding (Of a) m) m r -> Folding (Of a) m r
 concats (Folding phi) = Folding $ \construct wrap done ->
@@ -302,12 +313,15 @@ lenumFromStepN start step n = \construct wrap done ->
 
 foldl_ ::  Monad m => Folding_ (Of a) m r -> (b -> a -> b) -> b -> m b
 foldl_ phi = \ op b0 ->  
-  phi (\(a :> fn) b -> fn $! flip op a $! b)
+  phi (\(a :> fn) -> oneShot (\b -> b `seq` (fn $! (flip op a $! b))))
       (\mf b -> mf >>= \f -> f b)
       (\_ b -> return $! b)
       b0
 {-# INLINE foldl_ #-}
---
+--   foldr (\(v::a) (fn::b->b) ->  oneShot (\(z::b) -> z `seq` fn (k z v))) 
+--          (id :: b -> b) 
+--          xs z0
+
 foldl ::  Monad m => (b -> a -> b) -> b -> Folding (Of a) m r ->  m b
 foldl op b = \(Folding phi) -> foldl_ phi op b
 {-# INLINE foldl #-}
@@ -457,4 +471,3 @@ j ffolding =
   Folding $ \cons w nil -> 
        cons $ fmap (\f -> getFolding f cons w (\(Folding psi) -> psi cons w nil)) 
               ffolding
-
