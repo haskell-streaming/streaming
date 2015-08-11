@@ -1,15 +1,40 @@
-stream
-======
+streaming
+=========
 
-This library defines two types, a simple FreeT, for use with
-streaming libraries
+This library defines an optimized `FreeT` with an eye to use with 
+streaming libraries, namely:
 
     data Stream f m r
          = Return r
          | Step !(f (Stream f m r))
          | Delay (m (Stream f m r))
 
-and newtypes its church encoding
+in place of the standard version in the `free` library, which 
+is approximately: 
+
+    newtype FreeT f m r = FreeT {runFreeT :: m (Either r (f (FreeT f m r)))}
+
+Such an optimization is adopted internally by the `pipes` library. 
+
+The maneuver is very friendly to the compiler, but requires a bit of 
+subtlety to protect a sound monad instance: as in `pipes`, 
+the constructors are here left in an `Internal` module; 
+the main `Streaming` module exporting the type itself and various 
+operations and instances. 
+
+There is also a still-incomplete `Prelude` of functions, some 
+`FreeT` or `Stream` - general, some involving the functor 
+`((,) a)` here called `Of a`.  `FreeT ((,) a) m r` or `Stream (Of a) m r`
+is equivalent to the `pipes` `Producer a m r` type, as
+`FreeT ((,) a) m ()` or `Stream (Of a) m ()` are equivalent
+to the various implementations of `ListT done right`. 
+
+-------
+
+The prelude of functions included here experimentally uses a simple 
+optimization scheme which is modeled on that used in `Data.List`: it
+goes by way of the church encoding of the `Stream` type above, 
+generally newtyped thus:
 
     newtype Folding f m a = Folding {getFolding::
          forall r. (f r -> r) -> (m r -> r) -> a -> r}
@@ -23,8 +48,19 @@ which is equivalent to
 
     Folding ((,) a) Identity ()
 
-This library defines a `Prelude` of functions on `Folding` especially
-`Folding (Of a) m r`.  The hope is to employ this type for a fairly
+as 
+
+   [a]
+   
+is equivalent to 
+
+    Stream (Of a) Identity ()
+    
+or 
+
+    FreeT ((,) a) Identity ()
+    
+The hope is to employ this type for a fairly
 straightforward optimization of a number of types of the `ListT` 
 and `Producer` sort, using the almost-correct equivalences
 
@@ -36,9 +72,7 @@ and a number of potential others, e.g. `LogicT`, `Conduit.Source`, etc
 which are equivalent to `Folding ((,) a) m ()`. The `Stream` type 
 defined here is an attempt at an optimized `FreeT` aimed
 at improving the pipes usage `FreeT (Producer a m) m r` and
-the like. (Some decisions have been made homogeneous with 
-`ertes`'s similarly motivated [`fuse` package](http://hub.darcs.net/ertes/fuse), 
-which calls it `FreeT` replacement `List`; it may be more interesting.)
+the like. 
 
 In each of the `Prelude`s included here, operations with types like
 
@@ -53,7 +87,6 @@ are implemented as
      buildFreeT . f_folding . foldFreeT
      buildStream . f_folding . foldStream
      buildList . f_folding . foldList
-     
 
 where `f_folding` is the appropriate function of `Folding`s. The different
 `Prelude` s thus differ mostly by find-and-replace. Functions that enter or
@@ -93,7 +126,7 @@ I am surprised though that so far the newtype =
 ]wrapping makes the fusion 
 rules more reliable.  
 
-The real objective is to optimize pipes functions with types like
+One objective is to optimize pipes functions with types like
 
      lines :: Monad m 
            => Producer ByteString m r 
