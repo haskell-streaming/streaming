@@ -100,9 +100,15 @@ replicateM n a = buildStream (F.replicateM n a)
 -- iterate
 -- ---------------
 
+
+
 iterate :: Monad m => (a -> a) -> a -> Stream (Of a) m r
-iterate f  = buildStream . F.iterate f 
-{-# INLINE iterate #-}
+iterate f = loop where
+  loop a = Step (a :> loop (f a))
+{-# INLINABLE iterate #-}
+-- iterate :: Monad m => (a -> a) -> a -> Stream (Of a) m r
+-- iterate f  = buildStream . F.iterate f
+-- {-# INLINE iterate #-}
 
 iterateM :: Monad m => (a -> m a) -> m a -> Stream (Of a) m r
 iterateM = \f m -> buildStream (F.iterateM f m)

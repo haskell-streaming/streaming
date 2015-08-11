@@ -229,7 +229,11 @@ joinFold (Folding phi) = Folding $ \c w d ->
 -- ---------------
 
 map :: Monad m => (a -> b) -> Folding (Of a) m r -> Folding (Of b) m r
-map f = \(Folding phi) -> Folding (map_ phi f)
+map f0 = \(Folding phi) -> Folding $ \construct wrap done -> 
+      phi (\(a :> x) f -> construct (f a :> x f)) 
+          (\mf f -> wrap (liftM ($f) mf))
+          (\r f -> done r)
+          f0
 {-# INLINE map #-}
 
 
@@ -318,6 +322,15 @@ foldl_ phi = \ op b0 ->
       (\_ b -> return $! b)
       b0
 {-# INLINE foldl_ #-}
+
+
+fold_ ::  Monad m => Folding_ (Of a) m r -> (x -> a -> x) -> x -> (x -> b) -> m b
+fold_ phi = \ op b0 out ->  liftM out $ 
+  phi (\(a :> fn) -> oneShot (\b -> b `seq` (fn $! (flip op a $! b))))
+      (\mf b -> mf >>= \f -> f b)
+      (\_ b -> return $! b)
+      b0
+{-# INLINE fold_ #-}
 --   foldr (\(v::a) (fn::b->b) ->  oneShot (\(z::b) -> z `seq` fn (k z v))) 
 --          (id :: b -> b) 
 --          xs z0

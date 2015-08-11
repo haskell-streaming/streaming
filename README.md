@@ -24,11 +24,13 @@ operations and instances.
 
 There is also a still-incomplete `Prelude` of functions, some 
 `FreeT` or `Stream` - general, some involving the functor 
-`((,) a)` here called `Of a`.  `FreeT ((,) a) m r` or `Stream (Of a) m r`
-is equivalent to the `pipes` `Producer a m r` type, as
-`FreeT ((,) a) m ()` or `Stream (Of a) m ()` are equivalent
-to the various implementations of `ListT done right`. 
+`((,) a)` here called `Of a`. (`Stream (Of a) m r` like
+`FreeT ((,) a) m r` is equivalent to the `pipes` 
+`Producer a m r` type. Similarly, `Stream (Of a) m ()` and 
+`FreeT ((,) a) m ()` are possible implementations 
+of `ListT done right`. 
 
+-------
 -------
 
 The prelude of functions included here experimentally uses a simple 
