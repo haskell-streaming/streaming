@@ -63,6 +63,10 @@ or
     
 (A direct implementation can be found in `benchmarks/Stream/Prelude/Direct.hs`.)
 
+If there is an advantage in this scheme it is not that we avoid
+'constructing' the streams in question, but just that it is possible
+to give non-recursive definitions of so many functions this way.
+
 The `Data.List` scheme doesn't have the awesome good cases 
 that e.g. stream-fusion optimization has, but it is noteworthy
 for not having bad cases like `concatMap`; it does no harm. 
