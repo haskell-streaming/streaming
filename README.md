@@ -39,8 +39,8 @@ generally newtyped thus:
     newtype Folding f m a = Folding {getFolding::
          forall r. (f r -> r) -> (m r -> r) -> a -> r}
 
-for use with a simple foolproof optimization scheme. The latter wraps 
-and generalizes the unwrapped type GHC uses to  optimize `Data.List`
+The latter wraps and generalizes the unwrapped type GHC uses to 
+optimize `Data.List`
 
     forall r . (a -> r -> r) -> r -> r
 
@@ -48,7 +48,7 @@ which is equivalent to
 
     Folding ((,) a) Identity ()
 
-as 
+-- just as 
 
    [a]
    
@@ -60,9 +60,12 @@ or
 
     FreeT ((,) a) Identity ()
     
-The hope is to employ this type for a fairly
-straightforward optimization of a number of types of the `ListT` 
-and `Producer` sort, using the almost-correct equivalences
+The `Data.List` scheme doesn't have the awesome good cases 
+that e.g. stream-fusion optimization has, but it is noteworthy
+for not having bad cases like `concatMap`; it does no harm. 
+The hope is to employ this type for a fairly straightforward 
+optimization of a number of types of the `ListT` and `Producer` 
+sort, using the almost-correct equivalences
 
      Producer a m r ~ Folding ((,) a) m r
      FreeT f m r  ~ Folding f m r
@@ -72,9 +75,10 @@ and a number of potential others, e.g. `LogicT`, `Conduit.Source`, etc
 which are equivalent to `Folding ((,) a) m ()`. The `Stream` type 
 defined here is an attempt at an optimized `FreeT` aimed
 at improving the pipes usage `FreeT (Producer a m) m r` and
-the like. 
+the like. Some experimentation along these lines is included in
+the ancillary modules in the `benchmarks` directory here. 
 
-In each of the `Prelude`s included here, operations with types like
+In each of the `Prelude`s included there, operations with types like
 
      f_producer :: Producer a m r -> Producer b m z
      f_freet :: FreeT f m r -> FreeT g m s
