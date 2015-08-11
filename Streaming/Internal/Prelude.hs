@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase, RankNTypes, ScopedTypeVariables #-}
-module Streaming.Internal.Prelude 
-  (cons, 
-   drop, 
+module Streaming.Internal.Prelude
+  (cons,
+   drop,
    filter,
    filterM,
    foldl',
@@ -14,8 +14,8 @@ module Streaming.Internal.Prelude
    repeatM,
    replicate,
    scanr,
-   span, 
-   splitAt, 
+   span,
+   splitAt,
    sum,
    take,
    takeWhile,
@@ -41,7 +41,7 @@ import GHC.Magic (oneShot)
 -- ------
 -- cons
 -- ------
-cons :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r 
+cons :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
 cons a = buildStream . F.cons a . foldStream
 {-# INLINE cons #-}
 
@@ -69,23 +69,23 @@ foldl' op b0 s = getFolding (foldStream s)
 -- -------
 
 scanr :: Monad m => (a -> b -> b) -> b -> Stream (Of a) m r -> Stream (Of b) m r
-scanr op b = buildStream 
+scanr op b = buildStream
            . F.scanr op b
-           . foldStream 
+           . foldStream
 {-# INLINE scanr #-}
 
 
 -- ---------------
--- sum 
+-- sum
 -- ---------------
 
 sum :: (Monad m, Num a) => Stream (Of a) m () -> m a
-sum  = F.sum . foldStream 
+sum  = F.sum . foldStream
 {-# INLINE sum #-}
 
 
 -- ---------------
--- replicate 
+-- replicate
 -- ---------------
 
 replicate :: Monad m => Int -> a -> Stream (Of a) m ()
@@ -119,7 +119,7 @@ iterateM = \f m -> buildStream (F.iterateM f m)
 -- ---------------
 
 repeat :: a -> Stream (Of a) m r
-repeat = buildStream . F.repeat 
+repeat = buildStream . F.repeat
 {-# INLINE repeat #-}
 
 repeatM :: Monad m => m a -> Stream (Of a) m r
@@ -127,10 +127,10 @@ repeatM = buildStream . F.repeatM
 {-# INLINE repeatM #-}
 
 -- ---------------
--- filter 
+-- filter
 -- ---------------
 
-filter  :: (Monad m) => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r               
+filter  :: (Monad m) => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r      
 filter pred = buildStream . F.filter pred . foldStream
 {-# INLINE filter #-}
 
@@ -157,7 +157,7 @@ take n = buildStream . F.take n . foldStream
 {-# INLINE take #-}
 
 takeWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m ()
-takeWhile pred = buildStream . F.takeWhile pred . foldStream 
+takeWhile pred = buildStream . F.takeWhile pred . foldStream
 {-# INLINE takeWhile #-}
 
 -- ---------------
@@ -173,45 +173,45 @@ mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapM f = buildStream . F.mapM f . foldStream
 {-# INLINE mapM #-}
 
-span :: Monad m => (a -> Bool) -> Stream (Of a) m r 
+span :: Monad m => (a -> Bool) -> Stream (Of a) m r
       -> Stream (Of a) m (Stream (Of a) m r)
-span pred = 
-  buildStream 
+span pred =
+  buildStream
   . fmap buildStream
   . F.span pred
   . foldStream
 {-# INLINE span #-}
 
 
-break :: Monad m => (a -> Bool) -> Stream (Of a) m r 
+break :: Monad m => (a -> Bool) -> Stream (Of a) m r
       -> Stream (Of a) m (Stream (Of a) m r)
-break pred = 
-  buildStream 
+break pred =
+  buildStream
   . fmap buildStream
   . F.span (not . pred)
   . foldStream
 {-# INLINE break #-}
 
-splitAt :: (Monad m, Functor f) 
-         => Int 
-         -> Stream f m r 
+splitAt :: (Monad m, Functor f)
+         => Int
+         -> Stream f m r
          -> Stream f m (Stream f m r)
-splitAt n = 
-   buildStream 
+splitAt n =
+   buildStream
    . fmap buildStream
    . F.splitAt n
-   . foldStream 
+   . foldStream
 {-# INLINE splitAt #-}
 
-splitAt_ :: (Monad m) 
-         => Int 
-         -> Stream (Of a) m r 
+splitAt_ :: (Monad m)
+         => Int
+         -> Stream (Of a) m r
          -> Stream (Of a) m (Stream (Of a) m r)
-splitAt_ n = 
-   buildStream 
+splitAt_ n =
+   buildStream
    . fmap buildStream
    . F.splitAt_ n
-   . foldStream 
+   . foldStream
 {-# INLINE splitAt_ #-}
 
 enumFrom n = buildStream (Folding (F.lenumFrom n))
@@ -230,10 +230,10 @@ enumFromStepN start step n = buildStream (Folding (F.lenumFromStepN start step n
 
 -- stdinLn = Delay loop where
 --   loop = getLine >>= \str -> return (Step (str :> Delay loop))
--- 
--- jstdinLn = \construct wrap done -> 
+--
+-- jstdinLn = \construct wrap done ->
 --      let loop = wrap $ getLine >>= \str -> return (construct (str :> loop))
---      in loop 
+--      in loop
 --
 stdinLn :: MonadIO m => Stream (Of String) m ()
 stdinLn = fromHandle IO.stdin
@@ -257,7 +257,7 @@ fromHandle h = go
             str <- liftIO $ IO.hGetLine h
             yield str
             go
-{-# INLINABLE fromHandle #-}     
+{-# INLINABLE fromHandle #-}
 
 
  
