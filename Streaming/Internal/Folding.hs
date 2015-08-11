@@ -16,7 +16,6 @@ module Streaming.Internal.Folding (
     , joinFold
     , map
     , mapM
-    , maps
     , repeat
     , repeatM
     , replicate
@@ -246,11 +245,6 @@ mapM f = \(Folding phi) -> Folding (mapM__ phi f)
     {-# INLINE mapM__ #-}
 {-# INLINE mapM #-}
 
-maps :: (Monad m, Functor g) => (forall x . f x -> g x) -> Folding f m r -> Folding g m r
-maps morph (Folding phi) = Folding $ \construct wrap done -> 
-    phi (construct . morph)
-        wrap
-        done
 -- ---------------
 -- take
 -- ---------------
@@ -374,7 +368,6 @@ cons a_ (Folding phi)  = Folding $ \construct wrap done ->
 
 span :: Monad m => (a -> Bool) -> Folding (Of a) m r 
       -> Folding (Of a) m (Folding (Of a) m r)
-
 span pred0 (Folding phi)  = 
   phi 
   (\ (a :> folding) -> 
@@ -430,7 +423,8 @@ splitAt_ m (Folding phi)  =
   m
 {-# INLINE splitAt_ #-}
 
-splitAt :: (Monad m, Functor f) => Int -> Folding f m r 
+splitAt :: (Monad m, Functor f) 
+        => Int -> Folding f m r 
         -> Folding f m (Folding f m r)
 splitAt m (Folding phi)  =  
   phi 

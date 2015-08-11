@@ -183,10 +183,6 @@ mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapM f = buildStream . F.mapM f . foldStream
 {-# INLINE mapM #-}
 
-maps:: (Monad m, Functor f, Functor g) => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
-maps morph = buildStream . F.maps morph . foldStream
-{-# INLINE maps #-}
-
 
 span :: Monad m => (a -> Bool) -> Stream (Of a) m r 
       -> Stream (Of a) m (Stream (Of a) m r)

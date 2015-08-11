@@ -44,10 +44,11 @@ deriving instance (Eq r, Eq (m (Stream f m r))
                   , Eq (f (Stream f m r))) => Eq (Stream f m r)
 
 instance (Functor f, Monad m) => Functor (Stream f m) where
-  fmap f = loop where
-    loop = \case Step f  -> Step (fmap loop f)
-                 Delay m       -> Delay (liftM loop m)
-                 Return r       -> Return (f r)
+  fmap f = buildStream . fmap f . foldStream
+  {-# INLINE fmap #-}
+    -- loop = \case Step f  -> Step (fmap loop f)
+    --              Delay m       -> Delay (liftM loop m)
+    --              Return r       -> Return (f r)
 
 instance (Functor f, Monad m) => Monad (Stream f m) where
   return = Return
@@ -62,19 +63,26 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
     --              Return r      -> f r
 
 instance (Functor f, Monad m) => Applicative (Stream f m) where
-  pure = Return; (<*>) = ap
-
+  pure = buildStream . return
+  {-# INLINE pure #-}
+  (<*>) = ap
+  
 instance Functor f => MonadTrans (Stream f) where
-  lift = Delay . liftM Return
+  lift = buildStream . lift 
 
 instance Functor f => MFunctor (Stream f) where
-  hoist trans = loop where
-    loop = \case Step f -> Step (fmap loop f)
-                 Delay m      -> Delay (trans (liftM loop m))
-                 Return r      -> Return r
+  hoist trans = buildStream . hoist trans . foldStream
+    -- loop where
+    -- loop = \case Step f -> Step (fmap loop f)
+    --              Delay m      -> Delay (trans (liftM loop m))
+    --              Return r      -> Return r
 
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
-  liftIO = Delay . liftM Return . liftIO
+  liftIO = buildStream . liftIO
+  {-# INLINE liftIO #-}
+maps :: (Monad m, Functor f) => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
+maps phi = buildStream . mapsF phi . foldStream
+{-# INLINE maps #-}
 
 -- church encodings:
 -- ----- unwrapped synonym:
@@ -118,17 +126,32 @@ instance Applicative (Folding f m) where
 
 instance MonadTrans (Folding f) where
   lift ma = Folding (\constr wrap done -> wrap (liftM done ma))
-
+  {-# INLINE lift #-}
+  
 instance Functor f => MFunctor (Folding f) where
   hoist trans phi = Folding (\construct wrap done ->
     getFolding phi construct (wrap . trans) done)
-
+  {-# INLINE hoist #-}
 instance (MonadIO m, Functor f) => MonadIO (Folding f m) where
   liftIO io = Folding (\construct wrap done ->
              wrap (liftM done (liftIO io))
                 )
   {-# INLINE liftIO #-}
 
+
+mapsF :: (Monad m, Functor f) => (forall x . f x -> g x) -> Folding f m r -> Folding g m r
+mapsF morph (Folding phi) = Folding $ \construct wrap done -> 
+    phi (construct . morph)
+        wrap
+        done
+{-# INLINE mapsF #-}
+
+mapsMF :: (Monad m, Functor g) => (forall x . f x -> m (g x)) -> Folding f m r -> Folding g m r
+mapsMF morph (Folding phi) = Folding $ \construct wrap done -> 
+    phi (wrap . liftM construct . morph)
+        wrap
+        done
+{-# INLINE mapsMF #-}
 -- -------------------------------------
 -- optimization operations: wrapped case
 -- -------------------------------------
