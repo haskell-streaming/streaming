@@ -11,6 +11,10 @@ module Streaming.Internal.Folding (
     , filter
     , filterM
     , foldl
+    , fold
+    , fold'
+    , foldM
+    , foldM'
     , iterate
     , iterateM
     , joinFold
@@ -29,7 +33,7 @@ module Streaming.Internal.Folding (
     , takeWhile
     , yield ) where
 import Streaming.Internal hiding (concats)
-import Control.Monad hiding (filterM, mapM, replicateM)
+import Control.Monad hiding (filterM, mapM, replicateM,foldM)
 import Data.Functor.Identity
 import Control.Monad.Trans
 import Control.Monad.Trans.Class
@@ -39,6 +43,7 @@ import Prelude hiding (map, filter, drop, take, sum
                       , takeWhile, enumFrom, enumFromTo
                       , mapM, scanr, span, break, foldl)
 import GHC.Magic (oneShot)
+import GHC.Exts
 -- ---------------
 -- ---------------
 -- Prelude
@@ -178,7 +183,7 @@ jdrop = \m phi construct wrap done ->
 {-# INLINE jdrop #-}
 
 drop_ :: Monad m => Folding_ (Of a) m r -> Int -> Folding_ (Of a) m r
-drop_ phi n0 = \construct wrap done ->
+drop_ phi = \n0 construct wrap done ->
    phi
     (\(a :> fn) n -> if n >= 0 then fn (n-1) else construct (a :> (fn (n-1))))
     (\m n -> wrap (m >>= \fn -> return (fn n)))
@@ -325,19 +330,60 @@ foldl_ phi = \ op b0 ->
 
 
 fold_ ::  Monad m => Folding_ (Of a) m r -> (x -> a -> x) -> x -> (x -> b) -> m b
-fold_ phi = \ op b0 out ->  liftM out $
-  phi (\(a :> fn) -> oneShot (\b -> b `seq` (fn $! (flip op a $! b))))
+fold_ phi = \ step begin done ->  liftM done $
+  phi (\(a :> fn) -> oneShot (\b -> b `seq` (fn $! (flip step a $! b))))
       (\mf b -> mf >>= \f -> f b)
       (\_ b -> return $! b)
-      b0
+      begin                 
 {-# INLINE fold_ #-}
---   foldr (\(v::a) (fn::b->b) ->  oneShot (\(z::b) -> z `seq` fn (k z v)))
---          (id :: b -> b)
---          xs z0
+
+fold'_ ::  Monad m => Folding_ (Of a) m r -> (x -> a -> x) -> x -> (x -> b) -> m (b, r)
+fold'_ phi = \ step begin done ->  do 
+    phi (\(a :> fn) -> oneShot (\b -> b `seq` (fn $! (flip step a $! b))))
+                  (\mf b -> mf >>= \f -> f b)
+                  (\r b -> return $! (done b, r))
+                  begin
+{-# INLINE fold'_ #-}
+
+foldM__ ::  Monad m => Folding_ (Of a) m r -> (x -> a -> m x) -> m x -> (x -> m b) -> m b
+foldM__ phi = \ step begin done ->  do
+  q <- begin
+  x' <- phi (\(a :> fn) -> oneShot (\b -> b `seq` ((flip step a $! b) >>= fn)))
+            (\mf b -> mf >>= \f -> f b)
+            (\_ x -> return $! x) q
+  done x'
+{-# INLINE foldM__ #-}
+
+foldM'_ ::  Monad m => Folding_ (Of a) m r -> (x -> a -> m x) -> m x -> (x -> m b) -> m (b,r)
+foldM'_ phi = \ step begin done ->  do
+  q <- begin
+  (x',r) <- phi (\(a :> fn) -> oneShot (\b -> b `seq` ((flip step a $! b) >>= fn)))
+            (\mf b -> mf >>= \f -> f b)
+            (\r x -> return $! (x, r)) q
+  b <- done x'
+  return (b, r)
+{-# INLINE foldM'_ #-}
 
 foldl ::  Monad m => (b -> a -> b) -> b -> Folding (Of a) m r ->  m b
 foldl op b = \(Folding phi) -> foldl_ phi op b
 {-# INLINE foldl #-}
+
+fold ::  Monad m => (x -> a -> x) -> x -> (x -> b) -> Folding (Of a) m r ->  m b
+fold step begin done = \(Folding phi) -> fold_ phi step begin done
+{-# INLINE fold #-}
+
+fold' ::  Monad m => (x -> a -> x) -> x -> (x -> b) -> Folding (Of a) m r ->  m (b,r)
+fold' step begin done = \(Folding phi) -> fold'_ phi step begin done
+{-# INLINE fold' #-}
+
+
+foldM ::  Monad m => (x -> a -> m x) -> m x -> (x -> m b) -> Folding (Of a) m r ->  m b
+foldM step begin done = \(Folding phi) -> foldM__ phi step begin done
+{-# INLINE foldM #-}
+
+foldM' ::  Monad m => (x -> a -> m x) -> m x -> (x -> m b) -> Folding (Of a) m r ->  m (b, r)
+foldM' step begin done = \(Folding phi) -> foldM'_ phi step begin done
+{-# INLINE foldM' #-}
 
 jscanr :: Monad m => (a -> b -> b) -> b
        -> Folding_ (Of a) m r -> Folding_ (Of b) m r

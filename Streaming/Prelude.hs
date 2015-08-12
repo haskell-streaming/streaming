@@ -5,6 +5,10 @@ module Streaming.Prelude
    filter,
    filterM,
    foldl',
+   fold,
+   fold',
+   foldM,
+   foldM',
    yield,
    iterate,
    iterateM,
@@ -19,11 +23,15 @@ module Streaming.Prelude
    sum,
    take,
    takeWhile,
-   enumFromStepN
+   enumFromStepN,
+   toList,
+   fromList,
+   fold,
+   foldM
    ) where
 import qualified Streaming.Internal.Folding as F
 import Streaming.Internal
-import Control.Monad hiding (filterM, mapM)
+import Control.Monad hiding (filterM, mapM, foldM)
 import Data.Functor.Identity
 import Control.Monad.Trans
 import qualified System.IO as IO
@@ -251,3 +259,33 @@ fromHandle h = go
 {-# INLINABLE fromHandle #-}     
 
 
+toList :: Monad m => Stream (Of a) m r -> m [a]
+toList str = getFolding (foldStream str) 
+                      (\(a :> mas) -> liftM (a :) mas)
+                      (>>= id)
+                      (\_ -> return [])
+{-# INLINE toList #-}
+
+fromList :: [a] -> Stream (Of a) m ()
+fromList xs = foldr (\x xs -> Step (x :> xs)) (Return ()) xs
+{-# INLINE fromList #-}
+
+fold
+  :: Monad m =>
+     (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m b
+fold step begin done  = F.fold step begin done . foldStream 
+
+fold'
+  :: Monad m =>
+     (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (b,r)
+fold' step begin done  = F.fold' step begin done . foldStream 
+
+foldM :: Monad m =>
+          (x -> a -> m x)
+          -> m x -> (x -> m b) -> Stream (Of a) m r -> m b
+foldM step begin done  = F.foldM step begin done . foldStream 
+
+foldM' :: Monad m =>
+          (x -> a -> m x)
+          -> m x -> (x -> m b) -> Stream (Of a) m r -> m (b,r)
+foldM' step begin done  = F.foldM' step begin done . foldStream 

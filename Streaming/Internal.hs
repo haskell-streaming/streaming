@@ -360,6 +360,3 @@ concats ::
 concats str = getFolding (foldStream str) join (join . lift) return
 {-# INLINE concats #-}
 
---
--- intersperseT ::
---   (Monad m, Functor f) => f a -> Stream f m b -> Stream f m b
