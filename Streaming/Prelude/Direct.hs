@@ -129,7 +129,6 @@ mapM f = loop where
 -- ---------------
 
 
-
 take :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
 take = loop where
   loop 0 p = return ()

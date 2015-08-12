@@ -213,12 +213,12 @@ splitAt_ n =
    . foldStream 
 {-# INLINE splitAt_ #-}
 
-enumFrom n = buildStream (Folding (F.lenumFrom n))
-enumFromTo n m = buildStream (Folding (F.lenumFromTo n m))
-enumFromToStep n m k = buildStream (Folding (F.lenumFromToStep n m k))
+enumFrom n = buildStream (Folding (F.enumFrom n))
+enumFromTo n m = buildStream (Folding (F.enumFromTo n m))
+enumFromToStep n m k = buildStream (Folding (F.enumFromToStep n m k))
 
 enumFromStepN :: (Monad m, Num a) => a -> a -> Int -> Stream (Of a) m ()
-enumFromStepN start step n = buildStream (Folding (F.lenumFromStepN start step n))
+enumFromStepN start step n = buildStream (Folding (F.enumFromStepN start step n))
 {-# INLINE enumFromStepN #-}
 
 

@@ -4,10 +4,10 @@ module Streaming.Internal.Folding (
     , concats
     , cons
     , drop
-    , lenumFrom
-    , lenumFromStepN
-    , lenumFromTo
-    , lenumFromToStep
+    , enumFrom
+    , enumFromStepN
+    , enumFromTo
+    , enumFromToStep
     , filter
     , filterM
     , foldl
@@ -300,20 +300,20 @@ takeWhile_ phi pred0 =  \construct wrap done ->
 
 -- -------
 
-lenumFrom n = \construct wrap done ->
+enumFrom n = \construct wrap done ->
       let loop m = construct (m :> loop (succ m)) in loop n
 
-lenumFromTo n m = \construct wrap done ->
+enumFromTo n m = \construct wrap done ->
       let loop k = if k <= m then construct (k :> loop (succ k))
                              else done ()
       in loop n
 
-lenumFromToStep n m k = \construct wrap done ->
+enumFromToStep n m k = \construct wrap done ->
             let loop p = if p <= k then construct (p :> loop (p + m))
                                    else done ()
             in loop n
 
-lenumFromStepN start step n = \construct wrap done ->
+enumFromStepN start step n = \construct wrap done ->
                let loop p 0 = done ()
                    loop p now = construct (p :> loop (p + step) (now-1))
                in loop start n

@@ -45,7 +45,7 @@ library
                      , transformers >=0.3 && <0.5
                      , ghc-prim
 
-  default-language:    Haskell2010
+  default-language:  Haskell2010
   ghc-options:      -O2 
   
 
