@@ -9,11 +9,14 @@ module Streaming.Prelude
    fold',
    foldM,
    foldM',
+   fold,
+   foldM,
    yield,
    iterate,
    iterateM,
    map,
    mapM,
+   mapsM,
    repeat,
    repeatM,
    replicate,
@@ -25,9 +28,7 @@ module Streaming.Prelude
    takeWhile,
    enumFromStepN,
    toList,
-   fromList,
-   fold,
-   foldM
+   fromList
    ) where
 import qualified Streaming.Internal.Folding as F
 import Streaming.Internal
@@ -289,3 +290,5 @@ foldM' :: Monad m =>
           (x -> a -> m x)
           -> m x -> (x -> m b) -> Stream (Of a) m r -> m (b,r)
 foldM' step begin done  = F.foldM' step begin done . foldStream 
+
+

@@ -33,7 +33,7 @@ unkurry f = \(a :> b) -> f a b
 {-# INLINE unkurry #-}
 
 -- explicit Stream/FreeT data type
-data Stream f m r = Step (f (Stream f m r))
+data Stream f m r = Step !(f (Stream f m r))
                   | Delay (m (Stream f m r))
                   | Return r
                   deriving (Typeable)
@@ -85,8 +85,7 @@ instance (Functor f, Monad m) => Applicative (Stream f m) where
              (\f ->  getFolding (foldStream y) 
                         construct 
                         wrap 
-                        (\s -> done (f s))
-              )
+                        (\s -> done (f s)) )
   {-# INLINE (<*>) #-}    
   
 instance Functor f => MonadTrans (Stream f) where
@@ -109,8 +108,16 @@ maps :: (Monad m, Functor f) => (forall x . f x -> g x) -> Stream f m r -> Strea
 maps phi = buildStream . mapsF phi . foldStream
 {-# INLINE maps #-}
 
+mapsM :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
+mapsM phi = buildStream . mapsMF phi . foldStream
+{-# INLINE mapsM #-}
 
-
+mapsFold :: (Monad m, Functor f) 
+          => (forall x . f x -> m (a, x)) 
+          -> Stream f m r 
+          -> Stream (Of a) m r
+mapsFold phi = buildStream . mapsFoldF phi . foldStream
+{-# INLINE mapsFold #-}
 
 -- church encodings:
 -- ----- unwrapped synonym:
@@ -167,19 +174,27 @@ instance (MonadIO m, Functor f) => MonadIO (Folding f m) where
   {-# INLINE liftIO #-}
 
 
-mapsF :: (Monad m, Functor f) => (forall x . f x -> g x) -> Folding f m r -> Folding g m r
+mapsF :: (forall x . f x -> g x) -> Folding f m r -> Folding g m r
 mapsF morph (Folding phi) = Folding $ \construct wrap done -> 
     phi (construct . morph)
         wrap
         done
 {-# INLINE mapsF #-}
 
-mapsMF :: (Monad m, Functor g) => (forall x . f x -> m (g x)) -> Folding f m r -> Folding g m r
+mapsMF :: (Monad m) => (forall x . f x -> m (g x)) -> Folding f m r -> Folding g m r
 mapsMF morph (Folding phi) = Folding $ \construct wrap done -> 
     phi (wrap . liftM construct . morph)
         wrap
         done
 {-# INLINE mapsMF #-}
+
+
+mapsFoldF :: (Monad m) 
+          => (forall x . f x -> m (a, x)) 
+          -> Folding f m r 
+          -> Folding (Of a) m r
+mapsFoldF crush = mapsMF (liftM (\(a,b) -> a :> b) . crush) 
+{-# INLINE mapsFoldF #-}
 -- -------------------------------------
 -- optimization operations: wrapped case
 -- -------------------------------------
