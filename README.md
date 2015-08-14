@@ -47,30 +47,30 @@ direct implementation of the sort the user might, the results were fairly
 pleasing.
 
     benchmarking basic/stream
-    time                 77.89 ms   (71.87 ms .. 83.38 ms)
-                         0.990 R²   (0.978 R² .. 0.998 R²)
-    mean                 80.32 ms   (76.59 ms .. 87.02 ms)
-    std dev              8.186 ms   (3.234 ms .. 13.56 ms)
-    variance introduced by outliers: 29% (moderately inflated)
+    time                 84.50 ms   (79.81 ms .. 87.90 ms)
+                         0.995 R²   (0.987 R² .. 1.000 R²)
+    mean                 84.33 ms   (81.78 ms .. 89.29 ms)
+    std dev              5.550 ms   (2.426 ms .. 8.829 ms)
+    variance introduced by outliers: 19% (moderately inflated)
 
     benchmarking basic/iostreams
-    time                 267.1 ms   (232.0 ms .. 294.4 ms)
-                         0.995 R²   (0.988 R² .. 1.000 R²)
-    mean                 267.8 ms   (259.1 ms .. 277.1 ms)
-    std dev              9.579 ms   (5.181 ms .. 13.46 ms)
+    time                 266.2 ms   (235.6 ms .. 292.0 ms)
+                         0.996 R²   (0.990 R² .. 1.000 R²)
+    mean                 265.6 ms   (258.0 ms .. 271.1 ms)
+    std dev              7.510 ms   (2.602 ms .. 10.28 ms)
     variance introduced by outliers: 16% (moderately inflated)
 
     benchmarking basic/pipes
-    time                 228.4 ms   (187.7 ms .. 268.0 ms)
-                         0.971 R²   (0.893 R² .. 0.999 R²)
-    mean                 241.0 ms   (220.1 ms .. 263.4 ms)
-    std dev              27.95 ms   (14.63 ms .. 39.26 ms)
-    variance introduced by outliers: 31% (moderately inflated)
+    time                 232.0 ms   (206.6 ms .. 246.7 ms)
+                         0.993 R²   (0.974 R² .. 1.000 R²)
+    mean                 242.8 ms   (233.5 ms .. 259.9 ms)
+    std dev              16.41 ms   (3.249 ms .. 22.56 ms)
+    variance introduced by outliers: 15% (moderately inflated)
 
     benchmarking basic/conduit
-    time                 101.9 ms   (90.46 ms .. 109.7 ms)
-                         0.988 R²   (0.975 R² .. 0.997 R²)
-    mean                 97.79 ms   (94.04 ms .. 102.4 ms)
-    std dev              6.551 ms   (4.501 ms .. 10.04 ms)
-    variance introduced by outliers: 20% (moderately inflated)
+    time                 102.3 ms   (96.24 ms .. 110.0 ms)
+                         0.991 R²   (0.978 R² .. 0.999 R²)
+    mean                 99.48 ms   (95.40 ms .. 102.8 ms)
+    std dev              5.632 ms   (3.876 ms .. 8.163 ms)
+    variance introduced by outliers: 10% (moderately inflated)
 
