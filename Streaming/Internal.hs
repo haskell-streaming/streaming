@@ -1,42 +1,39 @@
-{-# LANGUAGE LambdaCase, RankNTypes, EmptyCase,
-             StandaloneDeriving, FlexibleContexts,
-             DeriveDataTypeable, DeriveFoldable,
-             DeriveFunctor, DeriveTraversable,
-             ScopedTypeVariables, BangPatterns #-}
-{-# LANGUAGE UndecidableInstances #-} -- for Streaming show instance
+{-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
+{-# LANGUAGE UndecidableInstances #-} -- for show, data instances
 module Streaming.Internal where
 
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Class
 import Control.Applicative
-import Data.Data ( Data, Typeable )
 import Data.Foldable ( Foldable )
 import Data.Traversable
 import Control.Monad.Morph
 import Data.Monoid
 import Data.Functor.Identity
 import GHC.Exts ( build )
+import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 
--- | A left-strict pair; the base functor for streams of individual elements.
-data Of a b = !a :> b
-    deriving (Data, Eq, Foldable, Functor, Ord,
-              Read, Show, Traversable, Typeable)
-infixr 4 :>
 
--- | Curry a function of left-strict pairs
-kurry :: (Of a b -> c) -> a -> b -> c
-kurry f = \a b -> f (a :> b)
-{-# INLINE kurry #-}
+{-| 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
+    succession of steps, where the steps are specified by the first 'functor' parameter. 
 
--- | Uncurry a function into a function on left-strict pairs 
+> data Stream f m r = Step !(f (Stream f m r)) | Delay (m (Stream f m r)) | Return r
 
-unkurry :: (a -> b -> c) -> Of a b -> c
-unkurry f = \(a :> b) -> f a b
-{-# INLINE unkurry #-}
+    The /producer/ concept uses the simple functor @ (a,_) @ \- or the stricter 
+    @ Of a _ @. Then the news at each step or layer is just: an individual item of type @a@. 
+    Since @Stream (Of a) m r@ is equivalent to @Pipe.Producer a m r@, much of
+    the @pipes@ @Prelude@ can easily be mirrored in a @streaming@ @Prelude@. Similarly, 
+    a simple @Consumer a m r@ or @Parser a m r@ concept arises when the base functor is
+    @ (a -> _) @ . @Stream ((->) input) m result@ consumes @input@ until it returns a 
+    @result@.
 
--- | @Stream@ (\'FreeT\') data type. The constructors are exported by @Streaming.Internal@
+    To avoid breaking reasoning principles, the constructors 
+    should not be used directly. A pattern-match should go by way of 'inspect' \
+    \- or, in the producer case, 'Streaming.Prelude.next'
+    The constructors are exported by the 'Internal' module.
+-}
 data Stream f m r = Step !(f (Stream f m r))
                   | Delay (m (Stream f m r))
                   | Return r
@@ -113,12 +110,12 @@ construct = \phi -> phi Step Delay Return
 {-# INLINE construct #-}
 
 
-{-| Inspect the first \'layer\' of a free sequence of \'f\'. 
-    Compare @Pipes.next@ and the replica @Streaming.next@. 
-    This is the 'uncons' for 'unfoldr'
+{-| Inspect the first stage of a freely layered sequence. 
+    Compare @Pipes.next@ and the replica @Streaming.Prelude.next@. 
+    This is the 'uncons' for the general 'unfold'.
 
-unfoldr inspect = id
-
+> unfold inspect = id
+> Streaming.Prelude.unfoldr StreamingPrelude.next = id
 -}
 inspect :: (Functor f, Monad m) =>
      Stream f m r -> m (Either r (f (Stream f m r)))
@@ -131,9 +128,9 @@ inspect = loop where
     
 {-| Build a @Stream@ by unfolding steps starting from a seed. 
 
-unfold inspect = id -- modulo the quotient we work with
-unfold Pipes.next :: Monad m => Producer a m r -> Stream ((,) a) m r
-unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
+> unfold inspect = id -- modulo the quotient we work with
+> unfold Pipes.next :: Monad m => Producer a m r -> Stream ((,) a) m r
+> unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
 
 -}
 
@@ -158,6 +155,7 @@ maps phi = loop where
     Step f    -> Step (phi (fmap loop f))
 {-# INLINABLE maps #-}
 
+-- | Map layers of one functor to another with a transformation involving the base monad
 mapsM :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
 mapsM phi = loop where
   loop stream = case stream of 
@@ -166,16 +164,7 @@ mapsM phi = loop where
     Step f    -> Delay (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsM #-}
 
-maps' :: (Monad m, Functor f) 
-          => (forall x . f x -> m (a, x)) 
-          -> Stream f m r 
-          -> Stream (Of a) m r
-maps' phi = loop where
-  loop stream = case stream of 
-    Return r -> Return r
-    Delay m -> Delay $ liftM loop m
-    Step fs -> Delay $ liftM (Step . uncurry (:>)) (phi (fmap loop fs))
-{-# INLINABLE maps' #-}
+
 
 
 intercalates :: (Monad m, Monad (t m), MonadTrans t) =>
@@ -196,18 +185,6 @@ intercalates sep = go0
                 f' <- fstr
                 go1 f'
 {-# INLINABLE intercalates #-}
-
-intercalates' :: (Monad m, Monad (t m), MonadTrans t) =>
-     t m a -> Stream (t m) m b -> t m b
-intercalates' sep stream = destroy stream 
-   (\tmstr -> do 
-     str <- tmstr
-     sep
-     str
-     )
-   (join . lift)
-   return
-{-# INLINE intercalates' #-}
 
 iterTM ::
   (Functor f, Monad m, MonadTrans t,

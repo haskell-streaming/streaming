@@ -1,8 +1,12 @@
-{-# LANGUAGE LambdaCase, RankNTypes, BangPatterns #-}
+{-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable,
+             DeriveFoldable, DeriveFunctor, DeriveTraversable #-}
+             
 module Streaming.Prelude (
     -- * Types
     Stream 
     , Of (..)
+    , lazily
+    , strictly
     
     -- * Introducing streams of elements
     -- $producers
@@ -28,6 +32,8 @@ module Streaming.Prelude (
     -- $pipes
     , map
     , mapM
+    , maps'
+    , maps
     , sequence
     , mapFoldable
     , filter
@@ -96,6 +102,7 @@ module Streaming.Prelude (
 import Streaming.Internal
 
 import Control.Monad hiding (filterM, mapM, mapM_, foldM, replicateM, sequence)
+import Data.Data ( Data, Typeable )
 import Data.Functor.Identity
 import Control.Monad.Trans
 import qualified Prelude as Prelude                      
@@ -112,6 +119,20 @@ import qualified System.IO as IO
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception (throwIO, try)
 
+
+-- | A left-strict pair; the base functor for streams of individual elements.
+data Of a b = !a :> b
+    deriving (Data, Eq, Foldable, Functor, Ord,
+              Read, Show, Traversable, Typeable)
+infixr 4 :>
+
+lazily :: Of a b -> (a,b)
+lazily = \(a:>b) -> (a,b)
+{-# INLINE lazily #-}
+
+strictly :: (a,b) -> Of a b
+strictly = \(a,b) -> a :> b
+{-# INLINE strictly #-}
 
 break :: Monad m => (a -> Bool) -> Stream (Of a) m r 
       -> Stream (Of a) m (Stream (Of a) m r)
@@ -446,7 +467,23 @@ mapM_ f = loop where
       f a 
       loop as 
 {-# INLINEABLE mapM_ #-}
+{-| Map free layers of a functor to a corresponding stream of individual elements. This
+     simplifies the use of folds marked with a \'\'\' in @Streaming.Prelude@
 
+> maps' sum' :: (Monad m, Num a) => Stream (Stream (Of a) m) m r -> Stream (Of a) m r
+> maps' (Pipes.fold' (+) (0::Int) id) :: Monad m => Stream (Producer Int m) m r -> Stream (Of Int) m r
+
+-}
+maps' :: (Monad m, Functor f) 
+          => (forall x . f x -> m (a, x)) 
+          -> Stream f m r 
+          -> Stream (Of a) m r
+maps' phi = loop where
+  loop stream = case stream of 
+    Return r -> Return r
+    Delay m -> Delay $ liftM loop m
+    Step fs -> Delay $ liftM (Step . uncurry (:>)) (phi (fmap loop fs))
+{-# INLINABLE maps' #-}
 
 {-| The standard way of inspecting the first item in a stream of elements, if the
      stream is still \'running\'. The @Right@ case contains a 

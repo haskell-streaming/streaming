@@ -1,32 +1,43 @@
 {-#LANGUAGE RankNTypes #-}
 module Streaming 
    (
-   concats,
+   -- * Constructing a 'Stream' on a base functor
+   construct,
+   unfold,
+   for,
+   -- * Transforming streams
    maps,
-   split,
-   chunksOf,
    maps',
    mapsM,
-   intercalates,
-   for,
-   destroy,
-   construct,
+   
+   -- * Inspecting a stream
    inspect,
-   unfold,
+   
+   -- * Eliminating a 'Stream'
+   destroy,
+   intercalates,
+   concats,
    iterTM,
    iterT,
+
+   -- * Splitting and joining 'Stream's 
+   split,
+   chunksOf,
+   concats,
+
    -- * Types
    Stream,
    Of (..),
-   kurry,
-   unkurry,
+   lazily,
+   strictly,
+   
    -- * re-exports
    MFunctor(..),
    MonadTrans(..)
    )
    where
 import Streaming.Internal
-import Streaming.Prelude (for)
+import Streaming.Prelude 
 import Control.Monad.Morph (MFunctor(..))
 import Control.Monad
 import Control.Monad.Trans
