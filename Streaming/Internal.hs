@@ -112,8 +112,45 @@ construct
 construct = \phi -> phi Step Delay Return
 {-# INLINE construct #-}
 
+
+{-| Inspect the first \'layer\' of a free sequence of \'f\'. 
+    Compare @Pipes.next@ and the replica @Streaming.next@. 
+    This is the 'uncons' for 'unfoldr'
+
+unfoldr inspect = id
+
+-}
+inspect :: (Functor f, Monad m) =>
+     Stream f m r -> m (Either r (f (Stream f m r)))
+inspect = loop where
+  loop stream = case stream of
+    Return r -> return (Left r)
+    Delay m  -> m >>= loop
+    Step fs  -> return (Right fs)
+{-# INLINABLE inspect #-}
+    
+{-| Build a @Stream@ by unfolding steps starting from a seed. 
+
+unfold inspect = id -- modulo the quotient we work with
+unfold Pipes.next :: Monad m => Producer a m r -> Stream ((,) a) m r
+unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
+
+-}
+
+unfold :: (Monad m, Functor f) 
+        => (s -> m (Either r (f s))) -> s -> Stream f m r
+unfold step = loop where
+  loop s0 = Delay $ do 
+    e <- step s0
+    case e of
+      Left r -> return (Return r)
+      Right fs -> return (Step (fmap loop fs))
+{-# INLINABLE unfold #-}
+
+
 -- | Map layers of one functor to another with a natural transformation
-maps :: (Monad m, Functor f) => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
+maps :: (Monad m, Functor f) 
+     => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
 maps phi = loop where
   loop stream = case stream of 
     Return r  -> Return r
@@ -139,6 +176,7 @@ maps' phi = loop where
     Delay m -> Delay $ liftM loop m
     Step fs -> Delay $ liftM (Step . uncurry (:>)) (phi (fmap loop fs))
 {-# INLINABLE maps' #-}
+
 
 intercalates :: (Monad m, Monad (t m), MonadTrans t) =>
      t m a -> Stream (t m) m b -> t m b

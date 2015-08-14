@@ -6,13 +6,14 @@ module Streaming.Prelude (
     
     -- * Introducing streams of elements
     -- $producers
-    ,  stdinLn
+    , each
+    , yield
+    , unfoldr
+    , stdinLn
     , readLn
     , fromHandle
     , repeatM
     , replicateM
-    , each
-    , yield
 
     -- * Consuming streams of elements
     -- $consumers
@@ -47,14 +48,15 @@ module Streaming.Prelude (
     , show
     , seq
 
-    -- * Splitting streams of elements
+    -- * Splitting and inspecting streams of elements
+    , next
+    , uncons
     , splitAt
     , break
     , span
     
     -- * Folds
     -- $folds
-    -- * Complete folds
     , fold
     , fold'
     , foldM
@@ -66,6 +68,8 @@ module Streaming.Prelude (
     , toList
     , toListM
     , toListM'
+    , foldrM
+    , foldrT
     
     -- * Short circuiting folds
     -- , all
@@ -108,11 +112,6 @@ import qualified System.IO as IO
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception (throwIO, try)
 
--- ---------------
--- ---------------
--- Prelude
--- ---------------
--- ---------------
 
 break :: Monad m => (a -> Bool) -> Stream (Of a) m r 
       -> Stream (Of a) m (Stream (Of a) m r)
@@ -325,6 +324,37 @@ foldM' step begin done str = do
         loop rest x'
 {-# INLINABLE foldM' #-}
 
+{-| A natural right fold for consuming a stream of elements. 
+    See also the more general 'iterTM' in the 'Streaming' module 
+    and the still more general 'destroy'
+
+foldrT (\a p -> Pipes.yield a >> p) :: Monad m => Stream (Of a) m r -> Producer a m r
+foldrT (\a p -> Conduit.yield a >> p) :: Monad m => Stream (Of a) m r -> Conduit a m r
+
+-}
+
+foldrT :: (Monad m, MonadTrans t, Monad (t m)) 
+       => (a -> t m r -> t m r) -> Stream (Of a) m r -> t m r
+foldrT step = loop where
+  loop stream = case stream of
+    Return r       -> return r
+    Delay m        -> lift m >>= loop
+    Step (a :> as) -> step a (loop as)
+{-# INLINABLE foldrT #-}  
+
+{-| A natural right fold for consuming a stream of elements.
+    See also the more general 'iterT' in the 'Streaming' module and the
+    still more general 'destroy'
+-}
+foldrM :: Monad m 
+       => (a -> m r -> m r) -> Stream (Of a) m r -> m r
+foldrM step = loop where
+  loop stream = case stream of
+    Return r       -> return r
+    Delay m        -> m >>= loop
+    Step (a :> as) -> step a (loop as)
+{-# INLINABLE foldrM #-}  
+
 -- ---------------
 -- for
 -- ---------------
@@ -416,6 +446,45 @@ mapM_ f = loop where
       f a 
       loop as 
 {-# INLINEABLE mapM_ #-}
+
+
+{-| The standard way of inspecting the first item in a stream of elements, if the
+     stream is still \'running\'. The @Right@ case contains a 
+     Haskell pair, where the more general @inspect@ would return a left-strict pair. 
+     There is no reason to prefer @inspect@ since, if the @Right@ case is exposed, 
+     the first element in the pair will have been evaluated to whnf.
+
+next :: Monad m => Stream (Of a) m r -> m (Either r (a, Stream (Of a) m r))
+inspect :: Monad m => Stream (Of a) m r -> m (Either r (Of a (Stream (Of a) m r)))
+
+IOStreams.unfoldM (liftM (either (const Nothing) Just) . next) :: Stream (Of a) IO b -> IO (InputStream a)
+Conduit.unfoldM (liftM (either (const Nothing) Just) . next) :: Stream (Of a) m r -> Source a m r
+
+-}
+next :: Monad m => Stream (Of a) m r -> m (Either r (a, Stream (Of a) m r))
+next = loop where
+  loop stream = case stream of
+    Return r         -> return (Left r)
+    Delay m          -> m >>= loop
+    Step (a :> rest) -> return (Right (a,rest))
+{-# INLINABLE next #-}
+
+
+{-| Inspect the first item in a stream of elements, without a return value. 
+    Useful for unfolding into another streaming type.
+
+IOStreams.unfoldM uncons :: Stream (Of a) IO b -> IO (InputStream a)
+Conduit.unfoldM uncons :: Stream (Of o) m r -> Conduit.Source m o
+
+-}
+uncons :: Monad m => Stream (Of a) m () -> m (Maybe (a, Stream (Of a) m ()))
+uncons = loop where
+  loop stream = case stream of
+    Return ()        -> return Nothing
+    Delay m          -> m >>= loop
+    Step (a :> rest) -> return (Just (a,rest))
+{-# INLINABLE uncons #-}
+
 
 -- | Fold a 'Stream' of numbers into their product
 product :: (Monad m, Num a) => Stream (Of a) m () -> m a
@@ -638,12 +707,30 @@ toListM' :: Monad m => Stream (Of a) m r -> m ([a], r)
 toListM' = fold' (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 {-# INLINE toListM' #-}
 
+{-| Build a @Stream@ by unfolding steps starting from a seed. 
+    This is one natural way to consume a 'Pipes.Producer'. The 
+    more general 'unfold' would require dealing with the left-strict pair
+    we are using.
+
+unfoldr Pipes.next :: Monad m => Producer a m r -> Stream (Of a) m r
+unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
+
+-}
+unfoldr :: Monad m 
+        => (s -> m (Either r (a, s))) -> s -> Stream (Of a) m r
+unfoldr step = loop where
+  loop s0 = Delay $ do 
+    e <- step s0
+    case e of
+      Left r -> return (Return r)
+      Right (a,s) -> return (Step (a :> loop s))
+{-# INLINABLE unfoldr #-}
 
 -- ---------------------------------------
 -- yield
 -- ---------------------------------------
 
--- | Yield an individual item
+-- | A singleton stream
 yield :: Monad m => a -> Stream (Of a) m ()
 yield a = Step (a :> Return ())
 {-# INLINE yield #-}
@@ -673,9 +760,9 @@ zipWith f = loop
         Step (b :> rest1) -> Step (f a b :>loop rest0 rest1)
 {-# INLINABLE zipWith #-}
 
--- ---------------------------------------
--- IO fripperies copped from Pipes.Prelude
--- ---------------------------------------
+-- --------------
+-- IO fripperies 
+-- --------------
 
 -- | repeatedly stream lines as 'String' from stdin
 stdinLn :: MonadIO m => Stream (Of String) m ()
