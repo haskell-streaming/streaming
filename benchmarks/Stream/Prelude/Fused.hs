@@ -43,6 +43,13 @@ import Prelude hiding (map, filter, drop, take, sum
                       , mapM, scanr, span, break, print, show)
 import qualified Prelude as Prelude
 
+
+import GHC.Exts ( SpecConstrAnnotation(..) )
+
+data SPEC = SPEC | SPEC2
+{-# ANN type SPEC ForceSpecConstr #-}
+
+
 -- ---------------
 -- Prelude
 -- ---------------
