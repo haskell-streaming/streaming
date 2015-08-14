@@ -1,28 +1,23 @@
 name:                streaming
 version:             0.1.0.0
-synopsis:            An optimized FreeT
-                     and (consequently) Producer and ListT-like type.
-description:         Stream is an optimized variant of FreeT which 
-                     moreover admits a build/foldr style optimization scheme.
+cabal-version:       >=1.10
+build-type:          Simple
+synopsis:            A general free monad transformer optimized for streaming applications.
+description:         Stream is an optimized variant of FreeT.
                      It can be used wherever FreeT is used, but is focused
-                     on employment with functors like ((,) a) which generate
-                     effectful lists. 
+                     on employment with functors like '((,) a)' which generate
+                     effectful sequences or \"producers\"
 license:             BSD3
 license-file:        LICENSE
 author:              michaelt
 maintainer:          what_is_it_to_do_anything@yahoo.com
 stability:           Experimental
-homepage:            https://github.com/michaelt/series
-bug-reports:         https://github.com/michaelt/series/issues
+homepage:            https://github.com/michaelt/streaming
+bug-reports:         https://github.com/michaelt/streaming/issues
 category:            Data, Pipes
-build-type:          Simple
-extra-source-files:
-  .gitignore
-  README.md
-  Main.hs
-  notes/*
-  
-cabal-version:       >=1.10
+source-repository head
+    type: git
+    location: https://github.com/michaelt/streaming
 
 
 library

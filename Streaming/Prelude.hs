@@ -1,3 +1,5 @@
+{-| This module is very closely modeled on Pipes.Prelude
+-}
 {-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable,
              DeriveFoldable, DeriveFunctor, DeriveTraversable #-}
              

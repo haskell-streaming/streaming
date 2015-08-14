@@ -15,7 +15,6 @@ import GHC.Exts ( build )
 import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 
-
 {-| 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
     succession of steps, where the steps are specified by the first 'functor' parameter. 
 
@@ -88,6 +87,13 @@ instance Functor f => MFunctor (Stream f) where
       Step f    -> Step (fmap loop f)
   {-# INLINABLE hoist #-}    
 
+instance Functor f => MFunctor (Stream f) where
+  embed phi = loop where
+    loop stream = case stream of
+      Return r -> Return r
+      Delay m  -> Delay (liftM loop (phi m))
+      Step f   -> Step (fmap loop f)
+      
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   liftIO = Delay . liftM Return . liftIO
   {-# INLINE liftIO #-}
