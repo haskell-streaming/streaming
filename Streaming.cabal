@@ -28,9 +28,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:     Streaming, 
                        Streaming.Prelude,
-                       Streaming.Internal,
-                       Streaming.Internal.Folding, 
-                       Streaming.Prelude.Fused
+                       Streaming.Internal
 
     -- other-modules:       
   other-extensions:    LambdaCase, RankNTypes, EmptyCase, 
