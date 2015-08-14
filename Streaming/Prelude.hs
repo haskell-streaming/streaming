@@ -51,7 +51,7 @@ module Streaming.Prelude (
     -- * Splitting and inspecting streams of elements
     , next
     , uncons
-    , splitAt
+    , split
     , break
     , span
     

@@ -1,26 +1,37 @@
 {-#LANGUAGE RankNTypes #-}
 module Streaming 
-   (Stream,
+   (
    concats,
    maps,
+   split,
+   chunksOf,
+   maps',
+   mapsM,
    intercalates,
+   for,
    destroy,
    construct,
+   inspect,
+   unfold,
    iterTM,
+   iterT,
+   -- * Types
+   Stream,
    Of (..),
    kurry,
-   unkurry
+   unkurry,
+   -- * re-exports
+   MFunctor(..),
+   MonadTrans(..)
    )
    where
 import Streaming.Internal
-import Control.Monad.Morph
+import Streaming.Prelude (for)
+import Control.Monad.Morph (MFunctor(..))
 import Control.Monad
+import Control.Monad.Trans
 
 
-hoistStream ::
-  (Monad m, Functor f) =>
-  (forall a. m a -> n a) -> Stream f m b -> Stream f n b
-hoistStream = hoist
 
 
 

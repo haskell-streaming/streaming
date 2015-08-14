@@ -228,8 +228,8 @@ concats stream = destroy stream join (join . lift) return
 {-# INLINE concats #-}
 
 
-splitAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
-splitAt = loop where
+split :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
+split = loop where
   loop !n stream 
     | n <= 1 = Return stream
     | otherwise = case stream of
@@ -238,12 +238,12 @@ splitAt = loop where
         Step fs        -> case n of 
           0 -> Return (Step fs)
           _ -> Step (fmap (loop (n-1)) fs)
-{-# INLINABLE splitAt #-}                        
+{-# INLINABLE split #-}                        
 
 chunksOf :: (Monad m, Functor f) => Int -> Stream f m r -> Stream (Stream f m) m r
 chunksOf n0 = loop where
   loop stream = case stream of
     Return r       -> Return r
     Delay m        -> Delay (liftM loop m)
-    Step fs        -> Step $ Step $ fmap (fmap loop . splitAt n0) fs
+    Step fs        -> Step $ Step $ fmap (fmap loop . split n0) fs
 {-# INLINABLE chunksOf #-}          
