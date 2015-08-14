@@ -42,35 +42,19 @@ composition of functions:
     . each
 
 This all-prepackaged-combinator sequence is, I think, very friendly to the 
-more recent conduit fusion framework. Since we are employing a very simple
-direct implementation of the sort the user might, the results were fairly 
-pleasing.
+more recent conduit fusion framework. Since here each combinator is defined
+with naive recursion, more or less as the user might, the results were 
+fairly pleasing:
 
     benchmarking basic/stream
     time                 84.50 ms   (79.81 ms .. 87.90 ms)
-                         0.995 R²   (0.987 R² .. 1.000 R²)
-    mean                 84.33 ms   (81.78 ms .. 89.29 ms)
-    std dev              5.550 ms   (2.426 ms .. 8.829 ms)
-    variance introduced by outliers: 19% (moderately inflated)
 
     benchmarking basic/iostreams
     time                 266.2 ms   (235.6 ms .. 292.0 ms)
-                         0.996 R²   (0.990 R² .. 1.000 R²)
-    mean                 265.6 ms   (258.0 ms .. 271.1 ms)
-    std dev              7.510 ms   (2.602 ms .. 10.28 ms)
-    variance introduced by outliers: 16% (moderately inflated)
 
     benchmarking basic/pipes
     time                 232.0 ms   (206.6 ms .. 246.7 ms)
-                         0.993 R²   (0.974 R² .. 1.000 R²)
-    mean                 242.8 ms   (233.5 ms .. 259.9 ms)
-    std dev              16.41 ms   (3.249 ms .. 22.56 ms)
-    variance introduced by outliers: 15% (moderately inflated)
 
     benchmarking basic/conduit
     time                 102.3 ms   (96.24 ms .. 110.0 ms)
-                         0.991 R²   (0.978 R² .. 0.999 R²)
-    mean                 99.48 ms   (95.40 ms .. 102.8 ms)
-    std dev              5.632 ms   (3.876 ms .. 8.163 ms)
-    variance introduced by outliers: 10% (moderately inflated)
 
