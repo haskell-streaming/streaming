@@ -1,6 +1,32 @@
 {-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
 {-# LANGUAGE UndecidableInstances #-} -- for show, data instances
-module Streaming.Internal where
+module Streaming.Internal (
+    -- * The free monad transformer
+    -- $stream
+    Stream (..)
+    
+    -- * Introducing a stream
+    , construct 
+    , unfold 
+    
+    -- * Eliminating a stream
+    , destroy 
+    , concats 
+    , intercalates 
+    , iterT 
+    , iterTM 
+    
+    -- * Inspecting a stream step by step
+    , inspect 
+    
+    -- * Transforming streams
+    , maps 
+    , mapsM 
+    
+    -- *  Splitting streams
+    , chunksOf 
+    , split 
+   ) where
 
 import Control.Monad
 import Control.Monad.Trans
@@ -15,8 +41,11 @@ import GHC.Exts ( build )
 import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 
-{-| 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
-    succession of steps, where the steps are specified by the first 'functor' parameter. 
+{- $stream
+
+    The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
+    succession of steps, where the form of the steps or 'commands' is 
+    specified by the first (functor) parameter. 
 
 > data Stream f m r = Step !(f (Stream f m r)) | Delay (m (Stream f m r)) | Return r
 
@@ -87,13 +116,14 @@ instance Functor f => MFunctor (Stream f) where
       Step f    -> Step (fmap loop f)
   {-# INLINABLE hoist #-}    
 
-instance Functor f => MFunctor (Stream f) where
+instance Functor f => MMonad (Stream f) where
   embed phi = loop where
     loop stream = case stream of
       Return r -> Return r
-      Delay m  -> Delay (liftM loop (phi m))
+      Delay m  -> phi m >>= loop
       Step f   -> Step (fmap loop f)
-      
+  {-# INLINABLE embed #-}   
+   
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   liftIO = Delay . liftM Return . liftIO
   {-# INLINE liftIO #-}
