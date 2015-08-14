@@ -30,7 +30,7 @@ library
                        Streaming.Prelude,
                        Streaming.Internal,
                        Streaming.Internal.Folding, 
-                       Streaming.Prelude.Direct
+                       Streaming.Prelude.Fused
 
     -- other-modules:       
   other-extensions:    LambdaCase, RankNTypes, EmptyCase, 

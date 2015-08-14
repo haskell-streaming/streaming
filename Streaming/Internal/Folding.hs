@@ -32,7 +32,7 @@ module Streaming.Internal.Folding (
     , take
     , takeWhile
     , yield ) where
-import Streaming.Internal hiding (concats)
+import Streaming.Internal hiding (concats, splitAt)
 import Control.Monad hiding (filterM, mapM, replicateM,foldM)
 import Data.Functor.Identity
 import Control.Monad.Trans
@@ -44,6 +44,8 @@ import Prelude hiding (map, filter, drop, take, sum
                       , mapM, scanr, span, break, foldl)
 import GHC.Magic (oneShot)
 import GHC.Exts
+import qualified Data.Foldable as Foldable
+
 -- ---------------
 -- ---------------
 -- Prelude
@@ -51,6 +53,11 @@ import GHC.Exts
 -- ---------------
 
 
+each :: (Monad m, Foldable.Foldable f) => f a -> Folding (Of a) m ()
+each = Foldable.foldr (\a p -> yield a >> p) (return ())
+{-# INLINE each #-}
+
+-- it must be possible to derecursivize this
 
 -- ---------------
 -- yield
@@ -264,6 +271,8 @@ mapM f = \(Folding phi) -> Folding (mapM__ phi f)
               f0
     {-# INLINE mapM__ #-}
 {-# INLINE mapM #-}
+
+
 
 -- ---------------
 -- take
@@ -530,3 +539,20 @@ j ffolding =
   Folding $ \cons w nil ->
        cons $ fmap (\f -> getFolding f cons w (\(Folding psi) -> psi cons w nil))
               ffolding
+
+-- type Folding_ f m r = forall r'
+--                    .  (f r' -> r')
+--                    -> (m r' -> r')
+--                    -> (r -> r')
+--                    -> r'
+fromHandle :: MonadIO m => IO.Handle -> Folding (Of String) m ()
+fromHandle h = Folding $ \construct wrap done -> 
+   wrap $ do 
+     let go = do
+          eof <- liftIO $ IO.hIsEOF h
+          if eof 
+          then (return (done ()))
+          else do
+              str <- liftIO $ IO.hGetLine h
+              liftM (construct . (str :> )) go
+     go

@@ -50,84 +50,75 @@ deriving instance (Typeable f, Typeable m, Data r, Data (m (Stream f m r))
                   , Data (f (Stream f m r))) => Data (Stream f m r)
 
 instance (Functor f, Monad m) => Functor (Stream f m) where
-  fmap f = loop where
-    loop stream = case stream of
-      Return r -> Return (f r)
-      Delay m  -> Delay (liftM loop m)
-      Step f   -> Step (fmap loop f)
-  {-# INLINABLE fmap #-}
-  
+  fmap f = buildStream . fmap f . foldStream
+  {-# INLINE fmap #-}
+    -- loop = \case Step f  -> Step (fmap loop f)
+    --              Delay m       -> Delay (liftM loop m)
+    --              Return r       -> Return (f r)
+
 instance (Functor f, Monad m) => Monad (Stream f m) where
   return = Return
   {-# INLINE return #-}
-  stream1 >> stream2 = loop stream1 where
-    loop stream = case stream of
-      Return _ -> stream2
-      Delay m  -> Delay (liftM loop m)
-      Step f   -> Step (fmap loop f)    
-  {-# INLINABLE (>>) #-}                              
-  stream >>= f = loop stream where
-    loop stream0 = case stream0 of
-      Step f -> Step (fmap loop f)
-      Delay m      -> Delay (liftM loop m)
-      Return r      -> f r
-  {-# INLINABLE (>>=) #-}                              
+  (>>) = \phi psi -> buildStream $ Folding (augmentFolding_ (getFolding (foldStream phi)) 
+                                             (getFolding (foldStream psi)))
+     where
+      augmentFolding_ ::
+           (forall r'.  (f r' -> r') -> (m r' -> r') -> (s -> r') -> r')
+        -> (forall r'.  (f r' -> r') -> (m r' -> r') -> (r -> r') -> r')
+        -> (forall r'.  (f r' -> r') -> (m r' -> r') -> (r -> r') -> r')
+      augmentFolding_ = \phi psi construct wrap done -> 
+                phi construct 
+                    wrap 
+                    (\x  -> psi construct
+                                wrap
+                                done)
+      {-# INLINE augmentFolding_ #-}                  
+  {-# INLINE (>>) #-}                               
+  s >>= f = buildStream (foldBind (foldStream . f) (foldStream s))
+  {-# INLINE (>>=) #-}
+    -- loop lst where
+    -- loop = \case Step f -> Step (fmap loop f)
+    --              Delay m      -> Delay (liftM loop m)
+    --              Return r      -> f r
 
 instance (Functor f, Monad m) => Applicative (Stream f m) where
-  pure = Return
+  pure = buildStream . return
   {-# INLINE pure #-}
-  streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)}   
-  {-# INLINABLE (<*>) #-}    
+  x <*> y = buildStream $ Folding $ \construct wrap done -> 
+      getFolding (foldStream x) 
+             construct 
+             wrap 
+             (\f ->  getFolding (foldStream y) 
+                        construct 
+                        wrap 
+                        (\s -> done (f s)) )
+  {-# INLINE (<*>) #-}    
   
 instance Functor f => MonadTrans (Stream f) where
-  lift = Delay . liftM Return
+  lift = buildStream . lift 
   {-# INLINE lift #-}
 
 instance Functor f => MFunctor (Stream f) where
-  hoist trans = loop where
-    loop stream = case stream of 
-      Return r  -> Return r
-      Delay m   -> Delay (trans (liftM loop m))
-      Step f    -> Step (fmap loop f)
-  {-# INLINABLE hoist #-}    
+  hoist trans = buildStream . hoist trans . foldStream
+  {-# INLINE hoist #-}
+    -- loop where
+    -- loop = \case Step f -> Step (fmap loop f)
+    --              Delay m      -> Delay (trans (liftM loop m))
+    --              Return r      -> Return r
 
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
-  liftIO = Delay . liftM Return . liftIO
+  liftIO = buildStream . liftIO
   {-# INLINE liftIO #-}
 
--- | Map a stream to its church encoding; compare list 'foldr'
-destroy 
-  :: (Functor f, Monad m) =>
-     Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroy stream0 construct wrap done = loop stream0 where
-  loop stream = case stream of
-    Return r -> done r
-    Delay m  -> wrap (liftM loop m)
-    Step fs  -> construct (fmap loop fs)
-{-# INLINABLE destroy #-}
-
--- | Reflect a church-encoded stream; cp. GHC.Exts.build
-construct
-  :: (forall b . (f b -> b) -> (m b -> b) -> (r -> b) -> b) ->  Stream f m r
-construct = \phi -> phi Step Delay Return
-{-# INLINE construct #-}
-
--- | Map layers of one functor to another with a natural transformation
+-- | Map streaming layers of one functor to another with a natural transformation
 maps :: (Monad m, Functor f) => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
-maps phi = loop where
-  loop stream = case stream of 
-    Return r  -> Return r
-    Delay m   -> Delay (liftM loop m)
-    Step f    -> Step (phi (fmap loop f))
-{-# INLINABLE maps #-}
+maps phi = buildStream . mapsF phi . foldStream
+{-# INLINE maps #-}
+
 
 mapsM :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
-mapsM phi = loop where
-  loop stream = case stream of 
-    Return r  -> Return r
-    Delay m   -> Delay (liftM loop m)
-    Step f    -> Delay (liftM Step (phi (fmap loop f)))
-{-# INLINABLE mapsM #-}
+mapsM phi = buildStream . mapsMF phi . foldStream
+{-# INLINE mapsM #-}
 
 maps' :: (Monad m, Functor f) 
           => (forall x . f x -> m (a, x)) 
@@ -139,80 +130,6 @@ maps' phi = loop where
     Delay m -> Delay $ liftM loop m
     Step fs -> Delay $ liftM (Step . uncurry (:>)) (phi (fmap loop fs))
 {-# INLINABLE maps' #-}
-
-intercalates :: (Monad m, Monad (t m), MonadTrans t) =>
-     t m a -> Stream (t m) m b -> t m b
-intercalates sep = go0
-  where
-    go0 f = case f of 
-      Return r -> return r 
-      Delay m -> lift m >>= go0 
-      Step fstr -> do
-                f' <- fstr
-                go1 f'
-    go1 f = case f of 
-      Return r -> return r 
-      Delay m     -> lift m >>= go1
-      Step fstr ->  do
-                sep
-                f' <- fstr
-                go1 f'
-{-# INLINABLE intercalates #-}
-
-intercalates' :: (Monad m, Monad (t m), MonadTrans t) =>
-     t m a -> Stream (t m) m b -> t m b
-intercalates' sep stream = destroy stream 
-   (\tmstr -> do 
-     str <- tmstr
-     sep
-     str
-     )
-   (join . lift)
-   return
-{-# INLINE intercalates' #-}
-
-iterTM ::
-  (Functor f, Monad m, MonadTrans t,
-   Monad (t m)) =>
-  (f (t m a) -> t m a) -> Stream f m a -> t m a
-iterTM out stream = destroy stream out (join . lift) return
-{-# INLINE iterTM #-}
-
-iterT ::
-  (Functor f, Monad m) => (f (m a) -> m a) -> Stream f m a -> m a
-iterT out stream = destroy stream out join return
-{-# INLINE iterT #-}
-
-concats ::
-    (MonadTrans t, Monad (t m), Monad m) =>
-    Stream (t m) m a -> t m a
-concats stream = destroy stream join (join . lift) return
-{-# INLINE concats #-}
-
-
-splitAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
-splitAt = loop where
-  loop !n stream 
-    | n <= 1 = Return stream
-    | otherwise = case stream of
-        Return r       -> Return (Return r)
-        Delay m        -> Delay (liftM (loop n) m)
-        Step fs        -> case n of 
-          0 -> Return (Step fs)
-          _ -> Step (fmap (loop (n-1)) fs)
-{-# INLINABLE splitAt #-}                        
-
-chunksOf :: (Monad m, Functor f) => Int -> Stream f m r -> Stream (Stream f m) m r
-chunksOf n0 = loop where
-  loop stream = case stream of
-    Return r       -> Return r
-    Delay m        -> Delay (liftM loop m)
-    Step fs        -> Step $ Step $ fmap (fmap loop . splitAt n0) fs
-{-# INLINABLE chunksOf #-}          
-
-
-
-
 
 -- church encodings:
 -- ----- unwrapped synonym:
@@ -290,7 +207,6 @@ mapsFoldF :: (Monad m)
           -> Folding (Of a) m r
 mapsFoldF crush = mapsMF (liftM (\(a,b) -> a :> b) . crush) 
 {-# INLINE mapsFoldF #-}
-
 -- -------------------------------------
 -- optimization operations: wrapped case
 -- -------------------------------------
@@ -330,6 +246,20 @@ buildStream (Folding phi) = phi Step Delay Return
 -- -------------------------------------
 -- optimization operations: unwrapped case
 -- -------------------------------------
+destroy 
+  :: (Functor f, Monad m) =>
+     Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
+destroy = \lst construct wrap done ->
+   let loop = \case Delay mlst -> wrap (liftM loop mlst)
+                    Step flst  -> construct (fmap loop flst)
+                    Return r   -> done r 
+   in loop lst
+{-# INLINABLE destroy #-}
+
+construct
+  :: (forall b . (f b -> b) -> (m b -> b) -> (r -> b) -> b) ->  Stream f m r
+construct = \phi -> phi Step Delay Return
+{-# INLINE construct #-}
 
 
 foldStreamx
@@ -406,4 +336,74 @@ foldList = \xs -> Folding (foldList_ xs)
     foldList(buildList phi) = phi
     #-}               
     
-              
+    
+--
+intercalates :: (Monad m, Monad (t m), MonadTrans t) =>
+     t m a -> Stream (t m) m b -> t m b
+intercalates sep = go0
+  where
+    go0 f = case f of 
+      Return r -> return r 
+      Delay m -> lift m >>= go0 
+      Step fstr -> do
+                f' <- fstr
+                go1 f'
+    go1 f = case f of 
+      Return r -> return r 
+      Delay m     -> lift m >>= go1
+      Step fstr ->  do
+                sep
+                f' <- fstr
+                go1 f'
+{-# INLINABLE intercalates #-}
+
+intercalates' :: (Monad m, Monad (t m), MonadTrans t) =>
+     t m a -> Stream (t m) m b -> t m b
+intercalates' sep s = getFolding (foldStream s)  
+   (\tmstr -> do 
+     str <- tmstr
+     sep
+     str
+     )
+   (join . lift)
+   return
+{-# INLINE intercalates' #-}
+
+iterTM ::
+  (Functor f, Monad m, MonadTrans t,
+   Monad (t m)) =>
+  (f (t m a) -> t m a) -> Stream f m a -> t m a
+iterTM out str = getFolding (foldStream str) out (join . lift) return
+{-# INLINE iterTM #-}
+
+iterT ::
+  (Functor f, Monad m) => (f (m a) -> m a) -> Stream f m a -> m a
+iterT out str = getFolding (foldStream str) out join return
+{-# INLINE iterT #-}
+
+concats ::
+    (MonadTrans t, Monad (t m), Monad m) =>
+    Stream (t m) m a -> t m a
+concats str = getFolding (foldStream str) join (join . lift) return
+{-# INLINE concats #-}
+
+
+splitAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
+splitAt = loop where
+  loop !n stream 
+    | n <= 1 = Return stream
+    | otherwise = case stream of
+        Return r       -> Return (Return r)
+        Delay m        -> Delay (liftM (loop n) m)
+        Step fs        -> case n of 
+          0 -> Return (Step fs)
+          _ -> Step (fmap (loop (n-1)) fs)
+{-# INLINABLE splitAt #-}                        
+
+chunksOf :: (Monad m, Functor f) => Int -> Stream f m r -> Stream (Stream f m) m r
+chunksOf n0 = loop where
+  loop stream = case stream of
+    Return r       -> Return r
+    Delay m        -> Delay (liftM loop m)
+    Step fs        -> Step $ Step $ fmap (fmap loop . splitAt n0) fs
+{-# INLINABLE chunksOf #-}                        
