@@ -2,11 +2,30 @@ name:                streaming
 version:             0.1.0.2
 cabal-version:       >=1.10
 build-type:          Simple
-synopsis:            A general free monad transformer optimized for streaming applications.
-description:         Stream is an optimized variant of FreeT.
-                     It can be used wherever FreeT is used, but is focused
-                     on employment with functors like '((,) a)' which generate
-                     effectful sequences or \"producers\"
+synopsis:            `Stream f m r` is s general free monad transformer 
+                     optimized for streaming applications.
+                     
+description:         `Stream` can be used wherever `FreeT` is used. The compiler
+                     is better able to optimize operations written in
+                     terms of `Stream`.
+                     .
+                     An associated prelude of functions, closely following 
+                     @Pipes.Prelude@ is focused on on employment with a base 
+                     functor like @((,) a)@ (here called @Of a@) which generates
+                     effectful sequences or producers - @Pipes.Producer@, 
+                     @Conduit.Source@, @IOStreams.InputStream@ and the like.
+                     .
+                     Interoperation with pipes is accomplished with
+                     .  
+                     > Pipes.unfoldr Streaming.next :: Stream (Of a) m r -> Producer a m r
+                     > Stream.unfoldr Pipes.next    :: Producer a m r -> Stream (Of a) m r
+                     .
+                     Exit to `conduit` and `iostreams` is thus:
+                     .
+                     > Conduit.unfoldM Streaming.uncons   :: Stream (Of a) m () -> Source m a
+                     > IOStreams.unfoldM Streaming.uncons :: Stream (Of a) IO () -> InputStream a
+                     
+                     
 license:             BSD3
 license-file:        LICENSE
 author:              michaelt
