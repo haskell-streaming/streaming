@@ -59,7 +59,7 @@ module Streaming.Prelude (
     -- * Splitting and inspecting streams of elements
     , next
     , uncons
-    , split
+    , splitAt
     , break
     , span
     
@@ -718,6 +718,18 @@ span pred = loop where
 {-# INLINEABLE span #-}
 
 
+{-| Split a succession of layers after some number, returning a streaming or
+--   effectful pair. This function is the same as the 'splitsAt' exported by the
+--   @Streaming@ module, but since this module is imported qualified, it can 
+--   usurp a Prelude name. It specializes to:
+
+>  splitAt :: (Monad m, Functor f) => Int -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
+
+
+-}
+splitAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
+splitAt = splitsAt
+{-# INLINE splitAt #-}
 -- ---------------
 -- take
 -- ---------------
@@ -749,7 +761,7 @@ takeWhile pred = loop where
 
 
 
--- | Convert a pure 'Stream (Of a) into a list of a
+-- | Convert a pure @Stream (Of a)@ into a list of @as@
 toList :: Stream (Of a) Identity () -> [a]
 toList = loop
   where
@@ -759,12 +771,13 @@ toList = loop
        Step (a :> rest)         -> a : loop rest
 {-# INLINABLE toList #-}
 
-{-| Convert an effectful 'Stream (Of a)' into a list of a
+{-| Convert an effectful 'Stream (Of a)' into a list of @as@
 
-    Note: 'toListM' is not an idiomatic use of @pipes@, but I provide it for
-    simple testing purposes.  Idiomatic @pipes@ style consumes the elements
-    immediately as they are generated instead of loading all elements into
-    memory.
+    Note: Needless to say this function does not stream properly.
+    It is basically the same as 'mapM' which, like 'replicateM',
+    'sequence' and similar operations on traversable containers
+    is a leading cause of space leaks.
+    
 -}
 toListM :: Monad m => Stream (Of a) m () -> m [a]
 toListM = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
@@ -773,11 +786,6 @@ toListM = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 
 {-| Convert an effectful 'Stream' into a list alongside the return value
 
-    Note: 'toListM'' is not an idiomatic use of @streaming@, but I provide it for
-    simple testing purposes.  Idiomatic @streaming@ style, like idiomatic @pipes@ style
-    consumes the elements as they are generated instead of loading all elements into
-    memory.
-
 >  mapsFold toListM' :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m 
 -}
 toListM' :: Monad m => Stream (Of a) m r -> m ([a], r)
@@ -785,9 +793,9 @@ toListM' = fold' (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 {-# INLINE toListM' #-}
 
 {-| Build a @Stream@ by unfolding steps starting from a seed. 
-    This is one natural way to consume a 'Pipes.Producer'. The 
-    more general 'unfold' would require dealing with the left-strict pair
-    we are using.
+    This is one natural way to consume a 'Pipes.Producer'. It is worth
+    adding it to the functor-general 'unfold' to avoid dealing with 
+    the left-strict pairing we are using in place of Haskell pairing.
 
 > unfoldr Pipes.next :: Monad m => Producer a m r -> Stream (Of a) m r
 > unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
@@ -807,7 +815,14 @@ unfoldr step = loop where
 -- yield
 -- ---------------------------------------
 
--- | A singleton stream
+{-| A singleton stream
+
+> S.sum $ do {yield 1; lift (putStrLn "hello"); yield 2; lift (putStrLn "goodbye"); yield 3}
+hello
+goodbye
+6
+
+-}
 yield :: Monad m => a -> Stream (Of a) m ()
 yield a = Step (a :> Return ())
 {-# INLINE yield #-}

@@ -283,7 +283,7 @@ chunksOf n0 = loop where
   loop stream = case stream of
     Return r       -> Return r
     Delay m        -> Delay (liftM loop m)
-    Step fs        -> Step $ Step $ fmap (fmap loop . split n0) fs
+    Step fs        -> Step $ Step $ fmap (fmap loop . splitsAt n0) fs
 {-# INLINABLE chunksOf #-}          
 
 {- | Make it possible to \'run\' the underlying transformed monad. A simple
@@ -333,7 +333,7 @@ repeatsM mf = loop where
 
 -- | Repeat a functorial layer, command or instruct several times.
 replicates :: (Monad m, Functor f) => Int -> f () -> Stream f m ()
-replicates n f = split n (repeats f) >> return ()
+replicates n f = splitsAt n (repeats f) >> return ()
 
 {-| Construct an infinite stream by cycling a finite one
 

@@ -10,7 +10,7 @@ module Streaming
    construct,
    replicates,
    repeats,
-   repeatsM
+   repeatsM,
    
    -- * Transforming streams
    maps,
