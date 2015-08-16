@@ -8,6 +8,9 @@ module Streaming.Internal (
     -- * Introducing a stream
     , construct 
     , unfold 
+    , replicates
+    , repeats
+    , repeatsM
     
     -- * Eliminating a stream
     , destroy 
@@ -15,17 +18,18 @@ module Streaming.Internal (
     , intercalates 
     , iterT 
     , iterTM 
-    
+
     -- * Inspecting a stream step by step
     , inspect 
     
     -- * Transforming streams
     , maps 
     , mapsM 
+    , distribute
     
     -- *  Splitting streams
     , chunksOf 
-    , split 
+    , splitsAt
    ) where
 
 import Control.Monad
@@ -128,7 +132,7 @@ instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   liftIO = Delay . liftM Return . liftIO
   {-# INLINE liftIO #-}
 
--- | Map a stream to its church encoding; compare list 'foldr'
+-- | Map a stream to its church encoding; compare @Data.List.foldr@
 destroy 
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
@@ -139,7 +143,7 @@ destroy stream0 construct wrap done = loop stream0 where
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroy #-}
 
--- | Reflect a church-encoded stream; cp. GHC.Exts.build
+-- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
 construct
   :: (forall b . (f b -> b) -> (m b -> b) -> (r -> b) -> b) ->  Stream f m r
 construct = \phi -> phi Step Delay Return
@@ -162,7 +166,8 @@ inspect = loop where
     Step fs  -> return (Right fs)
 {-# INLINABLE inspect #-}
     
-{-| Build a @Stream@ by unfolding steps starting from a seed. 
+{-| Build a @Stream@ by unfolding steps starting from a seed. See also
+    the specialized 'Streaming.Prelude.unfoldr' in the prelude.
 
 > unfold inspect = id -- modulo the quotient we work with
 > unfold Pipes.next :: Monad m => Producer a m r -> Stream ((,) a) m r
@@ -201,8 +206,10 @@ mapsM phi = loop where
 {-# INLINABLE mapsM #-}
 
 
+{-| Interpolate a layer at each segment. This specializes to e.g.
 
-
+> intercalates :: (Monad m, Functor f) => Stream f m () -> Stream (Stream f m) m r -> Stream f m r
+-}
 intercalates :: (Monad m, Monad (t m), MonadTrans t) =>
      t m a -> Stream (t m) m b -> t m b
 intercalates sep = go0
@@ -222,6 +229,10 @@ intercalates sep = go0
                 go1 f'
 {-# INLINABLE intercalates #-}
 
+{-| Specialized fold
+
+> iterTM alg stream = destroy stream alg (join . lift) return
+-}
 iterTM ::
   (Functor f, Monad m, MonadTrans t,
    Monad (t m)) =>
@@ -229,20 +240,33 @@ iterTM ::
 iterTM out stream = destroy stream out (join . lift) return
 {-# INLINE iterTM #-}
 
+{-| Specialized fold
+
+> iterT alg stream = destroy stream alg join return
+-}
 iterT ::
   (Functor f, Monad m) => (f (m a) -> m a) -> Stream f m a -> m a
 iterT out stream = destroy stream out join return
 {-# INLINE iterT #-}
 
+{-| This specializes to the more transparent case:
+
+> concats :: (Monad m, Functor f) => Stream (Stream f m) m r -> Stream f m r
+
+    Thus dissolving the segmentation into @Stream f m@ layers.
+
+> concats stream = destroy stream join (join . lift) return
+-}
 concats ::
     (MonadTrans t, Monad (t m), Monad m) =>
     Stream (t m) m a -> t m a
 concats stream = destroy stream join (join . lift) return
 {-# INLINE concats #-}
 
-
-split :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
-split = loop where
+-- | Split a succession of layers after some number, returning a streaming or
+--   effectful pair.
+splitsAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
+splitsAt = loop where
   loop !n stream 
     | n <= 1 = Return stream
     | otherwise = case stream of
@@ -251,8 +275,9 @@ split = loop where
         Step fs        -> case n of 
           0 -> Return (Step fs)
           _ -> Step (fmap (loop (n-1)) fs)
-{-# INLINABLE split #-}                        
+{-# INLINABLE splitsAt #-}                        
 
+-- | Break a stream into substreams each with n functorial layers. 
 chunksOf :: (Monad m, Functor f) => Int -> Stream f m r -> Stream (Stream f m) m r
 chunksOf n0 = loop where
   loop stream = case stream of
@@ -260,3 +285,68 @@ chunksOf n0 = loop where
     Delay m        -> Delay (liftM loop m)
     Step fs        -> Step $ Step $ fmap (fmap loop . split n0) fs
 {-# INLINABLE chunksOf #-}          
+
+{- | Make it possible to \'run\' the underlying transformed monad. A simple
+     minded example might be: 
+
+> debugFibs = flip runStateT 1 $ distribute $ loop 1 where
+>   loop n = do
+>     S.yield n
+>     s <- lift get 
+>     liftIO $ putStr "state is: " >> print s
+>     lift $ put (s + n :: Int)
+>     loop s
+
+>>> S.print $  S.take 4 $ S.drop 4 $ debugFibs
+state is: 1
+state is: 2
+state is: 3
+state is: 5
+5
+state is: 8
+8
+state is: 13
+13
+state is: 21
+21
+
+-}
+distribute :: (Monad m, Functor f, MonadTrans t, MFunctor t, Monad (t (Stream f m)))
+           => Stream f (t m) r -> t (Stream f m) r
+distribute = loop where
+  loop stream = case stream of 
+    Return r    -> lift $ Return r
+    Delay tmstr -> hoist lift tmstr >>= distribute
+    Step fstr   -> join $ lift (Step (fmap (Return . distribute) fstr))
+    
+-- | Repeat a functorial layer, command or instruction forever.
+repeats :: (Monad m, Functor f) => f () -> Stream f m r 
+repeats f = loop where
+  loop = Step $ fmap (\_ -> loop) f
+
+-- Repeat a functorial layer, command or instruction forever.
+repeatsM :: (Monad m, Functor f) => m (f ()) -> Stream f m r 
+repeatsM mf = loop where
+  loop = Delay $ do
+     f <- mf
+     return $ Step $ fmap (\_ -> loop) f
+
+-- | Repeat a functorial layer, command or instruct several times.
+replicates :: (Monad m, Functor f) => Int -> f () -> Stream f m ()
+replicates n f = split n (repeats f) >> return ()
+
+{-| Construct an infinite stream by cycling a finite one
+
+> cycles = forever
+
+>>> S.print $ S.take 3 $ forever $ S.each "hi"
+'h'
+'i'
+'h'
+> S.sum $ S.take 13 $ forever $ S.each [1..3]
+25
+-}
+ 
+cycles :: (Monad m, Functor f) =>  Stream f m () -> Stream f m r
+cycles = forever
+

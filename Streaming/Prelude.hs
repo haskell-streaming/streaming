@@ -149,7 +149,13 @@ break pred = loop where
 
 {-| Apply an action to all values flowing downstream
 
-> let debug str = chain print str
+>>> let debug str = chain print str
+>>> S.product (debug (S.each [2..4])) >>= print
+2
+3
+4
+24
+
 -}
 chain :: Monad m => (a -> m ()) -> Stream (Of a) m r -> Stream (Of a) m r
 chain f str = for str $ \a -> do
@@ -157,7 +163,14 @@ chain f str = for str $ \a -> do
     yield a
 {-# INLINE chain #-}
 
+{-| Make a stream of traversable containers into a stream of their separate elements
 
+>>> Streaming.print $ concat (each ["hi","ho"])
+'h'
+'i'
+'h'
+'o'
+-}
 
 concat :: (Monad m, Foldable f) => Stream (Of (f a)) m r -> Stream (Of a) m r
 concat str = for str each
@@ -209,7 +222,13 @@ dropWhile pred = loop where
 -- each 
 -- ---------------
 
--- | Stream the elements of a foldable container.
+{- | Stream the elements of a foldable container.
+
+>>> S.print $ S.each [1..3]
+1
+2
+3
+-}
 each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
 each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
 {-# INLINE each #-}
@@ -351,8 +370,8 @@ foldM' step begin done str = do
     See also the more general 'iterTM' in the 'Streaming' module 
     and the still more general 'destroy'
 
-foldrT (\a p -> Pipes.yield a >> p) :: Monad m => Stream (Of a) m r -> Producer a m r
-foldrT (\a p -> Conduit.yield a >> p) :: Monad m => Stream (Of a) m r -> Conduit a m r
+> foldrT (\a p -> Pipes.yield a >> p) :: Monad m => Stream (Of a) m r -> Producer a m r
+> foldrT (\a p -> Conduit.yield a >> p) :: Monad m => Stream (Of a) m r -> Conduit a m r
 
 -}
 
@@ -493,12 +512,20 @@ maps' phi = loop where
      There is no reason to prefer @inspect@ since, if the @Right@ case is exposed, 
      the first element in the pair will have been evaluated to whnf.
 
-next :: Monad m => Stream (Of a) m r -> m (Either r (a, Stream (Of a) m r))
-inspect :: Monad m => Stream (Of a) m r -> m (Either r (Of a (Stream (Of a) m r)))
+> next :: Monad m => Stream (Of a) m r -> m (Either r (a, Stream (Of a) m r))
+> inspect :: Monad m => Stream (Of a) m r -> m (Either r (Of a (Stream (Of a) m r)))
 
-IOStreams.unfoldM (liftM (either (const Nothing) Just) . next) :: Stream (Of a) IO b -> IO (InputStream a)
-Conduit.unfoldM (liftM (either (const Nothing) Just) . next) :: Stream (Of a) m r -> Source a m r
+     Interoperate with @pipes@ producers thus:
 
+> Pipes.unfoldr Stream.next :: Stream (Of a) m r -> Producer a m r
+> Stream.unfoldr Pipes.next :: Producer a m r -> Stream (Of a) m r 
+     
+     Similarly: 
+
+> IOStreams.unfoldM (liftM (either (const Nothing) Just) . next) :: Stream (Of a) IO b -> IO (InputStream a)
+> Conduit.unfoldM (liftM (either (const Nothing) Just) . next)   :: Stream (Of a) m r -> Source a m r
+
+     But see 'uncons'
 -}
 next :: Monad m => Stream (Of a) m r -> m (Either r (a, Stream (Of a) m r))
 next = loop where
@@ -512,8 +539,8 @@ next = loop where
 {-| Inspect the first item in a stream of elements, without a return value. 
     Useful for unfolding into another streaming type.
 
-IOStreams.unfoldM uncons :: Stream (Of a) IO b -> IO (InputStream a)
-Conduit.unfoldM uncons :: Stream (Of o) m r -> Conduit.Source m o
+> IOStreams.unfoldM uncons :: Stream (Of a) IO b -> IO (InputStream a)
+> Conduit.unfoldM uncons   :: Stream (Of o) m r -> Conduit.Source m o
 
 -}
 uncons :: Monad m => Stream (Of a) m () -> m (Maybe (a, Stream (Of a) m ()))
@@ -568,13 +595,14 @@ repeatM ma = loop where
 -- replicate 
 -- ---------------
 
+-- | Repeat an element several times
 replicate :: Monad m => Int -> a -> Stream (Of a) m ()
 replicate n a = loop n where
   loop 0 = Return ()
   loop m = Step (a :> loop (m-1))
 {-# INLINEABLE replicate #-}
 
--- | Repeat an action, streaming the results.
+-- | Repeat an action several times, streaming the results.
 replicateM :: Monad m => Int -> m a -> Stream (Of a) m ()
 replicateM n ma = loop n where 
   loop 0 = Return ()
@@ -587,6 +615,13 @@ replicateM n ma = loop n where
 {-| Strict left scan, streaming, e.g. successive partial results.
 
 > Control.Foldl.purely scan :: Monad m => Fold a b -> Stream (Of a) m r -> Stream (Of b) m r
+
+>>> Streaming.print $ Foldl.purely Streaming.scan Foldl.list $ each [3..5]
+[]
+[3]
+[3,4]
+[3,4,5]
+
 -}
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 scan step begin done = loop begin
@@ -625,10 +660,13 @@ scanM step begin done str = do
 -- sequence
 -- ---------------
 
--- | Like the 'Data.List.sequence' but streaming. The result type is a
--- stream of a\'s, but is not accumulated; the effects of the elements
--- of the original stream are interleaved in the resulting stream.
+{-| Like the 'Data.List.sequence' but streaming. The result type is a
+    stream of a\'s, /but is not accumulated/; the effects of the elements
+    of the original stream are interleaved in the resulting stream. Compare:
 
+> sequence :: Monad m =>       [m a]           -> m [a]
+> sequence :: Monad m => Stream (Of (m a)) m r -> Stream (Of a) m r
+-}
 sequence :: Monad m => Stream (Of (m a)) m r -> Stream (Of a) m r
 sequence = loop where
   loop stream = case stream of
@@ -751,8 +789,8 @@ toListM' = fold' (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
     more general 'unfold' would require dealing with the left-strict pair
     we are using.
 
-unfoldr Pipes.next :: Monad m => Producer a m r -> Stream (Of a) m r
-unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
+> unfoldr Pipes.next :: Monad m => Producer a m r -> Stream (Of a) m r
+> unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
 
 -}
 unfoldr :: Monad m 

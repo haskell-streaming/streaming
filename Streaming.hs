@@ -8,11 +8,15 @@ module Streaming
    unfold,
    for,
    construct,
+   replicates,
+   repeats,
+   repeatsM
    
    -- * Transforming streams
    maps,
    maps',
    mapsM,
+   distribute,
    
    -- * Inspecting a stream
    inspect,
@@ -25,7 +29,7 @@ module Streaming
    iterT,
 
    -- * Splitting and joining 'Stream's 
-   split,
+   splitsAt,
    chunksOf,
    concats,
 
