@@ -5,8 +5,8 @@
 > import Streaming
 > import qualified Streaming as S
 
-    The @Streaming@ exports types, functor-general operations and some other kit; 
-    it may clash with @free@ and @pipes-group@.
+    The @Streaming@ module exports types, functor-general operations and some other kit; 
+    it may clash with @free@ and @pipes-group@, but not with standard base modules.
 
     Interoperation with @pipes@ is accomplished with this isomorphism, which
     uses @Pipes.Prelude.unfoldr@ from @HEAD@:
@@ -164,6 +164,19 @@ lazily = \(a:>b) -> (a,b)
 strictly :: (a,b) -> Of a b
 strictly = \(a,b) -> a :> b
 {-# INLINE strictly #-}
+
+{-| Break a sequence when a element falls under a predicate, keeping the rest of
+    the stream as the return value.
+
+>>> rest <- S.print $ S.break even $ each [1,1,2,3]
+1
+1
+>>> S.print rest
+2
+3
+
+
+-}
 
 break :: Monad m => (a -> Bool) -> Stream (Of a) m r 
       -> Stream (Of a) m (Stream (Of a) m r)
@@ -728,7 +741,6 @@ fromList [1]
 fromList [1,2]
 fromList [1,2,3]
 fromList [1,2,3,4]
-
 
 -}
 scanM :: Monad m => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
