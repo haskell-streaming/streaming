@@ -13,20 +13,17 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      @Streaming.Prelude@ closely follows 
                      @Pipes.Prelude@, but cleverly omits the pipes. It is focused 
                      on employment with a base functors which generate
-                     effectful sequences: i.e., things like 
+                     effectful sequences: e.g. 
                      .
-                     * @Pipes.Producer@
-                     . 
-                     * @Conduit.Source@
+                     > pipes:      Producer a m r, Producer a m (Producer a m r), FreeT (Producer a m) m r
+                     > io-streams: InputStream a, Generator a r
+                     > conduit:    Source m a, ConduitM () o m r
                      .
-                     * @IOStreams.InputStream@
-                     .
-                     * @IOStreams.Generator@
+                     and the like.
                      .
                      Interoperation with 
                      <http://hackage.haskell.org/package/pipes pipes>
-                     is accomplished with this isomorphism which
-                     uses @Pipes.Prelude.unfoldr@ from @HEAD@:
+                     is accomplished with this isomorphism:
                      .  
                      > Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
                      > Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r                     

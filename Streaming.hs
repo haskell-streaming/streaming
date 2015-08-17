@@ -14,7 +14,6 @@ module Streaming
    
    -- * Transforming streams
    maps,
-   maps',
    mapsM,
    distribute,
    
@@ -33,7 +32,7 @@ module Streaming
    chunksOf,
    concats,
 
-   -- * Useful functors
+   -- * Base functor for streams of individual items
    Of (..),
    lazily,
    strictly,

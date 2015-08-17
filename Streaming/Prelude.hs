@@ -58,7 +58,6 @@ module Streaming.Prelude (
     -- $pipes
     , map
     , mapM
-    , maps'
     , maps
     , sequence
     , mapFoldable
@@ -355,13 +354,39 @@ filterM pred = loop where
 -- ---------------
 
 {- $folds
-    Use these to fold the elements of a 'Stream'.  The general folds 'fold', fold\'',
-    'foldM' and 'foldM\'' are arranged for use with 'Control.Foldl' All functions marked
-    with a final '\'' (e.g. 'fold\'', 'sum\') carry the stream's return value -- or, in
-    the case of 'maps\'' are tailored to take such an operation as argument.
+    Use these to fold the elements of a 'Stream'.  
 
->  maps' sum' :: (Monad m, Num n) => Stream (Stream (Of n)) m r -> Stream (Of n) m r
->  maps' (fold' mappend mempty id) :: :: (Monad m, Num n) => Stream (Stream (Of n)) m r -> Stream (Of n) m r
+>>> S.fold (+) 0 id $ S.each [1..0]
+50
+
+    The general folds 'fold', fold\'', 'foldM' and 'foldM\'' are arranged 
+    for use with 'Control.Foldl'
+
+>>> L.purely fold L.sum $ each [1..10]
+55
+>>> L.purely fold (liftA3 (,,) L.sum L.product L.list) $ each [1..10]
+(55,3628800,[1,2,3,4,5,6,7,8,9,10])
+
+    All functions marked with a single quote 
+    (e.g. @fold'@, @sum'@ carry the stream's return value in a left-strict pair.
+    These are convenient for @mapsM@-ing over a @Stream (Stream (Of a) m) m r@, 
+    which is to be compared with @[[a]]@. Specializing, we have e.g.
+
+>  mapsM sum' :: (Monad m, Num n) => Stream (Stream (Of Int)) IO () -> Stream (Of n) IO ()
+>  mapsM (fold' mappend mempty id) :: Stream (Stream (Of Int)) IO () -> Stream (Of Int) IO ()
+
+>>> S.print $ mapsM sum' $ chunksOf 3 $ each [1..10]
+6
+15
+24
+10
+
+>>> let three_folds = L.purely S.fold' (liftA3 (,,) L.sum L.product L.list)
+>>> S.print $ mapsM three_folds $ chunksOf 3 (each [1..10])
+(6,6,[1,2,3])
+(15,120,[4,5,6])
+(24,504,[7,8,9])
+(10,10,[10])
 -}
 
 {-| Strict fold of a 'Stream' of elements
@@ -377,16 +402,44 @@ fold step begin done stream0 = loop stream0 begin
       Step (a :> rest) -> loop rest (step x a)
 {-# INLINABLE fold #-}
 
-{-| Strict fold of a 'Stream' of elements that preserves the return value
+{-| Strict fold of a 'Stream' of elements that preserves the return value. 
 
-> Control.Foldl.purely fold' :: Monad m => Fold a b -> Stream (Of a) m r -> m (b, r)
+>>> S.sum' $ each [1..10]
+55 :> ()
+
+>>> (n :> rest)  <- sum' $ S.splitAt 3 (each [1..10])
+>>> print n
+6
+>>> (m :> rest') <- sum' $ S.splitAt 3 rest
+>>> print m
+15
+>>> S.print rest'
+7
+8
+9
+
+    The type provides for interoperation with the foldl library.
+
+> Control.Foldl.purely fold' :: Monad m => Fold a b -> Stream (Of a) m r -> m (Of b r)
+
+    Thus, specializing a bit:
+
+> L.purely fold' L.sum :: Stream (Of Int) Int r -> m (Of Int r)
+> maps (L.purely fold' L.sum) :: Stream (Stream (Of Int)) IO r -> Stream (Of Int) IO r
+
+
+>>> S.print $ mapsM (L.purely S.fold' (liftA2 (,) L.list L.sum)) $ chunksOf 3 $ each [1..10]
+([1,2,3],6)
+([4,5,6],15)
+([7,8,9],24)
+([10],10)
 -}
 
-fold' :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (b, r)
+fold' :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
 fold' step begin done s0 = loop s0 begin
   where
     loop stream !x = case stream of 
-      Return r         -> return (done x, r)
+      Return r         -> return (done x :> r)
       Delay m          -> m >>= \s -> loop s x
       Step (a :> rest) -> loop rest (step x a)
 {-# INLINABLE fold' #-}
@@ -416,13 +469,13 @@ foldM step begin done s0 = do
 -}
 foldM'
     :: Monad m
-    => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> m (b, r)
+    => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> m (Of b r)
 foldM' step begin done str = do
     x0 <- begin
     loop str x0
   where
     loop stream !x = case stream of 
-      Return r         -> done x >>= \b -> return (b, r)
+      Return r         -> done x >>= \b -> return (b :> r)
       Delay m          -> m >>= \s -> loop s x
       Step (a :> rest) -> do
         x' <- step x a
@@ -551,23 +604,7 @@ mapM_ f = loop where
       f a 
       loop as 
 {-# INLINEABLE mapM_ #-}
-{-| Map free layers of a functor to a corresponding stream of individual elements. This
-     simplifies the use of folds marked with a \'\'\' in @Streaming.Prelude@
 
-> maps' sum' :: (Monad m, Num a) => Stream (Stream (Of a) m) m r -> Stream (Of a) m r
-> maps' (Pipes.fold' (+) (0::Int) id) :: Monad m => Stream (Producer Int m) m r -> Stream (Of Int) m r
-
--}
-maps' :: (Monad m, Functor f) 
-          => (forall x . f x -> m (a, x)) 
-          -> Stream f m r 
-          -> Stream (Of a) m r
-maps' phi = loop where
-  loop stream = case stream of 
-    Return r -> Return r
-    Delay m -> Delay $ liftM loop m
-    Step fs -> Delay $ liftM (Step . uncurry (:>)) (phi (fmap loop fs))
-{-# INLINABLE maps' #-}
 
 {-| The standard way of inspecting the first item in a stream of elements, if the
      stream is still \'running\'. The @Right@ case contains a 
@@ -624,7 +661,7 @@ product = fold (*) 1 id
 
 >  maps' product' :: Stream (Stream (Of Int)) m r -> Stream (Of Int) m r
 -}
-product' :: (Monad m, Num a) => Stream (Of a) m r -> m (a,r)
+product' :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
 product' = fold' (*) 1 id
 {-# INLINAE product' #-}
 
@@ -800,7 +837,7 @@ sum = fold (+) 0 id
 
 >  maps' sum' :: Stream (Stream (Of Int)) m r -> Stream (Of Int) m r
 -}
-sum' :: (Monad m, Num a) => Stream (Of a) m r -> m (a, r)
+sum' :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
 sum' = fold' (+) 0 id
 {-# INLINE sum' #-}
 
@@ -859,8 +896,22 @@ splitAt = splitsAt
 -- take
 -- ---------------
 
--- | End stream after n elements; the original return value is lost.
--- 'splitAt' preserves this information. Note the function is functor-general.
+{-| End a stream after n elements; the original return value is thus lost.
+    'splitAt' preserves this information. Note that, like @splitAt@, this
+    function is functor-general, so that, for example, you can @take@ not
+    just a number of items from a stream of elements, but a number 
+    of substreams and the like.
+
+>>> S.print $ mapsM sum' $ S.take 2 $ chunksOf 3 $ each [1..]
+6   -- sum of first group of 3
+15  -- sum of second group of 3
+>>> S.print $ mapsM S.sum' $ S.take 2 $ chunksOf 3 $ S.each [1..4] >> S.readLn
+6     -- sum of first group of 3, which is already in [1..4]
+100   -- user input
+10000 -- user input
+10104 -- sum of second group of 3
+
+-}
 
 take :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
 take = loop where
@@ -913,7 +964,7 @@ toListM = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 
 >  maps' toListM' :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m 
 -}
-toListM' :: Monad m => Stream (Of a) m r -> m ([a], r)
+toListM' :: Monad m => Stream (Of a) m r -> m (Of [a] r)
 toListM' = fold' (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 {-# INLINE toListM' #-}
 
@@ -942,12 +993,12 @@ unfoldr step = loop where
 
 {-| A singleton stream
 
->>> S.sum $ do {S.yield 1; lift $ putStrLn "hello"; S.yield 2; lift $ putStrLn "goodbye"; S.yield 3}
+>>> S.sum $ do {yield 1; lift (putStrLn "hello"); yield 2; lift (putStrLn "goodbye"); S.yield 3}
 hello
 goodbye
 6
 
->>> S.sum $ S.take 3 $ forever $ do {lift $ putStrLn "enter a number" ; n <- lift $ readLn; S.yield n }
+>>> S.sum $ S.take 3 $ forever $ do {lift (putStrLn "enter a number") ; n <- lift readLn; S.yield n }
 enter a number
 100
 enter a number
