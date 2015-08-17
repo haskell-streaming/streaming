@@ -256,6 +256,17 @@ iterT out stream = destroy stream out join return
     Thus dissolving the segmentation into @Stream f m@ layers.
 
 > concats stream = destroy stream join (join . lift) return
+
+>>> S.print $ concats $ maps (cons 1776) $ chunksOf 2 (each [1..5])
+1776
+1
+2
+1776
+3
+4
+1776
+5
+
 -}
 concats ::
     (MonadTrans t, Monad (t m), Monad m) =>
@@ -263,12 +274,19 @@ concats ::
 concats stream = destroy stream join (join . lift) return
 {-# INLINE concats #-}
 
--- | Split a succession of layers after some number, returning a streaming or
---   effectful pair.
+{-| Split a succession of layers after some number, returning a streaming or
+    effectful pair.
+
+>>> rest <- S.print $ S.splitAt 1 $ each [1..3]
+1
+>>> S.print rest
+2
+3
+-}
 splitsAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
 splitsAt = loop where
   loop !n stream 
-    | n <= 1 = Return stream
+    | n <= 0 = Return stream
     | otherwise = case stream of
         Return r       -> Return (Return r)
         Delay m        -> Delay (liftM (loop n) m)
@@ -277,13 +295,20 @@ splitsAt = loop where
           _ -> Step (fmap (loop (n-1)) fs)
 {-# INLINABLE splitsAt #-}                        
 
--- | Break a stream into substreams each with n functorial layers. 
+{-| Break a stream into substreams each with n functorial layers. 
+
+>>>  S.print $ maps' sum' $ chunksOf 2 $ each [1,1,1,1,1,1,1]
+2
+2
+2
+1
+-}
 chunksOf :: (Monad m, Functor f) => Int -> Stream f m r -> Stream (Stream f m) m r
 chunksOf n0 = loop where
   loop stream = case stream of
     Return r       -> Return r
     Delay m        -> Delay (liftM loop m)
-    Step fs        -> Step $ Step $ fmap (fmap loop . splitsAt n0) fs
+    Step fs        -> Step $ Step $ fmap (fmap loop . splitsAt (n0-1)) fs
 {-# INLINABLE chunksOf #-}          
 
 {- | Make it possible to \'run\' the underlying transformed monad. A simple
@@ -293,21 +318,21 @@ chunksOf n0 = loop where
 >   loop n = do
 >     S.yield n
 >     s <- lift get 
->     liftIO $ putStr "state is: " >> print s
+>     liftIO $ putStr "Current state is:  " >> print s
 >     lift $ put (s + n :: Int)
 >     loop s
 
 >>> S.print $  S.take 4 $ S.drop 4 $ debugFibs
-state is: 1
-state is: 2
-state is: 3
-state is: 5
+Current state is:  1
+Current state is:  2
+Current state is:  3
+Current state is:  5
 5
-state is: 8
+Current state is:  8
 8
-state is: 13
+Current state is:  13
 13
-state is: 21
+Current state is:  21
 21
 
 -}

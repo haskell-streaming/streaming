@@ -16,16 +16,21 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      @Conduit.Source@, @IOStreams.InputStream@, @IOStreams.Generator@
                      and the like.
                      .
-                     Interoperation with `pipes` is accomplished with this isomorphism:
+                     Interoperation with @pipes@ is accomplished with this isomorphism, which
+                     uses @Pipes.Prelude.unfoldr@ from @HEAD@:
                      .  
-                     > Pipes.unfoldr Streaming.next :: Stream (Of a) m r -> Producer a m r
-                     > Stream.unfoldr Pipes.next    :: Producer a m r -> Stream (Of a) m r
+                     > Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
+                     > Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r                     
                      .
-                     Exit to `conduit` and `iostreams` is thus:
+                     Interoperation with `iostreams` is thus:
                      .
-                     > Conduit.unfoldM Streaming.uncons   :: Stream (Of a) m ()  -> Source m a
-                     > IOStreams.unfoldM Streaming.uncons :: Stream (Of a) IO () -> InputStream a
-                     
+                     > Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
+                     > IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
+                     .
+                     for example. A simple exit to conduit would be, e.g.:
+                     .
+                     > Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
+
                      
 license:             BSD3
 license-file:        LICENSE
