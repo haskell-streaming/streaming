@@ -11,8 +11,8 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      . 
                      @Streaming.Prelude@ closely follows 
                      @Pipes.Prelude@, but cleverly /omits the pipes/. It is focused 
-                     on employment with a base functors which generate
-                     effectful sequences: e.g. 
+                     on employment with base functors which generate
+                     effectful sequences. These appear elsewhere under titles like
                      .
                      > pipes:      Producer a m r, Producer a m (Producer a m r), FreeT (Producer a m) m r
                      > io-streams: InputStream a, Generator a r
@@ -36,15 +36,19 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      > Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
                      > IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
                      .
-                     The purposes of the separate @Generator a r@ type in @io-streams@ can as well be met with 
-                     @Stream (Of a) m r@, which admits more complex manipulations. It should
-                     be somewhat friendlier to the compiler. 
+                     The separate @Generator a r@ type in @io-streams@ is intended to permit
+                     construction of an @InputStream@ with more possibilities 
+                     (such as the @yield@ statement). This purpose can as well be met with 
+                     @Stream (Of a) m r@, which may be friendlier to the compiler.
                      .
                      A simple exit to <http://hackage.haskell.org/package/conduit conduit> would be, e.g.:
                      .
                      > Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
                      .
                      These conversions should never be more expensive than a single @>->@ or @=$=@.
+                     .
+  
+                     
                      
 license:             BSD3
 license-file:        LICENSE
@@ -75,7 +79,6 @@ library
                      , mtl >=2.1 && <2.3
                      , mmorph >=1.0 && <1.2
                      , transformers >=0.3 && <0.5
-                     , ghc-prim
 
   default-language:  Haskell2010
   

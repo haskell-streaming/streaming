@@ -1,27 +1,29 @@
-{-| This module is very closely modeled on Pipes.Prelude.
+{-| This module is very closely modeled on Pipes.Prelude; it attempts to 
+    simplify and optimize the conception of Producer manipulation contained
+    in Pipes.Group, Pipes.Parse and the like. This is very simple and unmysterious;
+    it is independent of piping and conduiting, and can be used with any 
+    rational \"streaming IO\" system.
+
+    Some interoperation incantations would be e.g. 
+
+> Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
+> Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r                     
+> Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
+> IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
+> Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
 
     Import qualified thus:
 
 > import Streaming
-> import qualified Streaming as S
+> import qualified Streaming.Prelude as S
 
-    The @Streaming@ module exports types, functor-general operations and some other kit; 
-    it may clash with @free@ and @pipes-group@, but not with standard base modules.
+    For the examples below, one sometimes needs
 
-    Interoperation with @pipes@ is accomplished with this isomorphism, which
-    uses @Pipes.Prelude.unfoldr@ from @HEAD@:
+> import Streaming.Prelude (each, yield, stdoutLn, stdinLn)
+> import qualified Control.Foldl as L -- cabal install foldl
+> import qualified Pipes as P
+> import qualified Pipes.Prelude as P
 
-> Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
-> Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r                     
-
-    Interoperation with `iostreams` is thus:
-
-> Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
-> IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
-
-    A simple exit to conduit would be, for example:
-
-> Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
 -}
 {-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable,
              DeriveFoldable, DeriveFunctor, DeriveTraversable #-}
@@ -42,6 +44,7 @@ module Streaming.Prelude (
     , fromHandle
     , iterate
     , repeat
+    , cycle
     , repeatM
     , replicateM
     
@@ -143,7 +146,7 @@ import qualified Prelude as Prelude
 import qualified Data.Foldable as Foldable
 import Text.Read (readMaybe)
 import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, sum, product
-                      , iterate, repeat, replicate, splitAt
+                      , iterate, repeat, cycle, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo, length
                       , print, zipWith, zip, seq, show, read
                       , readLn, sequence, concat, span, break)
@@ -241,12 +244,37 @@ cons :: (Monad m) => a -> Stream (Of a) m r -> Stream (Of a) m r
 cons a str = Step (a :> str)
 {-# INLINE cons #-}
 
+{- | Cycle repeatedly through the layers of a stream /ad inf./
+
+> rest <- S.print $ S.splitAt 3 $ S.cycle $ yield 1 >> yield 2
+1
+2
+1
+> S.print $ S.take 3 rest
+2
+1
+2
+
+-}
+
+cycle :: (Monad m, Functor f) => Stream f m r -> Stream f m s
+cycle = forever
 
 -- ---------------
 -- drain
 -- ---------------
 
--- | Reduce a stream, performing its actions but ignoring its elements.
+{- | Reduce a stream, performing its actions but ignoring its elements.
+
+>>> let stream = do {yield 1; lift (putStrLn "Effect!"); yield 2; lift (putStrLn "Effect!"); return (2^100)} 
+>>> S.drain stream
+Effect!
+Effect!
+1267650600228229401496703205376
+>>> S.drain $ S.takeWhile (<2) stream
+Effect!
+
+-}
 drain :: Monad m => Stream (Of a) m r -> m r
 drain = loop where
   loop stream = case stream of 
@@ -579,7 +607,7 @@ map f = loop where
 
 {-| For each element of a stream, stream a foldable container of elements instead
 
->>> D.print $ D.mapFoldable show $ D.yield 12
+>>> S.print $ S.mapFoldable show $ yield 12
 '1'
 '2'
 
@@ -989,20 +1017,25 @@ toListM' = fold' (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 {-| Build a @Stream@ by unfolding steps starting from a seed. 
 
     The seed can of course be anything, but this is one natural way 
-    to consume a @pipes@ 'Pipes.Producer'. 
+    to consume a @pipes@ 'Pipes.Producer'. Consider:
 
 >>> S.stdoutLn $ S.take 2 (S.unfoldr P.next P.stdinLn)
 hello<Enter>
 hello
-world<Enter>
-world
+goodbye<Enter>
+goodbye
 
->>> S.stdoutLn $ S.unfoldr P.next (P.stdinLn >-> P.take 2)
+>>> S.stdoutLn $ S.unfoldr P.next (P.stdinLn P.>-> P.take 2)
 hello<Enter>
 hello
-world<Enter>
-world
+goodbye<Enter>
+goodbye
 
+>>> S.drain $ S.unfoldr P.next (P.stdinLn P.>-> P.take 2 P.>-> P.stdoutLn)
+hello<Enter>
+hello
+goodbye<Enter>
+goodbye
 -}
 unfoldr :: Monad m 
         => (s -> m (Either r (a, s))) -> s -> Stream (Of a) m r
@@ -1010,7 +1043,7 @@ unfoldr step = loop where
   loop s0 = Delay $ do 
     e <- step s0
     case e of
-      Left r -> return (Return r)
+      Left r      -> return (Return r)
       Right (a,s) -> return (Step (a :> loop s))
 {-# INLINABLE unfoldr #-}
 
@@ -1020,19 +1053,24 @@ unfoldr step = loop where
 
 {-| A singleton stream
 
->>> S.sum $ do {yield 1; lift (putStrLn "hello"); yield 2; lift (putStrLn "goodbye"); S.yield 3}
+>>> stdoutLn $ yield "hello"
 hello
-goodbye
-6
 
->>> S.sum $ S.take 3 $ forever $ do {lift (putStrLn "Enter a number:") ; n <- lift readLn; S.yield n }
+>>> S.sum $ do {yield 1;  lift $ putStrLn "yielded 1";  yield 2;  lift $ putStrLn "yielded 2"}
+yielded 1
+yielded 2
+3
+
+>>> let prompt :: Stream (Of Int) IO (); prompt = do {lift $ putStrLn "Enter a number:"; n <- lift readLn;  yield n } 
+>>> S.sum $ prompt >> prompt >> prompt
 Enter a number:
-3<Enter>
+1
 Enter a number:
-20<Enter>
+10
 Enter a number:
-100<Enter>
-123
+100
+111
+
 
 -}
 yield :: Monad m => a -> Stream (Of a) m ()
