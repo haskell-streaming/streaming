@@ -60,3 +60,4 @@ user-defined operations, where we should expect times like those shown for pipes
 Since the combinators from `streaming` is defined with naive recursion, 
 more or less as the user might, we have reason to think the result is characteristic, 
 but much more benchmarking is needed before anything can be said with certainty.
+The labor of constructor-hiding may turn up some further difficulty.
