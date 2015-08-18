@@ -30,6 +30,14 @@ module Streaming.Internal (
     -- *  Splitting streams
     , chunksOf 
     , splitsAt
+    
+    -- *  For internal use
+    , unexposed
+    , hoistExposed
+    , mapsExposed
+    , mapsMExposed
+    , destroyExposed
+    
    ) where
 
 import Control.Monad
@@ -113,35 +121,51 @@ instance Functor f => MonadTrans (Stream f) where
   {-# INLINE lift #-}
 
 instance Functor f => MFunctor (Stream f) where
-  hoist trans = loop where
+  hoist trans = loop . unexposed where
     loop stream = case stream of 
       Return r  -> Return r
       Delay m   -> Delay (trans (liftM loop m))
       Step f    -> Step (fmap loop f)
   {-# INLINABLE hoist #-}    
 
+
 instance Functor f => MMonad (Stream f) where
   embed phi = loop where
     loop stream = case stream of
       Return r -> Return r
-      Delay m  -> phi m >>= loop
-      Step f   -> Step (fmap loop f)
+      Delay  m -> phi m >>= loop
+      Step   f -> Step (fmap loop f)
   {-# INLINABLE embed #-}   
-   
+
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   liftIO = Delay . liftM Return . liftIO
   {-# INLINE liftIO #-}
 
--- | Map a stream to its church encoding; compare @Data.List.foldr@
-destroy 
+
+{-| Map a stream directly to its church encoding; compare @Data.List.foldr@
+    It permits distinctions that should be hidden, as can be seen from
+    e.g. 
+
+isPure stream = destroy_ (const True) (const False) (const True)
+
+    and similar nonsense.  The crucial 
+    constraint is that the @m x -> x@ argument is an /Eilenberg-Moore algebra/.
+    See Atkey "Reasoning about Stream Processing with Effects"
+
+    The destroy exported by the safe modules is 
+
+destroy str = destroy (observe str)
+-}
+destroy
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroy stream0 construct wrap done = loop stream0 where
+destroy stream0 construct wrap done = loop (unexposed stream0) where
   loop stream = case stream of
     Return r -> done r
     Delay m  -> wrap (liftM loop m)
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroy #-}
+
 
 -- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
 construct
@@ -186,7 +210,7 @@ unfold step = loop where
 {-# INLINABLE unfold #-}
 
 
--- | Map layers of one functor to another with a natural transformation
+-- | Map layers of one functor to another with a transformation
 maps :: (Monad m, Functor f) 
      => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
 maps phi = loop where
@@ -271,7 +295,11 @@ iterT out stream = destroy stream out join return
 concats ::
     (MonadTrans t, Monad (t m), Monad m) =>
     Stream (t m) m a -> t m a
-concats stream = destroy stream join (join . lift) return
+concats  = loop where
+  loop stream = case stream of
+    Return r -> return r
+    Delay m  -> join $ lift (liftM loop m)
+    Step fs  -> join (fmap loop fs)
 {-# INLINE concats #-}
 
 {-| Split a succession of layers after some number, returning a streaming or
@@ -375,3 +403,51 @@ replicates n f = splitsAt n (repeats f) >> return ()
 cycles :: (Monad m, Functor f) =>  Stream f m () -> Stream f m r
 cycles = forever
 
+
+
+hoistExposed trans = loop where
+  loop stream = case stream of 
+    Return r  -> Return r
+    Delay m   -> Delay (trans (liftM loop m))
+    Step f    -> Step (fmap loop f)
+
+mapsExposed :: (Monad m, Functor f) 
+     => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
+mapsExposed phi = loop where
+  loop stream = case stream of 
+    Return r  -> Return r
+    Delay m   -> Delay (liftM loop m)
+    Step f    -> Step (phi (fmap loop f))
+{-# INLINABLE mapsExposed #-}
+
+mapsMExposed phi = loop where
+  loop stream = case stream of 
+    Return r  -> Return r
+    Delay m   -> Delay (liftM loop m)
+    Step f    -> Delay (liftM Step (phi (fmap loop f)))
+{-# INLINABLE mapsMExposed #-}
+--     Map a stream directly to its church encoding; compare @Data.List.foldr@
+--     It permits distinctions that should be hidden, as can be seen from
+--     e.g.
+--
+-- isPure stream = destroy (const True) (const False) (const True)
+--
+--     and similar nonsense.  The crucial
+--     constraint is that the @m x -> x@ argument is an /Eilenberg-Moore algebra/.
+--     See Atkey "Reasoning about Stream Processing with Effects"
+
+
+destroyExposed stream0 construct wrap done = loop stream0 where
+  loop stream = case stream of
+    Return r -> done r
+    Delay m  -> wrap (liftM loop m)
+    Step fs  -> construct (fmap loop fs)
+{-# INLINABLE destroyExposed #-}
+
+unexposed :: (Functor f, Monad m) => Stream f m r -> Stream f m r
+unexposed = Delay . loop where
+  loop stream = case stream of 
+    Return r -> return (Return r)
+    Delay  m -> m >>= loop
+    Step   f -> return (Step (fmap (Delay . loop) f))
+{-# INLINABLE unexposed #-}   

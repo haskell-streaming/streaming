@@ -6,8 +6,8 @@ module Streaming
    Stream, 
    -- * Constructing a 'Stream' on a base functor
    unfold,
-   for,
    construct,
+   for,
    replicates,
    repeats,
    repeatsM,
@@ -21,11 +21,12 @@ module Streaming
    inspect,
    
    -- * Eliminating a 'Stream'
-   destroy,
    intercalates,
    concats,
    iterTM,
    iterT,
+   destroy,
+   
 
    -- * Splitting and joining 'Stream's 
    splitsAt,
@@ -39,15 +40,23 @@ module Streaming
    
    -- * re-exports
    MFunctor(..),
-   MonadTrans(..)
+   MMonad(..),
+   MonadTrans(..),
+   MonadIO(..),
+   Compose(..),
+   join,
+   liftA2,
+   liftA3,
+   void
    )
    where
-import Streaming.Internal
+import Streaming.Internal 
 import Streaming.Prelude 
-import Control.Monad.Morph (MFunctor(..))
+import Control.Monad.Morph
 import Control.Monad
+import Control.Applicative
 import Control.Monad.Trans
-
+import Data.Functor.Compose 
 
 {- $stream
 
@@ -82,11 +91,22 @@ import Control.Monad.Trans
 
     To avoid breaking reasoning principles, the constructors 
     should not be used directly. A pattern-match should go by way of 'inspect' 
-    \- or, in the producer case, 'Streaming.Prelude.next'
-    The constructors are exported by the 'Internal' module.
+    \- or, in the producer case, 'Streaming.Prelude.next'. These mirror
+    the type of @runFreeT@. The constructors are exported by the 'Internal' module.
 -}
 
+{-| Map a stream to its church encoding; compare @Data.List.foldr@
+    This is the @safe_destroy@ exported by the @Internal@ module.
 
+    Typical @FreeT@ operators can be defined in terms of @destroy@
+    e.g.
 
+> iterT :: (Functor f, Monad m) => (f (m a) -> m a) -> Stream f m a -> m a
+> iterT out stream = destroy stream out join return
+> iterTM ::  (Functor f, Monad m, MonadTrans t, Monad (t m)) => (f (t m a) -> t m a) -> Stream f m a -> t m a
+> iterTM out stream = destroy stream out (join . lift) return
+> concats :: (Monad m, MonadTrans t, Monad (t m)) => Stream (t m) m a -> t m a
+> concats stream = destroy stream join (join . lift) return
+-}
 
 

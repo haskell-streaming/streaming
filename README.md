@@ -30,8 +30,7 @@ There is also a still-incomplete `Prelude` of functions, some
 `FreeT ((,) a) m ()` are possible implementations 
 of `ListT done right`. 
 
-I ran a simple benchmark (adjusting a script of `johnw`) using a very simple 
-composition of functions:
+I ran a simple [benchmark](https://gist.github.com/michaelt/7f89dc8b366b30bb6acc) (adjusting a [script](https://github.com/jwiegley/streaming-tests) of John Weigly) using a very simple composition of functions:
 
     toList 
     . filter (\x -> x `mod` 2 == 0) 
@@ -41,12 +40,9 @@ composition of functions:
     . filter even 
     . each
 
-This all-prepackaged-combinator sequence is, I think, very friendly to the 
-more recent conduit fusion framework. Since here each combinator is defined
-with naive recursion, more or less as the user might, the results were 
-fairly pleasing:
+The the results were fairly pleasing:
 
-    benchmarking basic/stream
+    benchmarking basic/streaming
     time                 84.50 ms   (79.81 ms .. 87.90 ms)
 
     benchmarking basic/iostreams
@@ -58,3 +54,9 @@ fairly pleasing:
     benchmarking basic/conduit
     time                 102.3 ms   (96.24 ms .. 110.0 ms)
 
+This sequence of pre-packaged combinators is, I think, very friendly to the 
+more recent conduit fusion framework. The framework of course doesn't apply to
+user-defined operations, where we should expect times like those shown for pipes.
+Since the combinators from `streaming` is defined with naive recursion, 
+more or less as the user might, we have reason to think the result is characteristic, 
+but much more benchmarking is needed before anything can be said with certainty.

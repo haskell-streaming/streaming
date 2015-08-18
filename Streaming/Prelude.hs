@@ -28,8 +28,7 @@
              
 module Streaming.Prelude (
     -- * Types
-    Stream 
-    , Of (..)
+    Of (..)
     , lazily
     , strictly
 
@@ -41,6 +40,7 @@ module Streaming.Prelude (
     , stdinLn
     , readLn
     , fromHandle
+    , iterate
     , repeat
     , repeatM
     , replicateM
@@ -97,13 +97,15 @@ module Streaming.Prelude (
     , sum'
     , product
     , product'
+    , length
+    , length'
     , toList
     , toListM
     , toListM'
     , foldrM
     , foldrT
     
-    -- * Short circuiting folds
+    
     -- , all
     -- , any
     -- , and
@@ -127,6 +129,8 @@ module Streaming.Prelude (
     -- * Interoperation
     , reread
     
+    -- * Basic Type
+    , Stream
 
   ) where
 import Streaming.Internal
@@ -140,7 +144,7 @@ import qualified Data.Foldable as Foldable
 import Text.Read (readMaybe)
 import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, sum, product
                       , iterate, repeat, replicate, splitAt
-                      , takeWhile, enumFrom, enumFromTo
+                      , takeWhile, enumFrom, enumFromTo, length
                       , print, zipWith, zip, seq, show, read
                       , readLn, sequence, concat, span, break)
 
@@ -286,7 +290,7 @@ dropWhile pred = loop where
 
 {- | Stream the elements of a foldable container.
 
->>> S.print $ S.each [1..3]
+>>> S.print $ each [1..3]
 1
 2
 3
@@ -547,6 +551,15 @@ iterateM f = loop where
     return (Step (a :> loop (f a)))
 {-# INLINEABLE iterateM #-}
 
+
+-- ---------------
+-- length
+-- ---------------
+length :: Monad m => Stream (Of a) m () -> m Int
+length = fold (\n _ -> n + 1) 0 id
+
+length' :: Monad m => Stream (Of a) m r -> m (Of Int r)
+length' = fold' (\n _ -> n + 1) 0 id
 -- ---------------
 -- map
 -- ---------------
@@ -694,11 +707,10 @@ repeat a = loop where loop = Step (a :> loop)
 
 {-| Repeat a monadic action /ad inf./, streaming its results.
 
->>>  L.purely fold L.list $ S.take 2 $ repeatM getLine
-hello
-world
+>>>  S.toListM $ S.take 2 (repeatM getLine)
+hello<Enter>
+world<Enter>
 ["hello","world"]
-
 -}
 
 repeatM :: Monad m => m a -> Stream (Of a) m r
@@ -719,7 +731,13 @@ replicate n a = loop n where
   loop m = Step (a :> loop (m-1))
 {-# INLINEABLE replicate #-}
 
--- | Repeat an action several times, streaming the results.
+{-| Repeat an action several times, streaming the results.
+
+>>> S.print $ S.replicateM 2 getCurrentTime
+2015-08-18 00:57:36.124508 UTC
+2015-08-18 00:57:36.124785 UTC
+
+-}
 replicateM :: Monad m => Int -> m a -> Stream (Of a) m ()
 replicateM n ma = loop n where 
   loop 0 = Return ()
@@ -969,12 +987,21 @@ toListM' = fold' (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 {-# INLINE toListM' #-}
 
 {-| Build a @Stream@ by unfolding steps starting from a seed. 
-    This is one natural way to consume a 'Pipes.Producer'. It is worth
-    adding it to the functor-general 'unfold' to avoid dealing with 
-    the left-strict pairing we are using in place of Haskell pairing.
 
-> unfoldr Pipes.next :: Monad m => Producer a m r -> Stream (Of a) m r
-> unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
+    The seed can of course be anything, but this is one natural way 
+    to consume a @pipes@ 'Pipes.Producer'. 
+
+>>> S.stdoutLn $ S.take 2 (S.unfoldr P.next P.stdinLn)
+hello<Enter>
+hello
+world<Enter>
+world
+
+>>> S.stdoutLn $ S.unfoldr P.next (P.stdinLn >-> P.take 2)
+hello<Enter>
+hello
+world<Enter>
+world
 
 -}
 unfoldr :: Monad m 
@@ -998,20 +1025,15 @@ hello
 goodbye
 6
 
->>> S.sum $ S.take 3 $ forever $ do {lift (putStrLn "enter a number") ; n <- lift readLn; S.yield n }
-enter a number
-100
-enter a number
-200
-enter a number
-300
-600
- 
-enter a number
-1
-enter a number
-1000
-1001
+>>> S.sum $ S.take 3 $ forever $ do {lift (putStrLn "Enter a number:") ; n <- lift readLn; S.yield n }
+Enter a number:
+3<Enter>
+Enter a number:
+20<Enter>
+Enter a number:
+100<Enter>
+123
+
 -}
 yield :: Monad m => a -> Stream (Of a) m ()
 yield a = Step (a :> Return ())
@@ -1048,10 +1070,25 @@ zipWith f = loop
 
 {-| repeatedly stream lines as 'String' from stdin
 
->>> S.stdoutLn $ S.show (S.each [1..3])
+>>> stdoutLn $ S.show (S.each [1..3])
 1
 2
 3
+
+>>> stdoutLn stdinLn 
+hello<Enter>
+hello
+world<Enter>
+world
+^CInterrupted.
+
+
+>>> stdoutLn $ S.map reverse stdinLn 
+hello<Enter>
+olleh
+world<Enter>
+dlrow
+^CInterrupted.
 
 -}
 stdinLn :: MonadIO m => Stream (Of String) m ()
@@ -1060,10 +1097,10 @@ stdinLn = fromHandle IO.stdin
 
 {-| Read values from 'IO.stdin', ignoring failed parses
 
->>>  S.sum $ S.take 2 $ forever S.readLn :: IO Int
-3
-#$%^&\^?
-1000
+>>>  S.sum $ S.take 2 S.readLn :: IO Int
+3<Enter>
+#$%^&\^?<Enter>
+1000<Enter>
 1003
 -}
 
@@ -1076,6 +1113,12 @@ readLn = for stdinLn $ \str -> case readMaybe str of
 {-| Read 'String's from a 'IO.Handle' using 'IO.hGetLine'
 
     Terminates on end of input
+
+>>> withFile "distribute.hs" ReadMode $ stdoutLn . S.take 3 . fromHandle
+import Streaming
+import qualified Streaming.Prelude as S
+import Control.Monad.Trans.State.Strict
+
 -}
 fromHandle :: MonadIO m => IO.Handle -> Stream (Of String) m ()
 fromHandle h = go
@@ -1140,7 +1183,25 @@ stdoutLn = loop
 {-| Write 'String's to 'IO.stdout' using 'putStrLn'
 
     This does not handle a broken output pipe, but has a polymorphic return
-    value
+    value, which makes this possible:
+
+>>> rest <- stdoutLn' $ S.splitAt 3 $ S.show (each [1..5])
+1
+2
+3
+>>> stdoutLn' rest
+4
+5
+
+    Or indeed:
+
+>>> rest <- stdoutLn' $ S.show $ S.splitAt 3 (each [1..5])
+1
+2
+3
+>>>S.sum rest
+9
+
 -}
 
 stdoutLn' :: MonadIO m => Stream (Of String) m r -> m r

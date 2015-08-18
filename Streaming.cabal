@@ -1,17 +1,16 @@
 name:                streaming
-version:             0.1.0.5
+version:             0.1.0.6
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            A free monad transformer optimized for streaming applications.
                      
-description:         `Stream` can be used wherever `FreeT` is used. The compiler
-                     is better able to optimize operations written in
-                     terms of `Stream`.
-                     .
-                     See the examples in @Streaming.Prelude@ for a sense
-                     of how simple the library is to use and think about. 
+description:         `Stream` can be used wherever `FreeT` is used. The compiler's
+                     standard range of optimizations work better for operations 
+                     written in terms of `Stream`. See the examples in @Streaming.Prelude@ 
+                     for a sense of how simple the library is to use and think about.
+                     . 
                      @Streaming.Prelude@ closely follows 
-                     @Pipes.Prelude@, but cleverly omits the pipes. It is focused 
+                     @Pipes.Prelude@, but cleverly /omits the pipes/. It is focused 
                      on employment with a base functors which generate
                      effectful sequences: e.g. 
                      .
@@ -37,7 +36,11 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      > Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
                      > IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
                      .
-                     for example. A simple exit to <http://hackage.haskell.org/package/conduit conduit> would be, e.g.:
+                     The purposes of the separate @Generator a r@ type in @io-streams@ can as well be met with 
+                     @Stream (Of a) m r@, which admits more complex manipulations. It should
+                     be somewhat friendlier to the compiler. 
+                     .
+                     A simple exit to <http://hackage.haskell.org/package/conduit conduit> would be, e.g.:
                      .
                      > Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
                      .
