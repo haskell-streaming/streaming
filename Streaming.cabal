@@ -1,5 +1,5 @@
 name:                streaming
-version:             0.1.0.6
+version:             0.1.0.7
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            A free monad transformer optimized for streaming applications.
@@ -27,8 +27,6 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      > Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
                      > Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r                     
                      .
-                     (If you don't have @pipes-HEAD@, inline the definition of <https://github.com/Gabriel439/Haskell-Pipes-Library/blob/master/src/Pipes/Prelude.hs#L909 unfoldr>.) 
-                     .
                      Interoperation with 
                      <http://hackage.haskell.org/package/io-streams io-streams> 
                      is thus:
@@ -36,19 +34,13 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      > Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
                      > IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
                      .
-                     The separate @Generator a r@ type in @io-streams@ is intended to permit
-                     construction of an @InputStream@ with more possibilities 
-                     (such as the @yield@ statement). This purpose can as well be met with 
-                     @Stream (Of a) m r@, which may be friendlier to the compiler.
-                     .
                      A simple exit to <http://hackage.haskell.org/package/conduit conduit> would be, e.g.:
                      .
                      > Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
                      .
                      These conversions should never be more expensive than a single @>->@ or @=$=@.
                      .
-  
-                     
+
                      
 license:             BSD3
 license-file:        LICENSE

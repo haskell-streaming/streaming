@@ -11,6 +11,8 @@ module Streaming
    replicates,
    repeats,
    repeatsM,
+   wrap,
+   step,
    
    -- * Transforming streams
    maps,
@@ -68,26 +70,24 @@ import Data.Functor.Compose
 
     In the simplest case, the base functor is @ (,) a @. Here the news 
     or /command/ at each step is an individual element of type @ a @, 
-    i.e. a @yield@ statement.  In 'Streaming.Prelude', @(a,b)@ is
-    replaced by the left-strict pair @Of a b@. Various operations are
-    defined for types like
+    i.e. a @yield@ statement.  The associated @Streaming@ 'Streaming.Prelude' 
+    uses the left-strict pair @Of a b@ in place of the Haskell pair @(a,b)@ 
+    Various operations are defined for fundamental streaming types like
 
-> Stream (Of a) m r                   -- a producer in the pipes sense 
->                                        -- i.e. an effectful, streaming [a], or rather ([a],r) 
+> Stream (Of a) m r                   -- a generator or producer (in the pipes sense) 
+>                                        -- compare [a], or rather ([a],r) 
 > Stream (Of a) m (Stream (Of a) m r) -- the effectful splitting of a producer
->                                        -- i.e. an effectful ([a],[a]) or rather ([a],([a],r))
-> Stream (Stream (Of a) m) m r        -- successive, segmentation of a producer
->                                        -- i.e. [[a]], or ([a],([a],([a]... r)))
+>                                        -- compare ([a],[a]) or rather ([a],([a],r))
+> Stream (Stream (Of a) m) m r        -- segmentation of a producer
+>                                        -- cp. [[a]], or rather ([a],([a],([a],(...,r))))
 
-    and so on. But of course any functor can be used. So, for example, 
+    and so on. But of course any functor can be used, as we already see from 
+    the type of the segmented stream, @Stream (Stream (Of a) m) m r@
 
-> Stream ((->) input) m result
+and e.g. 
 
-    is a simple @Consumer input m result@ or @Parser input m result@ type. And so on.
-    See e.g. http://www.haskellforall.com/2012/07/purify-code-using-free-monads.html ,
-    http://www.haskellforall.com/2012/07/free-monad-transformers.html and similar
-    literature.
-
+> chunksOf :: Monad m => Int -> Stream f m r -> Stream (Stream f m) m r
+> mapsM length' :: Stream (Stream (Of a) m) r -> Stream (Of Int) m r
 
     To avoid breaking reasoning principles, the constructors 
     should not be used directly. A pattern-match should go by way of 'inspect' 

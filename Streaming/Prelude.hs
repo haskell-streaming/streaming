@@ -23,6 +23,7 @@
 > import qualified Control.Foldl as L -- cabal install foldl
 > import qualified Pipes as P
 > import qualified Pipes.Prelude as P
+> import qualified System.IO as IO
 
 -}
 {-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable,
@@ -47,6 +48,8 @@ module Streaming.Prelude (
     , cycle
     , repeatM
     , replicateM
+    , enumFrom
+    , enumFromThen
     
     -- * Consuming streams of elements
     -- $consumers
@@ -147,7 +150,7 @@ import qualified Data.Foldable as Foldable
 import Text.Read (readMaybe)
 import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, sum, product
                       , iterate, repeat, cycle, replicate, splitAt
-                      , takeWhile, enumFrom, enumFromTo, length
+                      , takeWhile, enumFrom, enumFromTo, enumFromThen, length
                       , print, zipWith, zip, seq, show, read
                       , readLn, sequence, concat, span, break)
 
@@ -197,14 +200,14 @@ break pred = loop where
 
 {-| Apply an action to all values flowing downstream
 
->>> let debug str = chain print str
->>> S.product (debug (S.each [2..4])) >>= print
+
+>>> S.product (chain print (S.each [2..4])) >>= print
 2
 3
 4
 24
-
 -}
+
 chain :: Monad m => (a -> m ()) -> Stream (Of a) m r -> Stream (Of a) m r
 chain f str = for str $ \a -> do
     lift (f a)
@@ -213,25 +216,39 @@ chain f str = for str $ \a -> do
 
 {-| Make a stream of traversable containers into a stream of their separate elements
 
->>> Streaming.print $ concat (each ["hi","ho"])
-'h'
-'i'
-'h'
-'o'
-
->>> S.print $  S.concat (S.each [Just 1, Nothing, Just 2, Nothing])
+>>> S.print $ S.concat (each ["xy","z"])
+'x'
+'y'
+'z'
+>>> S.print $ S.concat (S.each [Just 1, Nothing, Just 2])
+1
+2
+>>> S.print $  S.concat (S.each [Right 1, Left "Error!", Right 2])
 1
 2
 
->>> S.print $  S.concat (S.each [Right 1, Left "error!", Right 2])
+    Not to be confused with the functor-general 
+
+> concats :: (Monad m, Functor f) => Stream (Stream f m) m r -> Stream f m r -- specializing
+
+>>> S.stdoutLn $ concats $ maps (<* yield "--\n--") $ chunksOf 2 $ S.show (each [1..5])
 1
 2
+--
+--
+3
+4
+--
+--
+5
+--
+--
 -}
 
 concat :: (Monad m, Foldable f) => Stream (Of (f a)) m r -> Stream (Of a) m r
 concat str = for str each
 {-# INLINE concat #-}
---
+
 {-| The natural @cons@ for a @Stream (Of a)@. 
 
 > cons a stream = yield a >> stream
@@ -244,16 +261,19 @@ cons :: (Monad m) => a -> Stream (Of a) m r -> Stream (Of a) m r
 cons a str = Step (a :> str)
 {-# INLINE cons #-}
 
-{- | Cycle repeatedly through the layers of a stream /ad inf./
+{- | Cycle repeatedly through the layers of a stream, /ad inf./ This
+     function is functor-general
 
-> rest <- S.print $ S.splitAt 3 $ S.cycle $ yield 1 >> yield 2
-1
-2
-1
-> S.print $ S.take 3 rest
-2
-1
-2
+> cycle = forever
+
+>>> rest <- S.print $ S.splitAt 3 $ S.cycle (yield True >> yield False)
+True
+False
+True
+>>> S.print $ S.take 3 rest
+False
+True
+False
 
 -}
 
@@ -267,10 +287,12 @@ cycle = forever
 {- | Reduce a stream, performing its actions but ignoring its elements.
 
 >>> let stream = do {yield 1; lift (putStrLn "Effect!"); yield 2; lift (putStrLn "Effect!"); return (2^100)} 
+
 >>> S.drain stream
 Effect!
 Effect!
 1267650600228229401496703205376
+
 >>> S.drain $ S.takeWhile (<2) stream
 Effect!
 
@@ -301,7 +323,14 @@ drop = loop where
 -- dropWhile
 -- ---------------
 
--- | Ignore elements of a stream until a test succeeds.
+{- | Ignore elements of a stream until a test succeeds.
+
+>>> IO.withFile "distribute.hs" IO.ReadMode $ S.stdoutLn . S.take 2 . S.dropWhile (isPrefixOf "import") . S.fromHandle
+main :: IO ()
+main = do
+
+
+-}
 dropWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 dropWhile pred = loop where 
   loop stream = case stream of
@@ -318,10 +347,19 @@ dropWhile pred = loop where
 
 {- | Stream the elements of a foldable container.
 
->>> S.print $ each [1..3]
-1
-2
-3
+>>> S.print $ S.map (*100) $ each [1..3] >> yield 4
+0
+100
+200
+300
+400
+
+>>> S.print $ S.map (*100) $ each [1..3] >> lift readLn >>= yield
+100
+200
+300
+4<Enter>
+400
 -}
 each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
 each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
@@ -331,24 +369,27 @@ each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
 -- enumFrom
 -- ------
 
-enumFrom :: (Monad m, Num n) => n -> Stream (Of n) m ()
+enumFrom :: (Monad m, Enum n) => n -> Stream (Of n) m r
 enumFrom = loop where
-  loop !n = Step (n :> loop (n+1))
+  loop !n = Step (n :> loop (succ n))
 {-# INLINEABLE enumFrom #-}
+--
+-- enumFromTo :: (Monad m, Num n, Ord n) => n -> n -> Stream (Of n) m ()
+-- enumFromTo = loop where
+--   loop !n m = if n <= m
+--     then Step (n :> loop (n+1) m)
+--     else Return ()
+-- {-# INLINEABLE enumFromTo #-}
+--     enumFromThen x y       = map toEnum [fromEnum x, fromEnum y ..]
 
-enumFromTo :: (Monad m, Num n, Ord n) => n -> n -> Stream (Of n) m ()
-enumFromTo = loop where
-  loop !n m = if n <= m 
-    then Step (n :> loop (n+1) m)
-    else Return ()
-{-# INLINEABLE enumFromTo #-}
-
-enumFromStepN :: (Monad m, Num a) => a -> a -> Int -> Stream (Of a) m ()
-enumFromStepN start step = loop start where
-    loop !s m = case m of 
-      0 -> Return ()
-      _ -> Step (s :> loop (s+step) (m-1))
-{-# INLINEABLE enumFromStepN #-}
+enumFromThen:: (Monad m, Enum a) => a -> a -> Stream (Of a) m r
+enumFromThen first second = Streaming.Prelude.map toEnum (loop _first)
+  where
+    _first = fromEnum first
+    _second = fromEnum second
+    diff = _second - _first
+    loop !s =  Step (s :> loop (s+diff))
+{-# INLINEABLE enumFromThen #-}
 
 -- ---------------
 -- filter 
@@ -1036,6 +1077,18 @@ hello<Enter>
 hello
 goodbye<Enter>
 goodbye
+
+    If the intended \"coalgebra\" is complicated it might be pleasant to 
+    write it with the state monad:
+
+> \state seed -> S.unfoldr  (runExceptT  . runStateT state) seed :: Monad m => StateT s (ExceptT r m) a -> s -> P.Producer a m r
+
+>>> let state = do {n <- get ; if n >= 3 then lift (throwE "Got to three"); else put (n+1); return n}
+>>> S.print $ S.unfoldr (runExceptT  . runStateT state) 0 
+0
+1
+2
+"Got to three"
 -}
 unfoldr :: Monad m 
         => (s -> m (Either r (a, s))) -> s -> Stream (Of a) m r
@@ -1056,23 +1109,26 @@ unfoldr step = loop where
 >>> stdoutLn $ yield "hello"
 hello
 
->>> S.sum $ do {yield 1;  lift $ putStrLn "yielded 1";  yield 2;  lift $ putStrLn "yielded 2"}
-yielded 1
-yielded 2
+>>> S.sum $ do {yield 1; yield 2}
 3
 
->>> let prompt :: Stream (Of Int) IO (); prompt = do {lift $ putStrLn "Enter a number:"; n <- lift readLn;  yield n } 
->>> S.sum $ prompt >> prompt >> prompt
-Enter a number:
-1
-Enter a number:
-10
-Enter a number:
-100
-111
+>>> S.sum $ do {yield 1;  lift $ putStrLn "# 1 was yielded";  yield 2;  lift $ putStrLn "# 2 was yielded"}
+# 1 was yielded
+# 2 was yielded
+3
 
+>>> let prompt :: IO Int; prompt = putStrLn "Enter a number:" >> readLn 
+>>> S.sum $ do {lift prompt >>= yield ; lift prompt >>= yield ; lift prompt >>= yield}
+Enter a number:
+3<Enter>
+Enter a number:
+20<Enter>
+Enter a number:
+100<Enter>
+123
 
 -}
+
 yield :: Monad m => a -> Stream (Of a) m ()
 yield a = Step (a :> Return ())
 {-# INLINE yield #-}

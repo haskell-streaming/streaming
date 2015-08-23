@@ -11,6 +11,8 @@ module Streaming.Internal (
     , replicates
     , repeats
     , repeatsM
+    , wrap
+    , step
     
     -- * Eliminating a stream
     , destroy 
@@ -273,11 +275,7 @@ iterT ::
 iterT out stream = destroy stream out join return
 {-# INLINE iterT #-}
 
-{-| This specializes to the more transparent case:
-
-> concats :: (Monad m, Functor f) => Stream (Stream f m) m r -> Stream f m r
-
-    Thus dissolving the segmentation into @Stream f m@ layers.
+{-| Dissolves the segmentation into layers of @Stream f m@ layers.
 
 > concats stream = destroy stream join (join . lift) return
 
@@ -292,9 +290,7 @@ iterT out stream = destroy stream out join return
 5
 
 -}
-concats ::
-    (MonadTrans t, Monad (t m), Monad m) =>
-    Stream (t m) m a -> t m a
+concats :: (Monad m, Functor f) => Stream (Stream f m) m r -> Stream f m r
 concats  = loop where
   loop stream = case stream of
     Return r -> return r
@@ -451,3 +447,10 @@ unexposed = Delay . loop where
     Delay  m -> m >>= loop
     Step   f -> return (Step (fmap (Delay . loop) f))
 {-# INLINABLE unexposed #-}   
+
+
+wrap :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
+wrap = Delay
+
+step :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
+step = Step
