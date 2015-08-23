@@ -64,15 +64,16 @@ import Data.Functor.Compose
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
     succession of steps, where the form of the steps or 'commands' is 
-    specified by the first (functor) parameter. 
+    specified by the first (functor) parameter. The (hidden) implementation is
 
 > data Stream f m r = Step !(f (Stream f m r)) | Delay (m (Stream f m r)) | Return r
 
     In the simplest case, the base functor is @ (,) a @. Here the news 
-    or /command/ at each step is an individual element of type @ a @, 
-    i.e. a @yield@ statement.  The associated @Streaming@ 'Streaming.Prelude' 
+    or /command/ at each step is an /individual element of type/ @ a @, 
+    i.e. the command is a @yield@ statement.  The associated 
+    @Streaming@ 'Streaming.Prelude' 
     uses the left-strict pair @Of a b@ in place of the Haskell pair @(a,b)@ 
-    Various operations are defined for fundamental streaming types like
+    In it, various operations are defined for fundamental streaming types like
 
 > Stream (Of a) m r                   -- a generator or producer (in the pipes sense) 
 >                                        -- compare [a], or rather ([a],r) 
@@ -81,13 +82,14 @@ import Data.Functor.Compose
 > Stream (Stream (Of a) m) m r        -- segmentation of a producer
 >                                        -- cp. [[a]], or rather ([a],([a],([a],(...,r))))
 
-    and so on. But of course any functor can be used, as we already see from 
+    and so on. But of course any functor can be used, and this is part of 
+    the point of this prelude - as we already see from 
     the type of the segmented stream, @Stream (Stream (Of a) m) m r@
 
-and e.g. 
+and operations like e.g. 
 
 > chunksOf :: Monad m => Int -> Stream f m r -> Stream (Stream f m) m r
-> mapsM length' :: Stream (Stream (Of a) m) r -> Stream (Of Int) m r
+> mapsM Streaming.Prelude.length' :: Stream (Stream (Of a) m) r -> Stream (Of Int) m r
 
     To avoid breaking reasoning principles, the constructors 
     should not be used directly. A pattern-match should go by way of 'inspect' 
