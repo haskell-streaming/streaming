@@ -41,6 +41,7 @@ module Streaming.Prelude (
     -- $producers
     , yield
     , each
+    , layers
     , unfoldr
     , stdinLn
     , readLn
@@ -628,6 +629,11 @@ iterateM f = loop where
 {-# INLINEABLE iterateM #-}
 
 
+layers
+  :: (Monad m, Functor f) =>
+     Stream (Of a) m r -> (a -> f x) -> Stream f m r
+layers stream f = for stream $ layer . f
+{-# INLINE layers #-}
 -- ---------------
 -- length
 -- ---------------

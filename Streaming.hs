@@ -8,6 +8,8 @@ module Streaming
    unfold,
    construct,
    for,
+   layer,
+   layers,
    replicates,
    repeats,
    repeatsM,

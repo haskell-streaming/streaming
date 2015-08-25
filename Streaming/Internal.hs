@@ -13,6 +13,7 @@ module Streaming.Internal (
     , repeatsM
     , wrap
     , step
+    , layer
     
     -- * Eliminating a stream
     , destroy 
@@ -250,6 +251,13 @@ runEffect = loop where
 mapsM_ :: (Functor f, Monad m) => (forall x . f x -> m x) -> Stream f m r -> m r
 mapsM_ f str = runEffect (maps f str)
 {-# INLINABLE mapsM_ #-}
+
+
+{-| Lift for items in the base functor. Makes a singleton or
+    one-layer succession.`
+-}
+layer ::  (Monad m, Functor f) => f r -> Stream f m r
+layer fr = Step (fmap Return fr)
 
 {-| Interpolate a layer at each segment. This specializes to e.g.
 
