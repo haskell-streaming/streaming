@@ -28,6 +28,8 @@ module Streaming
    iterTM,
    iterT,
    destroy,
+   mapsM_,
+   runEffect,
    
 
    -- * Splitting and joining 'Stream's 
@@ -49,7 +51,9 @@ module Streaming
    join,
    liftA2,
    liftA3,
-   void
+   void,
+   (&),
+   (-->)
    )
    where
 import Streaming.Internal 
@@ -59,6 +63,9 @@ import Control.Monad
 import Control.Applicative
 import Control.Monad.Trans
 import Data.Functor.Compose 
+import Data.Function ((&))
+infixl 6 -->
+(-->) = flip (.) 
 
 {- $stream
 

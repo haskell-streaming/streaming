@@ -34,6 +34,8 @@ module Streaming.Prelude (
     Of (..)
     , lazily
     , strictly
+    , fst'
+    , snd'
 
     -- * Introducing streams of elements
     -- $producers
@@ -174,6 +176,11 @@ strictly :: (a,b) -> Of a b
 strictly = \(a,b) -> a :> b
 {-# INLINE strictly #-}
 
+fst' :: Of a b -> a
+fst' (a :> b) = a
+
+snd' :: Of a b -> b
+snd' (a :> b) = b
 {-| Break a sequence when a element falls under a predicate, keeping the rest of
     the stream as the return value.
 

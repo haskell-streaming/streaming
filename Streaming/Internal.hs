@@ -27,6 +27,8 @@ module Streaming.Internal (
     -- * Transforming streams
     , maps 
     , mapsM 
+    , mapsM_
+    , runEffect
     , distribute
     
     -- *  Splitting streams
@@ -231,6 +233,23 @@ mapsM phi = loop where
     Step f    -> Delay (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsM #-}
 
+
+{-| Run the effects in a stream that merely layers effects.
+-}
+runEffect :: Monad m => Stream m m r  -> m r
+runEffect = loop where
+  loop stream = case stream of
+    Return r -> return r
+    Delay  m -> m >>= loop
+    Step mrest -> mrest >>= loop
+{-# INLINABLE runEffect #-}
+
+
+{-| Map each layer to an effect in the base monad, and run them all.
+-}
+mapsM_ :: (Functor f, Monad m) => (forall x . f x -> m x) -> Stream f m r -> m r
+mapsM_ f str = runEffect (maps f str)
+{-# INLINABLE mapsM_ #-}
 
 {-| Interpolate a layer at each segment. This specializes to e.g.
 
