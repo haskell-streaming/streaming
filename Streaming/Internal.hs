@@ -37,6 +37,7 @@ module Streaming.Internal (
     -- *  Splitting streams
     , chunksOf 
     , splitsAt
+    , takes
     
     -- * Zipping streams
     , zipsWith
@@ -381,7 +382,11 @@ splitsAt = loop where
         Step fs        -> case n of 
           0 -> Return (Step fs)
           _ -> Step (fmap (loop (n-1)) fs)
-{-# INLINABLE splitsAt #-}                        
+{-# INLINABLE splitsAt #-}  
+                      
+takes :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
+takes n = void . splitsAt n
+{-# INLINE takes #-}                        
 
 {-| Break a stream into substreams each with n functorial layers. 
 

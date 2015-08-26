@@ -94,6 +94,8 @@ module Streaming.Prelude (
     , splitAt
     , break
     , span
+    , group
+    , groupBy
  --   , split
     
     -- * Folds
@@ -609,6 +611,23 @@ for str0 act = loop str0 where
       act a
       loop rest
 {-# INLINEABLE for #-}
+
+
+groupBy :: Monad m  
+  => (a -> a -> Bool)
+  -> Stream (Of a) m r 
+  -> Stream (Stream (Of a) m) m r
+groupBy equals = loop  where
+  loop stream = Delay $ do
+        e <- next stream
+        return $ case e of
+            Left   r      -> Return r
+            Right (a, p') -> Step $
+                fmap loop (yield a >> span (equals a) p')
+                
+group :: (Monad m, Eq a)  => Stream (Of a) m r -> Stream (Stream (Of a) m) m r                
+group = groupBy (==)
+                
 
 -- ---------------
 -- iterate
