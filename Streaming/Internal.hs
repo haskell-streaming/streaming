@@ -1,5 +1,6 @@
 {-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
 {-# LANGUAGE UndecidableInstances #-} -- for show, data instances
+{-#LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
@@ -16,12 +17,13 @@ module Streaming.Internal (
     , layer
     
     -- * Eliminating a stream
-    , destroy 
-    , concats 
     , intercalates 
+    , concats 
     , iterT 
     , iterTM 
-
+    , destroy 
+    , destroyWith
+    
     -- * Inspecting a stream step by step
     , inspect 
     
@@ -39,8 +41,9 @@ module Streaming.Internal (
     -- * Zipping streams
     , zipsWith
     , zips
+    , interleaves
     
-    -- *  For internal use
+    -- *  For use in implementation
     , unexposed
     , hoistExposed
     , mapsExposed
@@ -137,7 +140,6 @@ instance Functor f => MFunctor (Stream f) where
       Step f    -> Step (fmap loop f)
   {-# INLINABLE hoist #-}    
 
-
 instance Functor f => MMonad (Stream f) where
   embed phi = loop where
     loop stream = case stream of
@@ -175,6 +177,37 @@ destroy stream0 construct wrap done = loop (unexposed stream0) where
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroy #-}
 
+
+{-| 'destroyWith' reorders the arguments of 'destroy' to be more akin
+    to @foldr@  It is more convenient to query in ghci to figure out
+    what kind of \'algebra\' you need to write.
+
+>>> :t destroyWith join return
+(Monad m, Functor f) => 
+     (f (m a) -> m a) -> Stream f m a -> m a        -- iterT
+>>> :t destroyWith (join . lift) return
+(Monad m, Monad (t m), Functor f, MonadTrans t) =>
+     (f (t m a) -> t m a) -> Stream f m a -> t m a  -- iterTM
+>>> :t destroyWith wrap return
+(Monad m, Functor f, Functor f1) =>
+     (f (Stream f1 m r) -> Stream f1 m r) -> Stream f m r -> Stream f1 m r
+>>> :t destroyWith wrap return (step . lazily)
+Monad m => 
+     Stream (Of a) m r -> Stream ((,) a) m r
+>>> :t destroyWith wrap return (step . strictly)
+Monad m => 
+     Stream ((,) a) m r -> Stream (Of a) m r
+>>> :t destroyWith Data.ByteString.Streaming.wrap return  
+(Monad m, Functor f) =>
+     (f (ByteString m r) -> ByteString m r) -> Stream f m r -> ByteString m r
+>>> :t destroyWith Data.ByteString.Streaming.wrap return (\(a:>b) -> consChunk a b) 
+Monad m => 
+     Stream (Of B.ByteString) m r -> ByteString m r -- fromChunks
+-}
+destroyWith
+  :: (Functor f, Monad m) =>
+     (m b -> b) -> (r -> b) -> (f b -> b) -> Stream f m r -> b
+destroyWith wrap done construct stream  = destroy stream construct wrap done
 
 -- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
 construct
@@ -453,6 +486,7 @@ mapsMExposed phi = loop where
     Delay m   -> Delay (liftM loop m)
     Step f    -> Delay (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsMExposed #-}
+
 --     Map a stream directly to its church encoding; compare @Data.List.foldr@
 --     It permits distinctions that should be hidden, as can be seen from
 --     e.g.
@@ -471,6 +505,12 @@ destroyExposed stream0 construct wrap done = loop stream0 where
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroyExposed #-}
 
+
+{-| This is akin to the @observe@ of @Pipes.Internal@ . It rewraps the layering
+    in instances of @Stream f m r@ so that it replicates that of 
+    @FreeT@. 
+
+-}
 unexposed :: (Functor f, Monad m) => Stream f m r -> Stream f m r
 unexposed = Delay . loop where
   loop stream = case stream of 
@@ -478,6 +518,7 @@ unexposed = Delay . loop where
     Delay  m -> m >>= loop
     Step   f -> return (Step (fmap (Delay . loop) f))
 {-# INLINABLE unexposed #-}   
+
 
 
 wrap :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
@@ -497,10 +538,35 @@ zipsWith phi = curry loop where
   go (Delay m) p          = m >>= \s -> go s p
   go q         (Delay m)  = m >>= go q
   go (Step f) (Step g)    = return $ Step $ fmap loop (phi f g)
+{-# INLINABLE zipsWith #-}   
   
 zips :: (Monad m, Functor f, Functor g) 
      => Stream f m r -> Stream g m r -> Stream (Compose f g) m r  
 zips = zipsWith go where
   go fx gy = Compose (fmap (\x -> fmap (\y -> (x,y)) gy) fx)
+{-# INLINE zips #-}   
 
+
+{-| Interleave functor layers, with the effects of the first preceding
+    the effects of the second.
+
+> interleaves = zipsWith (liftA2 (,))
+
+>>> let paste = \a b -> interleaves (Q.lines a) (maps (Q.cons' '\t') (Q.lines b))
+>>> Q.stdout $ Q.unlines $ paste "hello\nworld\n" "goodbye\nworld\n"
+hello	goodbye
+world	world
+
+-}
+  
+interleaves
+  :: (Monad m, Applicative h) =>
+     Stream h m r -> Stream h m r -> Stream h m r
+interleaves = zipsWith (liftA2 (,))
+{-# INLINE interleaves #-}   
+
+
+
+  
+  
   

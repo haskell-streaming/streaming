@@ -27,6 +27,7 @@ module Streaming
    -- * Zipping streams
    zips,
    zipsWith,
+   interleaves,
    
    -- * Eliminating a 'Stream'
    intercalates,
@@ -36,7 +37,6 @@ module Streaming
    destroy,
    mapsM_,
    runEffect,
-   
 
    -- * Splitting and joining 'Stream's 
    splitsAt,
