@@ -36,6 +36,10 @@ module Streaming.Internal (
     , chunksOf 
     , splitsAt
     
+    -- * Zipping streams
+    , zipsWith
+    , zips
+    
     -- *  For internal use
     , unexposed
     , hoistExposed
@@ -57,7 +61,7 @@ import Data.Functor.Identity
 import GHC.Exts ( build )
 import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
-
+import Data.Functor.Compose
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
@@ -481,3 +485,22 @@ wrap = Delay
 
 step :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
 step = Step
+
+
+zipsWith :: (Monad m, Functor h) 
+  => (forall x y . f x -> g y -> h (x,y)) 
+  -> Stream f m r -> Stream g m r -> Stream h m r
+zipsWith phi = curry loop where
+  loop (s1, s2) = Delay $ go s1 s2
+  go (Return r)  p        = return $ Return r
+  go q         (Return s) = return $ Return s
+  go (Delay m) p          = m >>= \s -> go s p
+  go q         (Delay m)  = m >>= go q
+  go (Step f) (Step g)    = return $ Step $ fmap loop (phi f g)
+  
+zips :: (Monad m, Functor f, Functor g) 
+     => Stream f m r -> Stream g m r -> Stream (Compose f g) m r  
+zips = zipsWith go where
+  go fx gy = Compose (fmap (\x -> fmap (\y -> (x,y)) gy) fx)
+
+  

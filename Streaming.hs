@@ -24,6 +24,10 @@ module Streaming
    -- * Inspecting a stream
    inspect,
    
+   -- * Zipping streams
+   zips,
+   zipsWith,
+   
    -- * Eliminating a 'Stream'
    intercalates,
    concats,
