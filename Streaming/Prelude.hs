@@ -263,8 +263,12 @@ concat str = for str each
 
 > cons a stream = yield a >> stream
 
-Useful for interoperation 
+   Useful for interoperation:
 
+> Data.Text.foldr S.cons (return ()) :: Text -> Stream (Of Char) m ()
+> Lazy.foldrChunks S.cons (return ()) :: Lazy.ByteString -> Stream (Of Strict.ByteString) m ()
+
+    and so on.
 -}
 
 cons :: (Monad m) => a -> Stream (Of a) m r -> Stream (Of a) m r
@@ -866,7 +870,7 @@ reread step s = loop where
 
 > Control.Foldl.purely scan :: Monad m => Fold a b -> Stream (Of a) m r -> Stream (Of b) m r
 
->>> Streaming.print $ Foldl.purely Streaming.scan Foldl.list $ each [3..5]
+>>> S.print $ L.purely S.scan L.list $ each [3..5]
 []
 [3]
 [3,4]

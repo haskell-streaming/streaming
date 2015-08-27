@@ -40,6 +40,7 @@ module Streaming
 
    -- * Splitting and joining 'Stream's 
    splitsAt,
+   takes,
    chunksOf,
    concats,
 
