@@ -1,5 +1,5 @@
 name:                streaming
-version:             0.1.0.10
+version:             0.1.0.11
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            A free monad transformer optimized for streaming applications.
@@ -40,7 +40,10 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      .
                      These conversions should never be more expensive than a single @>->@ or @=$=@.
                      .
-
+                     See the companion package <https://hackage.haskell.org/package/streaming-bytestring streaming-bytestring>
+                     For some simple examples, see
+                     <https://gist.github.com/michaelt/6c6843e6dd8030e95d58 these replicas> of shell-like programs from
+                     the <http://hackage.haskell.org/package/io-streams-1.3.2.0/docs/System-IO-Streams-Tutorial.html io-streams tutorial>.
                      
 license:             BSD3
 license-file:        LICENSE
