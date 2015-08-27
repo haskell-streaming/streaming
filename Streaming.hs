@@ -59,8 +59,6 @@ module Streaming
    liftA2,
    liftA3,
    void,
-   (&),
-   (-->)
    )
    where
 import Streaming.Internal 
@@ -70,9 +68,6 @@ import Control.Monad
 import Control.Applicative
 import Control.Monad.Trans
 import Data.Functor.Compose 
-import Data.Function ((&))
-infixl 6 -->
-(-->) = flip (.) 
 
 {- $stream
 
