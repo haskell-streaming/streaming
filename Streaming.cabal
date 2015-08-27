@@ -61,13 +61,13 @@ library
                        Streaming.Internal
 
     -- other-modules:       
-  other-extensions:    RankNTypes, 
+  other-extensions:    RankNTypes, CPP,
                        StandaloneDeriving, FlexibleContexts, 
                        DeriveDataTypeable, DeriveFoldable, 
                        DeriveFunctor, DeriveTraversable, 
                        UndecidableInstances
   
-  build-depends:       base >=4.5 && <4.9
+  build-depends:       base >=4.6 && <4.9
                      , mtl >=2.1 && <2.3
                      , mmorph >=1.0 && <1.2
                      , transformers >=0.3 && <0.5

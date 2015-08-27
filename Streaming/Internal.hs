@@ -1,5 +1,5 @@
 {-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
-{-# LANGUAGE UndecidableInstances #-} -- for show, data instances
+{-# LANGUAGE UndecidableInstances, CPP #-} -- for show, data instances
 {-#LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 module Streaming.Internal (
     -- * The free monad transformer
@@ -90,15 +90,17 @@ import Data.Functor.Compose
 data Stream f m r = Step !(f (Stream f m r))
                   | Delay (m (Stream f m r))
                   | Return r
+#if __GLASGOW_HASKELL__ >= 710
                   deriving (Typeable)
-
+#endif
 deriving instance (Show r, Show (m (Stream f m r))
                   , Show (f (Stream f m r))) => Show (Stream f m r)
 deriving instance (Eq r, Eq (m (Stream f m r))
                   , Eq (f (Stream f m r))) => Eq (Stream f m r)
+#if __GLASGOW_HASKELL__ >= 710
 deriving instance (Typeable f, Typeable m, Data r, Data (m (Stream f m r))
                   , Data (f (Stream f m r))) => Data (Stream f m r)
-
+#endif
 instance (Functor f, Monad m) => Functor (Stream f m) where
   fmap f = loop where
     loop stream = case stream of
