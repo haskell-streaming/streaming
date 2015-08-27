@@ -61,7 +61,7 @@ library
                        Streaming.Internal
 
     -- other-modules:       
-  other-extensions:    LambdaCase, RankNTypes, EmptyCase, 
+  other-extensions:    RankNTypes, 
                        StandaloneDeriving, FlexibleContexts, 
                        DeriveDataTypeable, DeriveFoldable, 
                        DeriveFunctor, DeriveTraversable, 
