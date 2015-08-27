@@ -57,7 +57,7 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Class
 import Control.Applicative
-import Data.Foldable ( Foldable )
+import Data.Foldable ( Foldable(..) )
 import Data.Traversable
 import Control.Monad.Morph
 import Data.Monoid
