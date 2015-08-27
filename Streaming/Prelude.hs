@@ -152,7 +152,7 @@ import Data.Functor.Identity
 import Control.Monad.Trans
 import qualified Prelude as Prelude                
 import Data.Foldable (Foldable)
-import Data.Foldable (Traversable)
+import Data.Traversable (Traversable)
 import qualified Data.Foldable as Foldable
 import Text.Read (readMaybe)
 import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, sum, product
@@ -257,7 +257,7 @@ chain f str = for str $ \a -> do
 --
 -}
 
-concat :: (Monad m, Foldable f) => Stream (Of (f a)) m r -> Stream (Of a) m r
+concat :: (Monad m, Foldable.Foldable f) => Stream (Of (f a)) m r -> Stream (Of a) m r
 concat str = for str each
 {-# INLINE concat #-}
 
@@ -691,7 +691,7 @@ map f = loop where
 '2'
 
 -}
-mapFoldable :: (Monad m, Foldable t) => (a -> t b) -> Stream (Of a) m r -> Stream (Of b) m r
+mapFoldable :: (Monad m, Foldable.Foldable t) => (a -> t b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapFoldable f str = for str (\a -> each (f a)) -- as in pipes
 
 -- | Replace each element of a stream with the result of a monadic action
