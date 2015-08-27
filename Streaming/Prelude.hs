@@ -150,7 +150,8 @@ import Control.Monad hiding (filterM, mapM, mapM_, foldM, replicateM, sequence)
 import Data.Data ( Data, Typeable )
 import Data.Functor.Identity
 import Control.Monad.Trans
-import qualified Prelude as Prelude                      
+import qualified Prelude as Prelude                
+import Data.Foldable (Foldable)
 import qualified Data.Foldable as Foldable
 import Text.Read (readMaybe)
 import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, sum, product
