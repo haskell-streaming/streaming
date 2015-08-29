@@ -12,8 +12,8 @@ module Streaming.Internal (
     , replicates
     , repeats
     , repeatsM
+    , delay
     , wrap
-    , step
     , layer
     
     -- * Eliminating a stream
@@ -24,7 +24,7 @@ module Streaming.Internal (
     , destroy 
     , destroyWith
     
-    -- * Inspecting a stream step by step
+    -- * Inspecting a stream wrap by wrap
     , inspect 
     
     -- * Transforming streams
@@ -69,13 +69,13 @@ import Data.Functor.Compose
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
-    succession of steps, where the form of the steps or 'commands' is 
+    succession of wraps, where the form of the wraps or 'commands' is 
     specified by the first (functor) parameter. 
 
 > data Stream f m r = Step !(f (Stream f m r)) | Delay (m (Stream f m r)) | Return r
 
     The /producer/ concept uses the simple functor @ (a,_) @ \- or the stricter 
-    @ Of a _ @. Then the news at each step or layer is just: an individual item of type @a@. 
+    @ Of a _ @. Then the news at each wrap or layer is just: an individual item of type @a@. 
     Since @Stream (Of a) m r@ is equivalent to @Pipe.Producer a m r@, much of
     the @pipes@ @Prelude@ can easily be mirrored in a @streaming@ @Prelude@. Similarly, 
     a simple @Consumer a m r@ or @Parser a m r@ concept arises when the base functor is
@@ -173,10 +173,10 @@ destroy str = destroy (observe str)
 destroy
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroy stream0 construct wrap done = loop (unexposed stream0) where
+destroy stream0 construct delay done = loop (unexposed stream0) where
   loop stream = case stream of
     Return r -> done r
-    Delay m  -> wrap (liftM loop m)
+    Delay m  -> delay (liftM loop m)
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroy #-}
 
@@ -191,26 +191,26 @@ destroy stream0 construct wrap done = loop (unexposed stream0) where
 >>> :t destroyWith (join . lift) return
 (Monad m, Monad (t m), Functor f, MonadTrans t) =>
      (f (t m a) -> t m a) -> Stream f m a -> t m a  -- iterTM
->>> :t destroyWith wrap return
+>>> :t destroyWith delay return
 (Monad m, Functor f, Functor f1) =>
      (f (Stream f1 m r) -> Stream f1 m r) -> Stream f m r -> Stream f1 m r
->>> :t destroyWith wrap return (step . lazily)
+>>> :t destroyWith delay return (wrap . lazily)
 Monad m => 
      Stream (Of a) m r -> Stream ((,) a) m r
->>> :t destroyWith wrap return (step . strictly)
+>>> :t destroyWith delay return (wrap . strictly)
 Monad m => 
      Stream ((,) a) m r -> Stream (Of a) m r
->>> :t destroyWith Data.ByteString.Streaming.wrap return  
+>>> :t destroyWith Data.ByteString.Streaming.delay return  
 (Monad m, Functor f) =>
      (f (ByteString m r) -> ByteString m r) -> Stream f m r -> ByteString m r
->>> :t destroyWith Data.ByteString.Streaming.wrap return (\(a:>b) -> consChunk a b) 
+>>> :t destroyWith Data.ByteString.Streaming.delay return (\(a:>b) -> consChunk a b) 
 Monad m => 
      Stream (Of B.ByteString) m r -> ByteString m r -- fromChunks
 -}
 destroyWith
   :: (Functor f, Monad m) =>
      (m b -> b) -> (r -> b) -> (f b -> b) -> Stream f m r -> b
-destroyWith wrap done construct stream  = destroy stream construct wrap done
+destroyWith delay done construct stream  = destroy stream construct delay done
 
 -- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
 construct
@@ -235,7 +235,7 @@ inspect = loop where
     Step fs  -> return (Right fs)
 {-# INLINABLE inspect #-}
     
-{-| Build a @Stream@ by unfolding steps starting from a seed. See also
+{-| Build a @Stream@ by unfolding wraps starting from a seed. See also
     the specialized 'Streaming.Prelude.unfoldr' in the prelude.
 
 > unfold inspect = id -- modulo the quotient we work with
@@ -246,9 +246,9 @@ inspect = loop where
 
 unfold :: (Monad m, Functor f) 
         => (s -> m (Either r (f s))) -> s -> Stream f m r
-unfold step = loop where
+unfold wrap = loop where
   loop s0 = Delay $ do 
-    e <- step s0
+    e <- wrap s0
     case e of
       Left r -> return (Return r)
       Right fs -> return (Step (fmap loop fs))
@@ -505,15 +505,15 @@ mapsMExposed phi = loop where
 --     See Atkey "Reasoning about Stream Processing with Effects"
 
 
-destroyExposed stream0 construct wrap done = loop stream0 where
+destroyExposed stream0 construct delay done = loop stream0 where
   loop stream = case stream of
     Return r -> done r
-    Delay m  -> wrap (liftM loop m)
+    Delay m  -> delay (liftM loop m)
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroyExposed #-}
 
 
-{-| This is akin to the @observe@ of @Pipes.Internal@ . It rewraps the layering
+{-| This is akin to the @observe@ of @Pipes.Internal@ . It redelays the layering
     in instances of @Stream f m r@ so that it replicates that of 
     @FreeT@. 
 
@@ -528,11 +528,11 @@ unexposed = Delay . loop where
 
 
 
-wrap :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
-wrap = Delay
+delay :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
+delay = Delay
 
-step :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
-step = Step
+wrap :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
+wrap = Step
 
 
 zipsWith :: (Monad m, Functor h) 
