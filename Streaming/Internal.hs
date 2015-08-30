@@ -1,6 +1,5 @@
 {-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
 {-# LANGUAGE UndecidableInstances, CPP #-} -- for show, data instances
-{-#LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
