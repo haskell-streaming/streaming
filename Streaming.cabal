@@ -6,19 +6,23 @@ synopsis:            A free monad transformer optimized for streaming applicatio
                      
 description:         `Stream` can be used wherever `FreeT` is used. The compiler's
                      standard range of optimizations work better for operations 
-                     written in terms of `Stream`. See the examples in @Streaming.Prelude@ 
-                     for a sense of how simple the library is to use and think about.
+                     written in terms of `Stream`. @FreeT f m r@ / @Stream f m r@
+                     is of course extremely general, and many functor-general combinators
+                     are exported by the general module @Streaming@. 
                      . 
-                     @Streaming.Prelude@ closely follows 
-                     @Pipes.Prelude@, but cleverly /omits the pipes/. It is focused 
-                     on employment with base functors which generate
-                     effectful sequences. These appear elsewhere under titles like
+                     See the examples in @Streaming.Prelude@ for a sense of how 
+                     simple the library is to use and think about. 
+                     That module is focused on employment with such base functors 
+                     (readings of the @f@ in @Stream f m r@) that express 
+                     different forms of effectful sequences. Some of these appear 
+                     elsewhere under titles like
                      .
                      > pipes:      Producer a m r, Producer a m (Producer a m r), FreeT (Producer a m) m r
                      > io-streams: InputStream a, Generator a r
                      > conduit:    Source m a, ConduitM () o m r
                      .
-                     and the like.
+                     and the like. @Streaming.Prelude@ closely follows 
+                     @Pipes.Prelude@, but cleverly /omits the pipes/. 
                      .
                      Interoperation with 
                      <http://hackage.haskell.org/package/pipes pipes>
@@ -39,6 +43,12 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      > Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
                      .
                      These conversions should never be more expensive than a single @>->@ or @=$=@.
+                     .
+                     With a much more general level, we also of course have interopetion with 
+                     <http://hackage.haskell.org/package/free free>:
+                     .
+                     Free.iterTM  Stream.wrap              :: FreeT f m a -> Stream f m a
+                     Stream.iterTM Free.wrap               :: Stream f m a -> FreeT f m a 
                      .
                      See the companion package <https://hackage.haskell.org/package/streaming-bytestring streaming-bytestring>
                      For some simple examples, see

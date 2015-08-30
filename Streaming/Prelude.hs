@@ -483,12 +483,12 @@ filterM pred = loop where
 > Control.Foldl.purely fold :: Monad m => Fold a b -> Stream (Of a) m () -> m b
 -}
 fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m () -> m b
-fold wrap begin done stream0 = loop stream0 begin
+fold step begin done stream0 = loop stream0 begin
   where
     loop stream !x = case stream of 
       Return r         -> return (done x)
       Delay m          -> m >>= \s -> loop s x
-      Step (a :> rest) -> loop rest (wrap x a)
+      Step (a :> rest) -> loop rest (step x a)
 {-# INLINABLE fold #-}
 
 {-| Strict fold of a 'Stream' of elements that preserves the return value. 
@@ -525,12 +525,12 @@ fold wrap begin done stream0 = loop stream0 begin
 -}
 
 fold' :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
-fold' wrap begin done s0 = loop s0 begin
+fold' step begin done s0 = loop s0 begin
   where
     loop stream !x = case stream of 
       Return r         -> return (done x :> r)
       Delay m          -> m >>= \s -> loop s x
-      Step (a :> rest) -> loop rest (wrap x a)
+      Step (a :> rest) -> loop rest (step x a)
 {-# INLINABLE fold' #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
@@ -540,7 +540,7 @@ fold' wrap begin done s0 = loop s0 begin
 foldM
     :: Monad m
     => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m () -> m b
-foldM wrap begin done s0 = do
+foldM step begin done s0 = do
     x0 <- begin
     loop s0 x0
   where
@@ -548,7 +548,7 @@ foldM wrap begin done s0 = do
       Return r         -> done x 
       Delay m          -> m >>= \s -> loop s x
       Step (a :> rest) -> do
-        x' <- wrap x a
+        x' <- step x a
         loop rest x'
 {-# INLINABLE foldM #-}
 
@@ -558,8 +558,8 @@ foldM wrap begin done s0 = do
 -}
 foldM'
     :: Monad m
-    => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> m (Of b r)
-foldM' wrap begin done str = do
+    => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r ->m (Of b r)
+foldM' step begin done str = do
     x0 <- begin
     loop str x0
   where
@@ -567,7 +567,7 @@ foldM' wrap begin done str = do
       Return r         -> done x >>= \b -> return (b :> r)
       Delay m          -> m >>= \s -> loop s x
       Step (a :> rest) -> do
-        x' <- wrap x a
+        x' <- step x a
         loop rest x'
 {-# INLINABLE foldM' #-}
 
@@ -582,11 +582,11 @@ foldM' wrap begin done str = do
 
 foldrT :: (Monad m, MonadTrans t, Monad (t m)) 
        => (a -> t m r -> t m r) -> Stream (Of a) m r -> t m r
-foldrT wrap = loop where
+foldrT step = loop where
   loop stream = case stream of
     Return r       -> return r
     Delay m        -> lift m >>= loop
-    Step (a :> as) -> wrap a (loop as)
+    Step (a :> as) -> step a (loop as)
 {-# INLINABLE foldrT #-}  
 
 {-| A natural right fold for consuming a stream of elements.
@@ -595,11 +595,11 @@ foldrT wrap = loop where
 -}
 foldrM :: Monad m 
        => (a -> m r -> m r) -> Stream (Of a) m r -> m r
-foldrM wrap = loop where
+foldrM step = loop where
   loop stream = case stream of
     Return r       -> return r
     Delay m        -> m >>= loop
-    Step (a :> as) -> wrap a (loop as)
+    Step (a :> as) -> step a (loop as)
 {-# INLINABLE foldrM #-}  
 
 -- ---------------
@@ -860,9 +860,9 @@ replicateM n ma = loop n where
 > reread Streams.read :: System.IO.Streams.InputStream a -> Stream (Of a) IO ()
 -}
 reread :: Monad m => (s -> m (Maybe a)) -> s -> Stream (Of a) m ()
-reread wrap s = loop where 
+reread step s = loop where 
   loop = Delay $ do 
-    m <- wrap s
+    m <- step s
     case m of 
       Nothing -> return (Return ())
       Just a  -> return (Step (a :> loop))
@@ -880,7 +880,7 @@ reread wrap s = loop where
 
 -}
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
-scan wrap begin done = loop begin
+scan step begin done = loop begin
   where
     loop !x stream = do 
       yield (done x)
@@ -888,7 +888,7 @@ scan wrap begin done = loop begin
         Return r -> Return r
         Delay m  -> Delay $ liftM (loop x) m
         Step (a :> rest) -> do
-          let x' = wrap x a
+          let x' = step x a
           loop x' rest
 {-# INLINABLE scan #-}
 
@@ -906,7 +906,7 @@ fromList [1,2,3,4]
 
 -}
 scanM :: Monad m => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
-scanM wrap begin done str = do
+scanM step begin done str = do
     x <- lift begin
     loop x str
   where
@@ -917,7 +917,7 @@ scanM wrap begin done str = do
         Return r -> Return r
         Delay m  -> Delay $ liftM (loop x) m
         Step (a :> rest) -> do
-          x' <- lift $ wrap x a
+          x' <- lift $ step x a
           loop x' rest
 {-# INLINABLE scanM #-}
 
@@ -1093,7 +1093,7 @@ toListM' :: Monad m => Stream (Of a) m r -> m (Of [a] r)
 toListM' = fold' (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 {-# INLINE toListM' #-}
 
-{-| Build a @Stream@ by unfolding wraps starting from a seed. 
+{-| Build a @Stream@ by unfolding steps starting from a seed. 
 
     The seed can of course be anything, but this is one natural way 
     to consume a @pipes@ 'Pipes.Producer'. Consider:
@@ -1130,9 +1130,9 @@ goodbye
 -}
 unfoldr :: Monad m 
         => (s -> m (Either r (a, s))) -> s -> Stream (Of a) m r
-unfoldr wrap = loop where
+unfoldr step = loop where
   loop s0 = Delay $ do 
-    e <- wrap s0
+    e <- step s0
     case e of
       Left r      -> return (Return r)
       Right (a,s) -> return (Step (a :> loop s))

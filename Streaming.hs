@@ -72,13 +72,13 @@ import Data.Functor.Compose
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
-    succession of wraps, where the form of the wraps or 'commands' is 
+    succession of steps, where the form of the steps or 'commands' is 
     specified by the first (functor) parameter. The (hidden) implementation is
 
 > data Stream f m r = Step !(f (Stream f m r)) | Delay (m (Stream f m r)) | Return r
 
     In the simplest case, the base functor is @ (,) a @. Here the news 
-    or /command/ at each wrap is an /individual element of type/ @ a @, 
+    or /command/ at each step is an /individual element of type/ @ a @, 
     i.e. the command is a @yield@ statement.  The associated 
     @Streaming@ 'Streaming.Prelude' 
     uses the left-strict pair @Of a b@ in place of the Haskell pair @(a,b)@ 

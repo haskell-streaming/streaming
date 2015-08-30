@@ -69,13 +69,13 @@ import Data.Functor.Compose
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
-    succession of wraps, where the form of the wraps or 'commands' is 
+    succession of steps, where the form of the steps or 'commands' is 
     specified by the first (functor) parameter. 
 
 > data Stream f m r = Step !(f (Stream f m r)) | Delay (m (Stream f m r)) | Return r
 
     The /producer/ concept uses the simple functor @ (a,_) @ \- or the stricter 
-    @ Of a _ @. Then the news at each wrap or layer is just: an individual item of type @a@. 
+    @ Of a _ @. Then the news at each step or layer is just: an individual item of type @a@. 
     Since @Stream (Of a) m r@ is equivalent to @Pipe.Producer a m r@, much of
     the @pipes@ @Prelude@ can easily be mirrored in a @streaming@ @Prelude@. Similarly, 
     a simple @Consumer a m r@ or @Parser a m r@ concept arises when the base functor is
@@ -105,9 +105,15 @@ instance (Functor f, Monad m) => Functor (Stream f m) where
   fmap f = loop where
     loop stream = case stream of
       Return r -> Return (f r)
-      Delay m  -> Delay (liftM loop m)
+      Delay m  -> Delay (do {stream' <- m; return (loop stream')})
       Step f   -> Step (fmap loop f)
   {-# INLINABLE fmap #-}
+  a <$ stream0 = loop stream0 where
+    loop stream = case stream of
+      Return r -> Return a
+      Delay m  -> Delay (do {stream' <- m; return (loop stream')})
+      Step f    -> Step (fmap loop f)
+  {-# INLINABLE (<$) #-}    
   
 instance (Functor f, Monad m) => Monad (Stream f m) where
   return = Return
@@ -117,20 +123,33 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
       Return _ -> stream2
       Delay m  -> Delay (liftM loop m)
       Step f   -> Step (fmap loop f)    
-  {-# INLINABLE (>>) #-}                              
+  {-# INLINABLE (>>) #-}
   stream >>= f = loop stream where
     loop stream0 = case stream0 of
       Step f -> Step (fmap loop f)
       Delay m      -> Delay (liftM loop m)
       Return r      -> f r
   {-# INLINABLE (>>=) #-}                              
-
+  fail = lift . fail
+  
 instance (Functor f, Monad m) => Applicative (Stream f m) where
   pure = Return
   {-# INLINE pure #-}
   streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)}   
   {-# INLINABLE (<*>) #-}    
-  
+  stra0 *> strb = loop stra0 where
+    loop stra = case stra of
+      Return _ -> strb
+      Delay m  -> Delay (do {stra' <- m ; return (stra' *> strb)})
+      Step fstr -> Step (fmap (*> strb) fstr)
+  {-# INLINABLE (*>) #-}    
+  stra <* strb0 = loop strb0 where
+    loop strb = case strb of
+      Return _ -> stra
+      Delay m  -> Delay (do {strb' <- m ; return (stra <* strb')})
+      Step fstr -> Step (fmap (stra <*) fstr)
+  {-# INLINABLE (<*) #-}    
+    
 instance Functor f => MonadTrans (Stream f) where
   lift = Delay . liftM Return
   {-# INLINE lift #-}
@@ -235,7 +254,7 @@ inspect = loop where
     Step fs  -> return (Right fs)
 {-# INLINABLE inspect #-}
     
-{-| Build a @Stream@ by unfolding wraps starting from a seed. See also
+{-| Build a @Stream@ by unfolding steps starting from a seed. See also
     the specialized 'Streaming.Prelude.unfoldr' in the prelude.
 
 > unfold inspect = id -- modulo the quotient we work with
@@ -246,9 +265,9 @@ inspect = loop where
 
 unfold :: (Monad m, Functor f) 
         => (s -> m (Either r (f s))) -> s -> Stream f m r
-unfold wrap = loop where
+unfold step = loop where
   loop s0 = Delay $ do 
-    e <- wrap s0
+    e <- step s0
     case e of
       Left r -> return (Return r)
       Right fs -> return (Step (fmap loop fs))
