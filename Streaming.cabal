@@ -1,8 +1,8 @@
 name:                streaming
-version:             0.1.0.12
+version:             0.1.0.13
 cabal-version:       >=1.10
 build-type:          Simple
-synopsis:            A free monad transformer optimized for streaming applications.
+synopsis:            a free monad transformer optimized for streaming applications, with a simple prelude
                      
 description:         `Stream` can be used wherever `FreeT` is used. The compiler's
                      standard range of optimizations work better for operations 
@@ -21,10 +21,27 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      > io-streams: InputStream a, Generator a r
                      > conduit:    Source m a, ConduitM () o m r
                      .
-                     and the like. @Streaming.Prelude@ closely follows 
-                     @Pipes.Prelude@, but cleverly /omits the pipes/. 
+                     and the like. @Streaming.Prelude@ closely follows @Pipes.Prelude@, but cleverly /omits the pipes/:
                      .
-                     Interoperation with 
+                     >>> S.stdoutLn $ S.take 2 S.stdinLn
+                     let's<Enter>
+                     let's
+                     stream<Enter>
+                     stream
+                     .
+                     And here we do a little /connect and resume/, as the streaming-io experts call it:
+                     .
+                     >>> rest <- S.print $ S.splitAt 3 $ S.each [1..10]
+                     1
+                     2
+                     3
+                     >>> S.sum rest
+                     49
+                     .
+                     Somehow, we didn't even need a four-character operator for that, nor advice
+                     about best practices; just ordinary Haskell common sense. 
+                     .
+                     The simplest form of interoperation with 
                      <http://hackage.haskell.org/package/pipes pipes>
                      is accomplished with this isomorphism:
                      .  
@@ -44,16 +61,20 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      .
                      These conversions should never be more expensive than a single @>->@ or @=$=@.
                      .
-                     With a much more general level, we also of course have interopetion with 
+                     At a much more general level, we also of course have interoperation with 
                      <http://hackage.haskell.org/package/free free>:
                      .
-                     Free.iterTM  Stream.wrap              :: FreeT f m a -> Stream f m a
-                     Stream.iterTM Free.wrap               :: Stream f m a -> FreeT f m a 
+                     > Free.iterTM  Stream.wrap              :: FreeT f m a -> Stream f m a
+                     > Stream.iterTM Free.wrap               :: Stream f m a -> FreeT f m a 
                      .
-                     See the companion package <https://hackage.haskell.org/package/streaming-bytestring streaming-bytestring>
-                     For some simple examples, see
+                     For some simple ghci examples, see the commentary throughout the Prelude module.
+                     For slightly more advanced usage see the commentary in the haddocks of <https://hackage.haskell.org/package/streaming-bytestring streaming-bytestring>
+                     and e.g. 
                      <https://gist.github.com/michaelt/6c6843e6dd8030e95d58 these replicas> of shell-like programs from
-                     the <http://hackage.haskell.org/package/io-streams-1.3.2.0/docs/System-IO-Streams-Tutorial.html io-streams tutorial>.
+                     the io-streams tutorial.
+                     Here's a simple <https://gist.github.com/michaelt/2dcea1ba32562c091357 streaming GET request> with
+                     intrinsically streaming byte streams.
+                     
                      
 license:             BSD3
 license-file:        LICENSE
