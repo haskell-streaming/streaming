@@ -1,9 +1,9 @@
 name:                streaming
-version:             0.1.0.13
+version:             0.1.0.14
 cabal-version:       >=1.10
 build-type:          Simple
-synopsis:            a free monad transformer optimized for streaming applications, with a simple prelude
-                     
+synopsis:            a free monad transformer optimized for streaming applications
+
 description:         `Stream` can be used wherever `FreeT` is used. The compiler's
                      standard range of optimizations work better for operations 
                      written in terms of `Stream`. @FreeT f m r@ / @Stream f m r@
