@@ -1,4 +1,4 @@
-`{-| This module is very closely modeled on Pipes.Prelude; it attempts to 
+{-| This module is very closely modeled on Pipes.Prelude; it attempts to 
     simplify and optimize the conception of Producer manipulation contained
     in Pipes.Group, Pipes.Parse and the like. This is very simple and unmysterious;
     it is independent of piping and conduiting, and can be used with any 
