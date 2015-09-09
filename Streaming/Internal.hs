@@ -123,13 +123,39 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
       Delay m  -> Delay (liftM loop m)
       Step f   -> Step (fmap loop f)    
   {-# INLINABLE (>>) #-}
-  stream >>= f = loop stream where
-    loop stream0 = case stream0 of
-      Step f -> Step (fmap loop f)
-      Delay m      -> Delay (liftM loop m)
-      Return r      -> f r
-  {-# INLINABLE (>>=) #-}                              
+  (>>=) = _bind
+  -- stream >>= f = 
+  --   loop stream where
+  --   loop stream0 = case stream0 of
+  --     Step fstr -> Step (fmap loop fstr)
+  --     Delay m   -> Delay (liftM loop m)
+  --     Return r  -> f r
+  -- {-# INLINABLE (>>=) #-}                         
+
   fail = lift . fail
+
+
+_bind
+    :: (Functor f, Monad m)
+    => Stream f m r
+    -> (r -> Stream f m s)
+    -> Stream f m s
+_bind p0 f = go p0 where
+    go p = case p of
+      Step fstr  -> Step (fmap go fstr)
+      Delay m   -> Delay (m >>= \s -> return (go s))
+      Return r  -> f r
+
+{-# RULES
+    "_bind (Step    fstr) f" forall  fstr f .
+        _bind (Step fstr) f = Step (fmap (\p -> _bind p f) fstr);
+    "_bind (Delay      m) f" forall m    f .
+        _bind (Delay   m) f = Delay (m >>= \p -> return (_bind p f));
+    "_bind (Return     r) f" forall r    f .
+        _bind (Return  r) f = f r;
+  #-}
+
+  
   
 instance (Functor f, Monad m) => Applicative (Stream f m) where
   pure = Return

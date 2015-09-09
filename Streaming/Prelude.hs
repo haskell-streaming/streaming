@@ -1,16 +1,8 @@
-{-| This module is very closely modeled on Pipes.Prelude; it attempts to 
+`{-| This module is very closely modeled on Pipes.Prelude; it attempts to 
     simplify and optimize the conception of Producer manipulation contained
     in Pipes.Group, Pipes.Parse and the like. This is very simple and unmysterious;
     it is independent of piping and conduiting, and can be used with any 
-    rational \"streaming IO\" system.
-
-    Some interoperation incantations would be e.g. 
-
-> Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
-> Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r                     
-> Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
-> IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
-> Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
+    rational \"streaming IO\" system. 
 
     Import qualified thus:
 
@@ -165,13 +157,46 @@ import qualified GHC.IO.Exception as G
 import qualified System.IO as IO
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception (throwIO, try)
-
+import Data.Monoid (Monoid (..))
 
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
-    deriving (Data, Eq, Foldable, Functor, Ord,
+    deriving (Data, Eq, Foldable, Ord,
               Read, Show, Traversable, Typeable)
-infixr 4 :>
+infixr 5 :>
+
+instance (Monoid a, Monoid b) => Monoid (Of a b) where
+  mempty = mempty :> mempty
+  {-#INLINE mempty #-}
+  mappend (m :> w) (m' :> w') = mappend m m' :> mappend w w'
+  {-#INLINE mappend #-}
+  mconcat = foldr mappend mempty
+  {-#INLINE mconcat #-}
+
+instance Functor (Of a) where
+  fmap f (a :> x) = a :> f x
+  {-#INLINE fmap #-}
+  a <$ (b :> x)   = b :> a
+  {-#INLINE (<$) #-}
+
+instance Monoid a => Applicative (Of a) where
+  pure x = mempty :> x
+  {-#INLINE pure #-}
+  m :> f <*> m' :> x = mappend m m' :> f x
+  {-#INLINE (<*>) #-}
+  m :> x *> m' :> y  = mappend m m' :> y
+  {-#INLINE (*>) #-}
+  m :> x <* m' :> y  = mappend m m' :> x  
+  {-#INLINE (<*) #-}
+
+instance Monoid a => Monad (Of a) where
+  return x = mempty :> x
+  {-#INLINE return #-}
+  m :> x >> m' :> y = mappend m m' :> y
+  {-#INLINE (>>) #-}
+  m :> x >>= f = let m' :> y = f x in mappend m m' :> y
+  {-#INLINE (>>=) #-}
+
 
 lazily :: Of a b -> (a,b)
 lazily = \(a:>b) -> (a,b)
@@ -186,6 +211,8 @@ fst' (a :> b) = a
 
 snd' :: Of a b -> b
 snd' (a :> b) = b
+
+
 {-| Break a sequence when a element falls under a predicate, keeping the rest of
     the stream as the return value.
 
@@ -327,7 +354,7 @@ drain = loop where
 -- | Ignore the first n elements of a stream, but carry out the actions
 drop :: (Monad m) => Int -> Stream (Of a) m r -> Stream (Of a) m r
 drop = loop where
-  loop n stream 
+  loop !n stream 
     | n <= 0    = stream
     | otherwise = case stream of
       Return r       -> Return r
@@ -363,12 +390,10 @@ dropWhile pred = loop where
 
 {- | Stream the elements of a foldable container.
 
->>> S.print $ S.map (*100) $ each [1..3] >> yield 4
-0
+>>> S.print $ S.map (*100) $ each [1..3] 
 100
 200
 300
-400
 
 >>> S.print $ S.map (*100) $ each [1..3] >> lift readLn >>= yield
 100

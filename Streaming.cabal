@@ -1,45 +1,46 @@
 name:                streaming
-version:             0.1.0.14
+version:             0.1.0.15
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            a free monad transformer optimized for streaming applications
 
-description:         `Stream` can be used wherever `FreeT` is used. The compiler's
+description:         @Stream@ can be used wherever 
+                     <https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html FreeT> 
+                     is used. The compiler's
                      standard range of optimizations work better for operations 
                      written in terms of `Stream`. @FreeT f m r@ / @Stream f m r@
                      is of course extremely general, and many functor-general combinators
                      are exported by the general module @Streaming@. 
                      . 
-                     See the examples in @Streaming.Prelude@ for a sense of how 
-                     simple the library is to use and think about. 
-                     That module is focused on employment with such base functors 
-                     (readings of the @f@ in @Stream f m r@) that express 
-                     different forms of effectful sequences. Some of these appear 
-                     elsewhere under titles like
+                     @Streaming.Prelude@ is focused on elementary /streaming/ applications.
+                     Here the free iteration of the \'base\' functors 
+                     (readings of the @f@ in @Stream f m r@) express 
+                     forms of effectful sequence or succession. Some of types in question
+                     appear in the streaming IO libraries under titles like
                      .
                      > pipes:      Producer a m r, Producer a m (Producer a m r), FreeT (Producer a m) m r
                      > io-streams: InputStream a, Generator a r
                      > conduit:    Source m a, ConduitM () o m r
                      .
-                     and the like. @Streaming.Prelude@ closely follows @Pipes.Prelude@, but cleverly /omits the pipes/:
+                     @Streaming.Prelude@ closely follows @Pipes.Prelude@, but cleverly /omits the pipes/:
                      .
-                     >>> S.stdoutLn $ S.take 2 S.stdinLn
-                     let's<Enter>
-                     let's
-                     stream<Enter>
-                     stream
+                     > ghci> S.stdoutLn $ S.take 2 S.stdinLn
+                     > let's<Enter>
+                     > let's
+                     > stream<Enter>
+                     > stream
                      .
                      And here we do a little /connect and resume/, as the streaming-io experts call it:
                      .
-                     >>> rest <- S.print $ S.splitAt 3 $ S.each [1..10]
-                     1
-                     2
-                     3
-                     >>> S.sum rest
-                     49
+                     > ghci> rest <- S.print $ S.splitAt 3 $ S.each [1..10]
+                     > 1
+                     > 2
+                     > 3
+                     > ghci> S.sum rest
+                     > 49
                      .
                      Somehow, we didn't even need a four-character operator for that, nor advice
-                     about best practices; just ordinary Haskell common sense. 
+                     about best practices! - just ordinary Haskell common sense. 
                      .
                      The simplest form of interoperation with 
                      <http://hackage.haskell.org/package/pipes pipes>
@@ -48,7 +49,9 @@ description:         `Stream` can be used wherever `FreeT` is used. The compiler
                      > Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
                      > Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r                     
                      .
-                     Interoperation with 
+                     (@streaming@ can be mixed with @pipes@ wherever @pipes@ 
+                     itself employs @Control.Monad.Trans.Free@; speedups are frequently
+                     appreciable.) Interoperation with 
                      <http://hackage.haskell.org/package/io-streams io-streams> 
                      is thus:
                      .
