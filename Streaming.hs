@@ -30,8 +30,6 @@ module Streaming
    interleaves,
    
    -- * Eliminating a 'Stream'
-   intercalates,
-   concats,
    iterTM,
    iterT,
    destroy,
@@ -43,7 +41,8 @@ module Streaming
    takes,
    chunksOf,
    concats,
-
+   intercalates,
+   
    -- * Base functor for streams of individual items
    Of (..),
    lazily,
