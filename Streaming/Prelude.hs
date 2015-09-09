@@ -143,6 +143,8 @@ import Data.Data ( Data, Typeable )
 import Data.Functor.Identity
 import Control.Monad.Trans
 import Control.Applicative (Applicative (..))
+import Data.Functor (Functor (..), (<$))
+
 import qualified Prelude as Prelude                
 import Data.Foldable (Foldable)
 import Data.Traversable (Traversable)
