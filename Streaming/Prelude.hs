@@ -142,6 +142,7 @@ import Control.Monad hiding (filterM, mapM, mapM_, foldM, replicateM, sequence)
 import Data.Data ( Data, Typeable )
 import Data.Functor.Identity
 import Control.Monad.Trans
+import Control.Applicative (Applicative (..))
 import qualified Prelude as Prelude                
 import Data.Foldable (Foldable)
 import Data.Traversable (Traversable)
