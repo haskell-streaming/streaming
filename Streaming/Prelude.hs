@@ -811,7 +811,7 @@ product = fold (*) 1 id
 -}
 product' :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
 product' = fold' (*) 1 id
-{-# INLINAE product' #-}
+{-# INLINE product' #-}
 
 -- ---------------
 -- read

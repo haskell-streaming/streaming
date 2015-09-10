@@ -29,8 +29,10 @@ module Streaming.Internal (
     -- * Transforming streams
     , maps 
     , mapsM 
+    , decompose
     , mapsM_
-    , runEffect
+    , eithers
+    , run
     , distribute
     
     -- *  Splitting streams
@@ -59,12 +61,13 @@ import Control.Applicative
 import Data.Foldable ( Foldable(..) )
 import Data.Traversable
 import Control.Monad.Morph
-import Data.Monoid
+import Data.Monoid (Monoid (..), (<>))
 import Data.Functor.Identity
 import GHC.Exts ( build )
 import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
+import Data.Functor.Sum
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
@@ -309,7 +312,12 @@ maps phi = loop where
     Step f    -> Step (phi (fmap loop f))
 {-# INLINABLE maps #-}
 
--- | Map layers of one functor to another with a transformation involving the base monad
+{- | Map layers of one functor to another with a transformation involving the base monad
+     @maps@ is more fundamental than @mapsM@, which is best understood as a convenience
+     for effecting this frequent composition:
+
+> mapsM phi = decompose . maps (Compose . phi)
+-}
 mapsM :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
 mapsM phi = loop where
   loop stream = case stream of 
@@ -318,22 +326,41 @@ mapsM phi = loop where
     Step f    -> Delay (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsM #-}
 
+{-| Resort a succession of layers of the form @m (f x)@. Though @mapsM@ 
+    is best understood as:
+
+> mapsM phi = decompose . maps (Compose . phi)
+
+   we could as well define @decompose@ by @mapsM@:
+
+> decompose = mapsM getCompose
+
+-}
+decompose :: (Monad m, Functor f) => Stream (Compose m f) m r -> Stream f m r
+decompose = loop where
+  loop stream = case stream of 
+    Return r -> Return r 
+    Delay m ->  Delay (liftM loop m)
+    Step (Compose mstr) -> Delay $ do
+      str <- mstr
+      return (Step (fmap loop str))
+
 
 {-| Run the effects in a stream that merely layers effects.
 -}
-runEffect :: Monad m => Stream m m r  -> m r
-runEffect = loop where
+run :: Monad m => Stream m m r  -> m r
+run = loop where
   loop stream = case stream of
     Return r -> return r
     Delay  m -> m >>= loop
     Step mrest -> mrest >>= loop
-{-# INLINABLE runEffect #-}
+{-# INLINABLE run #-}
 
 
 {-| Map each layer to an effect in the base monad, and run them all.
 -}
 mapsM_ :: (Functor f, Monad m) => (forall x . f x -> m x) -> Stream f m r -> m r
-mapsM_ f str = runEffect (maps f str)
+mapsM_ f str = run (maps f str)
 {-# INLINABLE mapsM_ #-}
 
 
@@ -450,30 +477,7 @@ chunksOf n0 = loop where
     Step fs        -> Step $ Step $ fmap (fmap loop . splitsAt (n0-1)) fs
 {-# INLINABLE chunksOf #-}          
 
-{- | Make it possible to \'run\' the underlying transformed monad. A simple
-     minded example might be: 
-
-> debugFibs = flip runStateT 1 $ distribute $ loop 1 where
->   loop n = do
->     S.yield n
->     s <- lift get 
->     liftIO $ putStr "Current state is:  " >> print s
->     lift $ put (s + n :: Int)
->     loop s
-
->>> S.print $  S.take 4 $ S.drop 4 $ debugFibs
-Current state is:  1
-Current state is:  2
-Current state is:  3
-Current state is:  5
-5
-Current state is:  8
-8
-Current state is:  13
-13
-Current state is:  21
-21
-
+{- | Make it possible to \'run\' the underlying transformed monad. 
 -}
 distribute :: (Monad m, Functor f, MonadTrans t, MFunctor t, Monad (t (Stream f m)))
            => Stream f (t m) r -> t (Stream f m) r
@@ -617,7 +621,16 @@ interleaves = zipsWith (liftA2 (,))
 {-# INLINE interleaves #-}   
 
 
-
+eithers :: (Monad m, Applicative h) => 
+    (forall x . f x -> h x) -> (forall x . g x -> h x) -> Stream (Sum f g) m r -> Stream h m r
+eithers f g = loop where
+  loop str = case str of 
+    Return r -> Return r
+    Delay m -> Delay (liftM loop m)
+    Step str' -> case str' of 
+      InL s -> Step (fmap loop (f s))
+      InR t -> Step (fmap loop (g t))
+      
   
   
   

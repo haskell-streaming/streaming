@@ -17,9 +17,11 @@ module Streaming
    wrap,
    
    -- * Transforming streams
+   decompose,
    maps,
    mapsM,
    distribute,
+   eithers,
    
    -- * Inspecting a stream
    inspect,
@@ -34,7 +36,7 @@ module Streaming
    iterT,
    destroy,
    mapsM_,
-   runEffect,
+   run,
 
    -- * Splitting and joining 'Stream's 
    splitsAt,
