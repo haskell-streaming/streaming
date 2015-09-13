@@ -17,6 +17,19 @@
 > import qualified Pipes.Prelude as P
 > import qualified System.IO as IO
 
+     Here are some correspondences between the types employed here and elsewhere:
+
+>               streaming             |            pipes               |       conduit      |  io-streams
+> ----------------------------------------------------------------------------------------------------------
+> Stream (Of a) m ()                  | Producer a m ()                | Source m a         | InputStream a
+>                                     | ListT m a                      | ConduitM () o m () | Generator r ()
+> ----------------------------------------------------------------------------------------------------------
+> Stream (Of a) m r                   | Producer a m r                 | ConduitM () o m r  | Generator a r
+> ----------------------------------------------------------------------------------------------------------
+> Stream (Of a) m (Stream (Of a) m r) | Producer a m (Producer a m r)  | 
+> -----------------------------------------------------------------------------------------------------------
+> Stream (Stream (Of a) m) r          | FreeT (Producer a m) m r       |
+
 -}
 {-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable,
              DeriveFoldable, DeriveFunctor, DeriveTraversable #-}
@@ -200,7 +213,30 @@ instance Monoid a => Monad (Of a) where
   m :> x >>= f = let m' :> y = f x in mappend m m' :> y
   {-#INLINE (>>=) #-}
 
+{-| Note that 'lazily', 'strictly', 'fst'', and 'mapOf' are all so-called /natural transformations/ on the primitive @Of a@ functor
+    If we write 
+  
+>  type f ~> g = forall x . f x -> g x
+  
+   then we have
+  
+>  mapOf  :: (a -> b) -> Of a ~> Of b
+>  lazily :: Of a -> (,) a
+>  fst'   :: Of a -> Identity a
 
+   Manipulation of a @Stream f m r@ by mapping often turns on recognizing natural transformations of @f@,
+   thus
+
+>  S.map :: (a -> b) -> Stream (Of a) m r -> Stream (Of b) m r
+>  S.map f = maps (mapOf f)
+  
+  This rests on recognizing that @mapOf@ is a natural transformation; note though
+  that it results in such a transformation as well:
+  
+>  S.map :: (a -> b) -> Stream (Of a) m ~> Stream (Of b) m   
+  
+
+-}
 lazily :: Of a b -> (a,b)
 lazily = \(a:>b) -> (a,b)
 {-# INLINE lazily #-}
@@ -215,7 +251,8 @@ fst' (a :> b) = a
 snd' :: Of a b -> b
 snd' (a :> b) = b
 
-
+mapOf :: (a -> b) -> Of a r -> Of b r
+mapOf f (a:> b) = (f a :> b)
 {-| Break a sequence when a element falls under a predicate, keeping the rest of
     the stream as the return value.
 
@@ -1178,10 +1215,11 @@ hello
 >>> S.sum $ do {yield 1; yield 2}
 3
 
->>> S.sum $ do {yield 1;  lift $ putStrLn "# 1 was yielded";  yield 2;  lift $ putStrLn "# 2 was yielded"}
-# 1 was yielded
-# 2 was yielded
+>>> S.sum $ do {yield 1; lift $ putStrLn "/* 1 was yielded */"; yield 2; lift $ putStrLn "/* 2 was yielded */"}
+/* 1 was yielded */
+/* 2 was yielded */
 3
+
 
 >>> let prompt :: IO Int; prompt = putStrLn "Enter a number:" >> readLn 
 >>> S.sum $ do {lift prompt >>= yield ; lift prompt >>= yield ; lift prompt >>= yield}
