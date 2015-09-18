@@ -2,7 +2,7 @@ name:                streaming
 version:             0.1.0.18
 cabal-version:       >=1.10
 build-type:          Simple
-synopsis:            a free monad transformer optimized for streaming applications
+synopsis:            a free monad transformer optimized for streaming applications with an elementary streaming prelude
 
 description:         * __The free stream on a streamable functor__
                      .
@@ -14,34 +14,45 @@ description:         * __The free stream on a streamable functor__
                      is of course extremely general, and many functor-general combinators
                      are exported by the general module @Streaming@. 
                      .
+                     * __The general idea of streaming__
+                     .
                      As soon as you consider the idea of an effectful stream of any kind
-                     whatsoever, you will inevitably be forced to contemplate the
-                     idea of a streaming succession of /such streams/. Thus for example
-                     if you consider bytes streaming from a handle in some way,
-                     you will want to consider a succession of /such streams/ divided
-                     on newlines. 
+                     whatsoever, for example, a stream of bytes from a handle, however
+                     constituted, you will inevitably be forced to contemplate the
+                     idea of a streaming /succession/ of /such streams/. Thus, for example,
+                     however you imagine your bytes streaming from a handle,
+                     you will want to consider a /succession/ of /such streams/ divided
+                     on newlines. Similarly, suppose you have the idea the unfolding of
+                     some sort of stream from a Haskell value, a seed - a file name, 
+                     as it might be.  And suppose you /also/ have some idea of a stream of 
+                     such Haskell values - maybe a stream of file names coming from 
+                     something like @du@, subjected
+                     to some filter. Then you will also have the idea of a streaming 
+                     /succession/ of /such unfoldings/ linked together end to end in 
+                     accordance with the initial succession of seed values.
                      .
-                     If you understood the two preceding sentences, 
-                     you have a total comprehension of @Stream f m r@. @Stream f m r@ 
-                     is just the direct and naive formulation of the idea in the 
-                     @Begriffsschrift@ we call Haskell: 
+                     Call those 5 sentences the ABCs. If you understood the ABCs
+                     you have a total comprehension of @Stream f m r@. 
                      .
-                     * @Stream@ expresses what the word "succession" meant in those sentences
+                     * @Stream@ itself expresses what the word "succession" meant in the ABCs
                      .
                      * The general parameter @f@ expresses what was meant by "such streams"
                      .
                      * @m@ expresses the relevant form of "effect".
                      .
-                     General combinators for working with this idea of succession generally are
-                     contained in the module @Stream@, and they can be used to link
-                     e.g. io-streams @Generator@s or pipes @Producer@s or the effectful
-                     bytestreams of the <https://hackage.haskell.org/package/streaming-bytestring streaming-bytestring> library, 
+                     General combinators for working with this idea of succession irrespective
+                     of the form of succession are
+                     contained in the module @Stream@. They can be used, or example,
+                     to organize a succession of io-streams @Generator@s or pipes 
+                     @Producer@s or the effectful
+                     bytestreams of the <https://hackage.haskell.org/package/streaming-bytestring 
+                     streaming-bytestring> library, 
                      or whatever stream-form you can express in a Haskell functor. 
                      . 
-                     * __A free stream of /connected individual Haskell values/ is Producer, Generator or Source__
+                     * __A freely generated stream of /connected individual Haskell values/ is Producer, Generator or Source__
                      .
                      But, of course, as soon as you grasp the general form of /succession/, 
-                     you are already in possession of the most basic form: a simple 
+                     you are already in possession of the most basic concrete form: a simple 
                      /succession of individual Haskell values/ one after another. 
                      This is just @Stream ((,) a) m r@, or as we write it here,
                      @Stream (Of a) m r@, strictifying the left element of the pair.
@@ -49,7 +60,7 @@ description:         * __The free stream on a streamable functor__
                      stream. The primitive @yield@ statement just expresses the
                      pairing of the yielded item with the rest of the stream; or rather
                      it is itself the trivial singleton stream.
-                     @Streaming.Prelude@ is focused on this the manipulation of this 
+                     @Streaming.Prelude@ is focused on the manipulation of this 
                      all-important stream-form, which appears in the streaming 
                      IO libraries under titles like:
                      .
@@ -62,7 +73,7 @@ description:         * __The free stream on a streamable functor__
                      concept is formulated explicitly in terms of the 
                      /general/ concept of successive connection. But this is
                      a concept you need and already possess anyway, as your comprehension of
-                     those two sentences above showed. 
+                     the four sentences above showed. 
                      .
                      The special case of a 
                      /stream of individual Haskell values/ 
@@ -77,9 +88,8 @@ description:         * __The free stream on a streamable functor__
                      .
                      * __@Streaming.Prelude@__
                      .
-                     @Streaming.Prelude@ closely follows @Pipes.Prelude@. In fact it follows
-                     pipes in as much as possible, and can be viewed as a preliminary to the 
-                     comprehension of the pipes packages. But since it restricts itself to use 
+                     @Streaming.Prelude@ closely follows @Pipes.Prelude@. 
+                     But since it restricts itself to use 
                      only of the general idea of streaming, it cleverly /omits the pipes/:
                      .
                      > ghci> S.stdoutLn $ S.take 2 S.stdinLn
@@ -116,23 +126,23 @@ description:         * __The free stream on a streamable functor__
                      > Prelude.splitAt   :: Int -> [a]          -> ([a],[a])
                      > Streaming.splitAt :: Int -> Stream f m r -> Stream f m (Stream f m r)
                      .
-                     These are "functor general", in the jargon used in the documentation,
+                     These concepts are "functor general", in the jargon used in the documentation,
                      and are thus exported by the main @Streaming@ module. 
                      Something like @break@ requires us to inspect individual values for
-                     their properties, so we get
+                     their properties, so it is found in the @Streaming.Prelude@
                      .
                      > Prelude.break           :: (a -> Bool) -> [a]               -> ([a],[a])
                      > Streaming.Prelude.break :: (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
                      .
                      It is easy to prove that /resistance to these types is resistance to effectful streaming itself/.
-                     I will labor this point a bit more below, but you can also find it labored
-                     in the documentation for the pipes libraries.
+                     I will labor this point a bit more below, but you can also find it developed, with
+                     greater skill, in the documentation for the pipes libraries.
                      .
                      * __How come there's not one of those fancy "ListT done right" implementations in here?__
                      .
                      The use of the final return value appears to be a complication, but in fact
                      it is essentially contained in the idea of effectful streaming. This is why
-                     this library does not export a /ListT done right/, which would be simple enough,
+                     this library does not export a /ListT done right/, which would be simple enough -
                      following @pipes@, as usual:
                      .
                      > newtype ListT m a = ListT (Stream (Of a) m ())
@@ -159,31 +169,33 @@ description:         * __The free stream on a streamable functor__
                      The attractions of the various "@ListT@ done right" implementations are superficial; the concept
                      belongs to logic programming, not stream programming.
                      .
-                     Note that you can write a certain kind of 
+                     Note similarly that you can write a certain kind of 
                      <http://hackage.haskell.org/package/machines-0.5.1/docs/Data-Machine-Process.html#v:taking take> 
                      and 
                      <http://hackage.haskell.org/package/machines-0.5.1/docs/Data-Machine-Process.html#v:dropping drop> 
                      with the
-                     @machines@ library, as you can even with a "@ListT@ done right"; but I 
-                     wish you luck writing @splitAt@. Similarly you can write a
+                     @machines@ library - as you can even with a "@ListT@ done right". But I 
+                     wish you luck writing @splitAt@! Similarly you can write a
                      <http://hackage.haskell.org/package/machines-io-0.2.0.6/docs/System-IO-Machine.html getContents>; 
                      but I wish you luck dividing the resulting bytestream on its lines. 
                      This is - as usual! - because the library was not written with the general concept of
                      effectful succession or streaming in view. Materials for
                      sinking some elements of a stream in one way, and others in other ways - copying
                      each line to a different file, as it might be, but without accumulation 
-                     - are documented within. So are are myriad other ABCs of streaming io.
+                     - are documented within. So are are myriad other elementary operations of streaming io.
                      .
                      * __Didn't I hear that free monads are a real efficiency dog? Isn't Oleg working on this important problem?__
                      .
                      We noted above that if we instantiate @Stream f m r@ to @Stream ((,) a) m r@ 
                      or the like, we get the standard idea of a producer or generator. 
                      If it is instantiated to @Stream f Identity m r@ then we have
-                     the standard /free monad construction/. This is subject to certain familiar
+                     the standard /free monad construction/. This construction is subject to 
+                     certain familiar
                      objections from an efficiency perspective; efforts have been made to
-                     substitute exotic cps-ed implementations and so forth. It is an interesting topic.
+                     substitute exotic cps-ed implementations and so forth. 
+                     It is an interesting topic.
                      .
-                     But in fact, the standard fast talk about /retraversing binds/ and /quadratic explosions/ and
+                     But in fact, the standard alarmist talk about /retraversing binds/ and /quadratic explosions/ and
                      /costly appends/, and so on become __transparent__ nonsense with @Stream f m r@  
                      in its streaming use. The conceptual power needed to see this is 
                      basically nil: Where @m@ is read as

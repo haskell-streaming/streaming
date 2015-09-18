@@ -31,7 +31,7 @@
 > Stream (Stream (Of a) m) r          | FreeT (Producer a m) m r       |
 
 -}
-{-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable,
+{-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable, TypeFamilies,
              DeriveFoldable, DeriveFunctor, DeriveTraversable #-}
              
 module Streaming.Prelude (
@@ -174,6 +174,7 @@ import qualified System.IO as IO
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception (throwIO, try)
 import Data.Monoid (Monoid (..))
+import Data.String (IsString (..))
 
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
@@ -212,6 +213,9 @@ instance Monoid a => Monad (Of a) where
   {-#INLINE (>>) #-}
   m :> x >>= f = let m' :> y = f x in mappend m m' :> y
   {-#INLINE (>>=) #-}
+
+instance (r ~ (), Monad m, f ~ Of Char) => IsString (Stream f m r) where
+  fromString = each
 
 {-| Note that 'lazily', 'strictly', 'fst'', and 'mapOf' are all so-called /natural transformations/ on the primitive @Of a@ functor
     If we write 
