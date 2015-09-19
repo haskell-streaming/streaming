@@ -1,20 +1,20 @@
 name:                streaming
-version:             0.1.0.18
+version:             0.1.0.19
 cabal-version:       >=1.10
 build-type:          Simple
-synopsis:            a free monad transformer optimized for streaming applications with an elementary streaming prelude
+synopsis:            an elementary streaming prelude and a general free monad transformer optimized for streaming applications
 
-description:         * __The free stream on a streamable functor__
+description:         /A. The freely-developed stream on a streamable functor/
                      .
                      @Stream@ can be used wherever 
                      <https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html FreeT> 
                      is used. The compiler's
                      standard range of optimizations work better for operations 
-                     written in terms of `Stream`. @FreeT f m r@ / @Stream f m r@
-                     is of course extremely general, and many functor-general combinators
+                     written in terms of `Stream`. @FreeT f m r@ and @Stream f m r@
+                     are of course extremely general, and many functor-general combinators
                      are exported by the general module @Streaming@. 
                      .
-                     * __The general idea of streaming__
+                     /B. The general idea of streaming/
                      .
                      As soon as you consider the idea of an effectful stream of any kind
                      whatsoever, for example, a stream of bytes from a handle, however
@@ -31,7 +31,7 @@ description:         * __The free stream on a streamable functor__
                      /succession/ of /such unfoldings/ linked together end to end in 
                      accordance with the initial succession of seed values.
                      .
-                     Call those 5 sentences the ABCs. If you understood the ABCs
+                     Call those 5 sentences the ABCs of streaming. If you understood these ABCs
                      you have a total comprehension of @Stream f m r@. 
                      .
                      * @Stream@ itself expresses what the word "succession" meant in the ABCs
@@ -49,7 +49,7 @@ description:         * __The free stream on a streamable functor__
                      streaming-bytestring> library, 
                      or whatever stream-form you can express in a Haskell functor. 
                      . 
-                     * __A freely generated stream of /connected individual Haskell values/ is Producer, Generator or Source__
+                     /C. A freely generated stream of/ connected individual Haskell values /is a Producer, Generator or Source/
                      .
                      But, of course, as soon as you grasp the general form of /succession/, 
                      you are already in possession of the most basic concrete form: a simple 
@@ -86,7 +86,7 @@ description:         * __The free stream on a streamable functor__
                      > machines:   SourceT m a (= forall k. MachineT m k a)
                      > streaming:  Stream (Of a) m ()
                      .
-                     * __@Streaming.Prelude@__
+                     /D./ @Streaming.Prelude@
                      .
                      @Streaming.Prelude@ closely follows @Pipes.Prelude@. 
                      But since it restricts itself to use 
@@ -110,7 +110,7 @@ description:         * __The free stream on a streamable functor__
                      Somehow, we didn't even need a four-character operator for that, nor advice
                      about best practices! - just ordinary Haskell common sense. 
                      .
-                     * __Mother's @Prelude@ vs. @Streaming.Prelude@__
+                     /E. Mother's/ @Prelude@ /vs./ @Streaming.Prelude@
                      .
                      The effort of
                      @Streaming.Prelude@ is to leverage the intuition the user has acquired
@@ -138,7 +138,7 @@ description:         * __The free stream on a streamable functor__
                      I will labor this point a bit more below, but you can also find it developed, with
                      greater skill, in the documentation for the pipes libraries.
                      .
-                     * __How come there's not one of those fancy "ListT done right" implementations in here?__
+                     /F. How come there's not one of those fancy "ListT done right" implementations in here?/
                      .
                      The use of the final return value appears to be a complication, but in fact
                      it is essentially contained in the idea of effectful streaming. This is why
@@ -184,7 +184,7 @@ description:         * __The free stream on a streamable functor__
                      each line to a different file, as it might be, but without accumulation 
                      - are documented within. So are are myriad other elementary operations of streaming io.
                      .
-                     * __Didn't I hear that free monads are a real efficiency dog? Isn't Oleg working on this important problem?__
+                     /G. Didn't I hear that free monads are a dog from the point of view of efficiency?/
                      .
                      We noted above that if we instantiate @Stream f m r@ to @Stream ((,) a) m r@ 
                      or the like, we get the standard idea of a producer or generator. 
@@ -280,29 +280,9 @@ description:         * __The free stream on a streamable functor__
                      gives you an immense body of such structures and a 
                      simple discipline for working with them. Spinkle @id@ freely
                      though your program if you get homesick.
+         
                      .
-                     Much of the discussion of the free monad concept is associated 
-                     with the "algebraic effects" program. A leading advertisement for this approach
-                     is that we can toss generators into the soup without missing a beat.
-                     See for example this 
-                     <http://hackage.haskell.org/package/extensible-effects-1.11.0.0/docs/Control-Eff-Coroutine.html#v:yield yield>.
-                     concept
-                     .
-                     > yield :: (Typeable a, Member (Yield a) r)                 => a   -> Eff r ()
-                     .
-                     With it I can over course write, e.g.
-                     .
-                     > each  :: (Traversable t, Typeable a, Member (Yield a) r)  => t a -> Eff r ()
-                     > each = mapM_ yield
-                     .
-                     Once I have one of these "coroutine effects" on my hands,
-                     the fact that I am writing Haskell, not e.g. Python, will leave me with 
-                     little trouble splitting it at the 20th element, and reserving the rest for later use.
-                     I invite you, though, to divide such a "coroutine effect" on its lines or 
-                     into chunks of 500. There must be /some/ sense in which these effects are "extensible".
-                     But it seems not as far as the ABCs.
-                     .
-                     * __Interoperation with the streaming-io libraries__
+                     /H. Interoperation with the streaming-io libraries/
                      .
                      The simplest form of interoperation with 
                      <http://hackage.haskell.org/package/pipes pipes>
@@ -334,7 +314,7 @@ description:         * __The free stream on a streamable functor__
                      > Free.iterTM  Stream.wrap              :: FreeT f m a -> Stream f m a
                      > Stream.iterTM Free.wrap               :: Stream f m a -> FreeT f m a 
                      .
-                     * __Examples__
+                     /I. Where can I find examples of use?/
                      .
                      For some simple ghci examples, see the commentary throughout the Prelude module.
                      For slightly more advanced usage see the commentary in the haddocks of <https://hackage.haskell.org/package/streaming-bytestring streaming-bytestring>
@@ -344,7 +324,7 @@ description:         * __The free stream on a streamable functor__
                      Here's a simple <https://gist.github.com/michaelt/2dcea1ba32562c091357 streaming GET request> with
                      intrinsically streaming byte streams.
                      .
-                     * __Problems__
+                     /J. Problems/
                      .
                      Questions about this library can be put as issues through the github site or
                      on the <https://groups.google.com/forum/#!forum/haskell-pipes pipes mailing list>. 
@@ -359,6 +339,8 @@ stability:           Experimental
 homepage:            https://github.com/michaelt/streaming
 bug-reports:         https://github.com/michaelt/streaming/issues
 category:            Data, Pipes, Streaming
+extra-source-files:  README.md
+
 source-repository head
     type: git
     location: https://github.com/michaelt/streaming
