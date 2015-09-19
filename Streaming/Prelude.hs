@@ -19,17 +19,21 @@
 
      Here are some correspondences between the types employed here and elsewhere:
 
->               streaming             |            pipes               |       conduit      |  io-streams
-> ----------------------------------------------------------------------------------------------------------
-> Stream (Of a) m ()                  | Producer a m ()                | Source m a         | InputStream a
->                                     | ListT m a                      | ConduitM () o m () | Generator r ()
-> ----------------------------------------------------------------------------------------------------------
-> Stream (Of a) m r                   | Producer a m r                 | ConduitM () o m r  | Generator a r
-> ----------------------------------------------------------------------------------------------------------
-> Stream (Of a) m (Stream (Of a) m r) | Producer a m (Producer a m r)  | 
-> -----------------------------------------------------------------------------------------------------------
+>               streaming             |            pipes               |       conduit       |  io-streams
+> -------------------------------------------------------------------------------------------------------------------
+> Stream (Of a) m ()                  | Producer a m ()                | Source m a          | InputStream a
+>                                     | ListT m a                      | ConduitM () o m ()  | Generator r ()
+> -------------------------------------------------------------------------------------------------------------------
+> Stream (Of a) m r                   | Producer a m r                 | ConduitM () o m r   | Generator a r
+> -------------------------------------------------------------------------------------------------------------------
+> Stream (Of a) m (Stream (Of a) m r) | Producer a m (Producer a m r)  |                     
+> --------------------------------------------------------------------------------------------------------------------
 > Stream (Stream (Of a) m) r          | FreeT (Producer a m) m r       |
-
+> --------------------------------------------------------------------------------------------------------------------
+> --------------------------------------------------------------------------------------------------------------------
+> ByteString m ()                     | Producer ByteString m ()       | Source m ByteString  | InputStream ByteString
+> --------------------------------------------------------------------------------------------------------------------
+> 
 -}
 {-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable, TypeFamilies,
              DeriveFoldable, DeriveFunctor, DeriveTraversable #-}
