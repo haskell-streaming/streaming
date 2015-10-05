@@ -41,10 +41,6 @@
 module Streaming.Prelude (
     -- * Types
     Of (..)
-    , lazily
-    , strictly
-    , fst'
-    , snd'
 
     -- * Introducing streams of elements
     -- $producers
@@ -107,6 +103,12 @@ module Streaming.Prelude (
     , group
     , groupBy
  --   , split
+ 
+    -- * Pair manipulation
+    , lazily
+    , strictly
+    , fst'
+    , snd'
     
     -- * Folds
     -- $folds
@@ -225,16 +227,17 @@ instance (r ~ (), Monad m, f ~ Of Char) => IsString (Stream f m r) where
 {-| Note that 'lazily', 'strictly', 'fst'', and 'mapOf' are all so-called /natural transformations/ on the primitive @Of a@ functor
     If we write 
   
->  type f ~> g = forall x . f x -> g x
+>  type f ~~> g = forall x . f x -> g x
   
-   then we have
+   then we can restate some types as follows:
   
->  mapOf  :: (a -> b) -> Of a ~> Of b
->  lazily :: Of a -> (,) a
->  fst'   :: Of a -> Identity a
+>  mapOf            :: (a -> b) -> Of a ~~> Of b   -- bifunctor lmap
+>  lazily           ::             Of a ~~> (,) a
+>  Identity . fst'  ::             Of a ~~> Identity a
 
    Manipulation of a @Stream f m r@ by mapping often turns on recognizing natural transformations of @f@,
-   thus
+   thus @maps@ is far more general the the @map@ of the present module, which can be
+   defined thus:
 
 >  S.map :: (a -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 >  S.map f = maps (mapOf f)
@@ -243,7 +246,6 @@ instance (r ~ (), Monad m, f ~ Of Char) => IsString (Stream f m r) where
   that it results in such a transformation as well:
   
 >  S.map :: (a -> b) -> Stream (Of a) m ~> Stream (Of b) m   
-  
 
 -}
 lazily :: Of a b -> (a,b)
@@ -262,6 +264,7 @@ snd' (a :> b) = b
 
 mapOf :: (a -> b) -> Of a r -> Of b r
 mapOf f (a:> b) = (f a :> b)
+
 {-| Break a sequence when a element falls under a predicate, keeping the rest of
     the stream as the return value.
 
@@ -289,7 +292,7 @@ break pred = loop where
 {-| Apply an action to all values flowing downstream
 
 
->>> S.product (chain print (S.each [2..4])) >>= print
+>>> S.product (S.chain Prelude.print (S.each [2..4])) >>= Prelude.print
 2
 3
 4
@@ -302,7 +305,12 @@ chain f str = for str $ \a -> do
     yield a
 {-# INLINE chain #-}
 
-{-| Make a stream of traversable containers into a stream of their separate elements
+{-| Make a stream of traversable containers into a stream of their separate elements.
+    This is just 
+
+> concat = for str each
+
+    Note that it also has the effect of @Data.Maybe.catMaybes@ @Data.Either.rights@
 
 >>> S.print $ S.concat (each ["xy","z"])
 'x'

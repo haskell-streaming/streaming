@@ -2,7 +2,7 @@ name:                streaming
 version:             0.1.1.0
 cabal-version:       >=1.10
 build-type:          Simple
-synopsis:            an elementary streaming prelude and a free monad transformer optimized for streaming applications.
+synopsis:            an elementary streaming prelude and a general monad transformer for streaming applications.
 
 description:         @Streaming.Prelude@ exports an elementary streaming prelude; @Streaming@ exports a free monad transformer 
                      optimized for streaming applications and replacing @FreeT@. See the 
