@@ -425,7 +425,7 @@ cycle = forever
      This might just be called @effects@ or @runEffects@.
 
 >>> let effect = lift (putStrLn "Effect!")
->>> let stream = do {yield 1; effect ; yield 2; effect; return (2^100)} 
+>>> let stream = do {yield 1; effect; yield 2; effect; return (2^100)} 
 
 >>> S.drain stream
 Effect!
@@ -459,7 +459,7 @@ drain = loop where
 
     
 -}
-drained :: (Monad m, Monad (t m), MonadTrans t) => t m (Stream (Of a) m r) -> t m r
+drained :: (Monad m, Monad (t m), Functor (t m), MonadTrans t) => t m (Stream (Of a) m r) -> t m r
 drained = join . fmap (lift . drain)
 {-#INLINE drained #-}
 
