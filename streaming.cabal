@@ -2,12 +2,13 @@ name:                streaming
 version:             0.1.1.0
 cabal-version:       >=1.10
 build-type:          Simple
-synopsis:            an elementary streaming prelude and a free monad transformer optimized for streaming applications
+synopsis:            an elementary streaming prelude and a free monad transformer optimized for streaming applications.
 
 description:         @Streaming.Prelude@ exports an elementary streaming prelude; @Streaming@ exports a free monad transformer 
                      optimized for streaming applications and replacing @FreeT@. See the 
-                     <https://hackage.haskell.org/package/streaming-0.1.0.20#readme readme below>
-                     for an explanation. 
+                     <https://hackage.haskell.org/package/streaming#readme readme> below
+                     for an explanation. Elementary usage can be divined from the ghci examples in 
+                     @Streaming.Prelude@
                      .
                      Note also the 
                      <https://hackage.haskell.org/package/streaming-bytestring streaming bytestring> 
