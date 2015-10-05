@@ -1,28 +1,38 @@
 streaming
 =========
 
-The freely-extended stream on a streamable functor
----------------------------------------------------
+
 
 `Stream` can be used wherever [FreeT](https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html) is used. The compiler's standard range of optimizations work better for operations written in terms of `Stream`. `FreeT f m r` and `Stream f m r` are of course extremely general, and many functor-general combinators are exported by the general module `Streaming`.
 
-The general idea of streaming
------------------------------
+The freely generated stream on a streamable functor
+----------------------------------------------------
 
-As soon as you consider the idea of an effectful stream of any kind whatsoever, for example, a stream of bytes from a handle, however constituted, you will inevitably be forced to contemplate the idea of a streaming *succession* of *such streams*. Thus, for example, however you imagine your bytes streaming from a handle, you will want to consider a *succession* of *such streams* divided on newlines. Similarly, suppose you have the idea the unfolding of some sort of stream from a Haskell value, a seed - a file name, as it might be. And suppose you *also* have some idea of a stream of such Haskell values - maybe a stream of file names coming from something like `du`, subjected to some filter. Then you will also have the idea of a streaming *succession* of *such unfoldings* linked together end to end in accordance with the initial succession of seed values.
+As soon as you consider the idea of an effectful stream of any kind whatsoever, for example, a stream of bytes from a handle, however constituted, you will inevitably be forced to contemplate the idea of a streaming *succession* of *just such streams*. 
+Thus, for example, however you imagine your bytes streaming from a handle, you will want to consider a *succession* of *such streams* divided on newlines. 
 
-Call those 5 sentences the ABCs of streaming. If you understood these ABCs you have a total comprehension of `Stream f m r`:
+Similarly, suppose you have the idea the unfolding of some sort of stream from a Haskell value, a seed - a file name, as it might be. And suppose you *also* have some idea of a stream of individual Haskell values - maybe a stream of file names coming from something like `du`, subjected to some filter. Then you will also have the idea of a streaming *succession* of *such unfoldings* linked together end to end in accordance with the initial succession of seed values.
 
--   `Stream` itself expresses what the word "succession" meant in the ABCs
+Call the thoughts in that paragraph the ABCs of streaming. If you understood these ABCs you have a total comprehension of `Stream f m r`:
+
+-   `Stream` expresses what the word "succession" meant in the ABCs
 -   The general parameter `f` expresses what was meant by "such streams"
 -   `m` expresses the relevant form of "effect".
 
-General combinators for working with this idea of succession irrespective of the form of succession are contained in the module `Stream`. They can be used, or example, to organize a succession of io-streams `Generator`s or pipes `Producer`s or the effectful bytestreams of the [streaming-bytestring](https://hackage.haskell.org/package/streaming-bytestring) library, or whatever stream-form you can express in a Haskell functor.
+General combinators for working with this idea of succession __irrespective of the form of succession__ are contained in the module `Stream`. They can be used, or example, to organize a succession of io-streams `Generator`s or pipes `Producer`s or the effectful bytestreams of the [streaming-bytestring](https://hackage.haskell.org/package/streaming-bytestring) library, or whatever stream-form you can express in a Haskell functor.
 
-A freely generated stream of connected individual Haskell values is a Producer, Generator or Source
+A freely generated stream of individual Haskell values is a Producer, Generator or Source
 ---------------------------------------------------------------------------------------------------
 
-But, of course, as soon as you grasp the general form of *succession/, you are already in possession of the most basic concrete form: a simple *succession of individual Haskell values\_ one after another. This is just `Stream ((,) a) m r`, or as we write it here, `Stream (Of a) m r`, strictifying the left element of the pair. The pairing just links the present element with the rest of the stream. The primitive `yield` statement just expresses the pairing of the yielded item with the rest of the stream; or rather it is itself the trivial singleton stream. `Streaming.Prelude` is focused on the manipulation of this all-important stream-form, which appears in the streaming IO libraries under titles like:
+But, of course, as soon as you grasp the general form of *succession*, you are already in possession of the most basic concrete form: a simple *succession of individual Haskell values* one after another. This is just `Stream ((,) a) m r`. Here we prefer `Stream (Of a) m r`, strictifying the left element of the pair with 
+
+    data Of a r = !a :> r deriving Functor
+
+Either way, the pairing just links the present element with the rest of the stream. The primitive `yield` statement just expresses the pairing of the yielded item with the rest of the stream; or rather it is itself the trivial singleton stream. 
+
+    yield 17  :: Stream (Of Int) IO ()
+
+`Streaming.Prelude` is focused on the manipulation of this all-important stream-form, which appears in the streaming IO libraries under titles like:
 
     io-streams: Generator a r
     pipes:      Producer a m r
@@ -42,7 +52,7 @@ The special case of a *stream of individual Haskell values* that simply *comes t
 `Streaming.Prelude`
 -------------------
 
-`Streaming.Prelude` closely follows `Pipes.Prelude`. But since it restricts itself to use only of the general idea of streaming, it cleverly \_omits the pipes/:
+`Streaming.Prelude` closely follows `Pipes.Prelude`. But since it restricts itself to use only of the general idea of streaming, it cleverly *omits the pipes*:
 
     ghci> S.stdoutLn $ S.take 2 S.stdinLn
     let's<Enter>
@@ -50,7 +60,7 @@ The special case of a *stream of individual Haskell values* that simply *comes t
     stream<Enter>
     stream
 
-Here's a little \_connect and resume/, as the streaming-io experts call it:
+Here's a little *connect and resume*, as the streaming-io experts call it:
 
     ghci> rest <- S.print $ S.splitAt 3 $ S.each [1..10]
     1
@@ -77,7 +87,7 @@ These concepts are "functor general", in the jargon used in the documentation, a
     Prelude.break           :: (a -> Bool) -> [a]               -> ([a],[a])
     Streaming.Prelude.break :: (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
 
-It is easy to prove that \_resistance to these types is resistance to effectful streaming itself/. I will labor this point a bit more below, but you can also find it developed, with greater skill, in the documentation for the pipes libraries.
+It is easy to prove that *resistance to these types is resistance to effectful streaming itself*. I will labor this point a bit more below, but you can also find it developed, with greater skill, in the documentation for the pipes libraries.
 
 How come there's not one of those fancy "ListT done right" implementations in here?
 -----------------------------------------------------------------------------------

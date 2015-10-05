@@ -1,16 +1,19 @@
 name:                streaming
-version:             0.1.0.20
+version:             0.1.1.0
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and a free monad transformer optimized for streaming applications
 
-description:         @Streaming.Prelude@ is elementary streaming prelude; @Streaming@ exports a free monad transformer 
-                     optimized for streaming applications and replacing @FreeT@. See also
-                     the 
+description:         @Streaming.Prelude@ exports an elementary streaming prelude; @Streaming@ exports a free monad transformer 
+                     optimized for streaming applications and replacing @FreeT@. See the 
+                     <https://hackage.haskell.org/package/streaming-0.1.0.20#readme readme below>
+                     for an explanation. 
+                     .
+                     Note also the 
                      <https://hackage.haskell.org/package/streaming-bytestring streaming bytestring> 
                      and 
                      <https://hackage.haskell.org/package/streaming-utils streaming utils> 
-                     packages and the README.
+                     packages.
                      
 license:             BSD3
 license-file:        LICENSE
@@ -44,6 +47,7 @@ library
                      , mmorph >=1.0 && <1.2
                      , transformers >=0.4 && <0.5
                      , bytestring
+                     , random
 
   default-language:  Haskell2010
   

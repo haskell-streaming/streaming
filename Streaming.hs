@@ -8,12 +8,11 @@ module Streaming
    unfold,
    construct,
    for,
-   layer,
-   layers,
+   elevate,
    replicates,
    repeats,
    repeatsM,
-   delay,
+   mwrap,
    wrap,
    
    -- * Transforming streams

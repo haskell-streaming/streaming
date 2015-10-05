@@ -50,7 +50,6 @@ module Streaming.Prelude (
     -- $producers
     , yield
     , each
-    , layers
     , unfoldr
     , stdinLn
     , readLn
@@ -62,6 +61,8 @@ module Streaming.Prelude (
     , replicateM
     , enumFrom
     , enumFromThen
+    , randomRs
+    , randoms
     
     -- * Consuming streams of elements
     -- $consumers
@@ -179,7 +180,7 @@ import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception (throwIO, try)
 import Data.Monoid (Monoid (..))
 import Data.String (IsString (..))
-
+import qualified System.Random as R
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
     deriving (Data, Eq, Foldable, Ord,
@@ -727,11 +728,6 @@ iterateM f = loop where
 {-# INLINEABLE iterateM #-}
 
 
-layers
-  :: (Monad m, Functor f) =>
-     Stream (Of a) m r -> (a -> f x) -> Stream f m r
-layers stream f = for stream $ layer . f
-{-# INLINE layers #-}
 -- ---------------
 -- length
 -- ---------------
@@ -857,6 +853,41 @@ product = fold (*) 1 id
 product' :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
 product' = fold' (*) 1 id
 {-# INLINE product' #-}
+
+
+-- ---------------
+-- random
+-- ---------------
+
+{- An infinite stream of random items 
+
+>  randoms = liftIO Random.getStdGen >>= unfoldr (return . Right . Random.random)
+
+>>>  S.print $ S.take 4 (S.randoms :: Stream (Of Bool) IO ())
+True
+False
+True
+True
+-}
+randoms :: (R.Random a, MonadIO m) => Stream (Of a) m r
+randoms = do 
+  g <- liftIO $ R.getStdGen
+  unfoldr (return . Right . R.random) g
+
+{- An infinite stream of random items between some bounds
+
+>  randomRs limits = liftIO Random.getStdGen >>= unfoldr (return . Right . Random.randomR limits)
+
+>>> S.print $ S.take 4 $ S.randomRs (0,10^10::Int)
+6489666022
+3984407086
+4271461383
+3632382535
+-}
+randomRs :: (R.Random a, MonadIO m) => (a, a) -> Stream (Of a) m r
+randomRs limits = do 
+  g <- liftIO $ R.getStdGen
+  unfoldr (return . Right . R.randomR limits) g
 
 -- ---------------
 -- read
