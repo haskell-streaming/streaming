@@ -68,11 +68,13 @@ module Streaming.Prelude (
     , print
     , toHandle
     , drain
+    , drained
 
     -- * Stream transformers
     -- $pipes
     , map
     , mapM
+    , chain
     , maps
     , sequence
     , mapFoldable
@@ -89,7 +91,7 @@ module Streaming.Prelude (
     -- , findIndices
     , scan
     , scanM
-    , chain
+    , scanned
     , read
     , show
     , cons
@@ -99,6 +101,7 @@ module Streaming.Prelude (
     , uncons
     , splitAt
     , break
+    , breakWhen
     , span
     , group
     , groupBy
@@ -289,6 +292,38 @@ break pred = loop where
       else Step (a :> loop rest)
 {-# INLINEABLE break #-}
 
+{- Yield elements, using a fold to maintain state, until the accumulated 
+   value satifies the supplied predicate. The fold will then be short-circuited 
+   and the element that breaks it will be included with the stream returned.
+   This function is easiest to use with 'Control.Foldl.purely'
+
+>>> rest <- S.print $ L.purely S.breakWhen L.sum even $ S.each [1,2,3,4]
+1
+2
+>>> S.print rest
+3
+4
+
+-}
+breakWhen :: Monad m => (x -> a -> x) -> x -> (x -> b) -> (b -> Bool) -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
+breakWhen step begin done pred = loop0 begin
+  where
+    loop0 x stream = case stream of 
+        Return r -> return (return r)
+        Delay mn  -> Delay $ liftM (loop0 x) mn
+        Step (a :> rest) -> loop a (step x a) rest
+    loop a !x stream = do
+      if pred (done x) 
+        then return (yield a >> stream) 
+        else case stream of 
+          Return r -> yield a >> return (return r)
+          Delay mn  -> Delay $ liftM (loop a x) mn
+          Step (a' :> rest) -> do
+            yield a
+            loop a' (step x a') rest
+{-# INLINABLE breakWhen #-}
+
+
 {-| Apply an action to all values flowing downstream
 
 
@@ -310,20 +345,22 @@ chain f str = for str $ \a -> do
 
 > concat = for str each
 
-    Note that it also has the effect of @Data.Maybe.catMaybes@ @Data.Either.rights@
-
 >>> S.print $ S.concat (each ["xy","z"])
 'x'
 'y'
 'z'
->>> S.print $ S.concat (S.each [Just 1, Nothing, Just 2])
+
+    Note that it also has the effect of 'Data.Maybe.catMaybes' and 'Data.Either.rights'
+
+
+>>> S.print $ S.concat $ S.each [Just 1, Nothing, Just 2]
 1
 2
->>> S.print $  S.concat (S.each [Right 1, Left "Error!", Right 2])
+>>> S.print $  S.concat $ S.each [Right 1, Left "Error!", Right 2]
 1
 2
 
-    Not to be confused with the functor-general 
+    @concat@ is not to be confused with the functor-general 
 
 > concats :: (Monad m, Functor f) => Stream (Stream f m) m r -> Stream f m r -- specializing
 
@@ -384,9 +421,11 @@ cycle = forever
 -- drain
 -- ---------------
 
-{- | Reduce a stream, performing its actions but ignoring its elements.
+{- | Reduce a stream, performing its actions but ignoring its elements. 
+     This might just be called @effects@ or @runEffects@.
 
->>> let stream = do {yield 1; lift (putStrLn "Effect!"); yield 2; lift (putStrLn "Effect!"); return (2^100)} 
+>>> let effect = lift (putStrLn "Effect!")
+>>> let stream = do {yield 1; effect ; yield 2; effect; return (2^100)} 
 
 >>> S.drain stream
 Effect!
@@ -403,6 +442,26 @@ drain = loop where
     Return r         -> return r
     Delay m          -> m >>= loop 
     Step (_ :> rest) -> loop rest
+{-#INLINABLE drain #-}
+  
+{-| Where a transformer returns a stream, run the effects of the stream, keeping
+   the return value. This is usually used at the type
+
+> drained :: Monad m => Stream (Of a) m (Stream (Of b) m r) -> Stream (Of a) m r
+
+> drained = join . fmap (lift . drain)
+
+>>> let take' n = S.drained . S.splitAt n
+>>> S.print $ concats $ maps (take' 1) $ S.group $ S.each "wwwwarrrrr"
+'w'
+'a'
+'r'
+
+    
+-}
+drained :: (Monad m, Monad (t m), MonadTrans t) => t m (Stream (Of a) m r) -> t m r
+drained = join . fmap (lift . drain)
+{-#INLINE drained #-}
 
 -- ---------------
 -- drop
@@ -467,19 +526,48 @@ each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
 -- enumFrom
 -- ------
 
+{- An infinite stream of enumerable values, starting from a given value.
+   @Streaming.Prelude.enumFrom@ is more desirable that @each [x..]@ for 
+   the infinite case, because it has a polymorphic return type.
+   
+>>> S.print $ S.take 3 $ S.enumFrom 'a'
+'a'
+'b'
+'c'
+
+   Because their return type is polymorphic, @enumFrom@ and @enumFromThen@
+   are useful for example with @zip@
+   and @zipWith@, which require the same return type in the zipped streams. 
+   With @each [1..]@ the following would be impossible.
+
+>>> rest <- S.print $  S.zip (S.enumFrom 'a') $ S.splitAt 3 $ S.enumFrom 1
+('a',1)
+('b',2)
+('c',3)
+>>>  S.print $ S.take 3 rest
+4
+5
+6
+
+   Where a final element is specified, as in @each [1..10]@ a special combinator
+   is unneeded, since the return type would be @()@ anyway.
+
+-}
 enumFrom :: (Monad m, Enum n) => n -> Stream (Of n) m r
 enumFrom = loop where
   loop !n = Step (n :> loop (succ n))
 {-# INLINEABLE enumFrom #-}
---
--- enumFromTo :: (Monad m, Num n, Ord n) => n -> n -> Stream (Of n) m ()
--- enumFromTo = loop where
---   loop !n m = if n <= m
---     then Step (n :> loop (n+1) m)
---     else Return ()
--- {-# INLINEABLE enumFromTo #-}
---     enumFromThen x y       = map toEnum [fromEnum x, fromEnum y ..]
 
+
+{- An infinite sequence of enumerable values at a fixed distance, determined
+   by the first and second values. See the discussion of 'Streaming.enumFrom'
+
+>>> S.print $ S.take 3 $ S.enumFromThen 100 200
+100
+200
+300
+
+-}
 enumFromThen:: (Monad m, Enum a) => a -> a -> Stream (Of a) m r
 enumFromThen first second = Streaming.Prelude.map toEnum (loop _first)
   where
@@ -520,6 +608,7 @@ filterM pred = loop where
         then return $ Step (a :> loop as)
         else return $ loop as
 {-# INLINEABLE filterM #-}
+
 -- ---------------
 -- fold
 -- ---------------
@@ -715,7 +804,7 @@ groupBy equals = loop  where
                 
 group :: (Monad m, Eq a)  => Stream (Of a) m r -> Stream (Stream (Of a) m) m r                
 group = groupBy (==)
-                
+
 
 -- ---------------
 -- iterate
@@ -867,9 +956,9 @@ product' = fold' (*) 1 id
 -- random
 -- ---------------
 
-{- An infinite stream of random items 
+{-| A simple infinite stream of random items, using @System.Random@
 
->  randoms = liftIO Random.getStdGen >>= unfoldr (return . Right . Random.random)
+>  randoms = liftIO Random.newStdGen >>= unfoldr (return . Right . Random.random)
 
 >>>  S.print $ S.take 4 (S.randoms :: Stream (Of Bool) IO ())
 True
@@ -879,12 +968,10 @@ True
 -}
 randoms :: (R.Random a, MonadIO m) => Stream (Of a) m r
 randoms = do 
-  g <- liftIO $ R.getStdGen
+  g <- liftIO $ R.newStdGen
   unfoldr (return . Right . R.random) g
 
-{- An infinite stream of random items between some bounds
-
->  randomRs limits = liftIO Random.getStdGen >>= unfoldr (return . Right . Random.randomR limits)
+{-| An simple infinite stream of random items between some bounds, using @System.Random@
 
 >>> S.print $ S.take 4 $ S.randomRs (0,10^10::Int)
 6489666022
@@ -990,6 +1077,16 @@ reread step s = loop where
 [3,4]
 [3,4,5]
 
+  A simple way of including the scanned item with the accumulator is to use
+  'Control.Foldl.last'. See also 'Streaming.Prelude.scanned'
+
+>>> let a >< b = (,) <$> a <*> b
+>>> S.print $ L.purely S.scan (L.last >< L.sum) $ S.each [1..3]
+(Nothing,0)
+(Just 1,1)
+(Just 2,3)
+(Just 3,6)
+
 -}
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 scan step begin done = loop begin
@@ -1032,6 +1129,42 @@ scanM step begin done str = do
           x' <- lift $ step x a
           loop x' rest
 {-# INLINABLE scanM #-}
+
+{- Label each element in a stream with a value accumulated according to a fold.
+
+
+>>> S.print $ S.scanned (*) 1 id $ S.each [100,200,300]
+(100,100)
+(200,20000)
+(300,6000000)
+
+>>> S.print $ L.purely S.scanned L.product $ S.each [100,200,300]
+(100,100)
+(200,20000)
+(300,6000000)
+
+-}
+
+data Maybe' a = Just' a | Nothing'
+scanned :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of (a,b)) m r
+scanned step begin done = loop Nothing' begin
+  where
+    loop !m !x stream = do 
+      case stream of 
+        Return r -> return r
+        Delay mn  -> Delay $ liftM (loop m x) mn
+        Step (a :> rest) -> do
+          case m of 
+            Nothing' -> do 
+              let !acc = step x a
+              yield (a, done acc)
+              loop (Just' a) acc rest
+            Just' _ -> do
+              let !acc = done (step x a)
+              yield (a, acc) 
+              loop (Just' a) (step x a) rest
+{-# INLINABLE scanned #-}
+
 
 -- ---------------
 -- sequence
