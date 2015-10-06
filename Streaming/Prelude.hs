@@ -341,12 +341,12 @@ breaks
      (a -> Bool) -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
 breaks thus  = loop  where
   loop stream = Delay $ do
-    e <- S.next stream
+    e <- next stream
     return $ case e of
       Left   r      -> Return r
       Right (a, p') -> 
        if not (thus a)
-          then Step $ fmap loop (S.yield a >> S.break thus p')
+          then Step $ fmap loop (yield a >> break thus p')
           else loop p'
 {-#INLINABLE breaks #-}
           
@@ -1306,12 +1306,12 @@ split :: (Eq a, Monad m) =>
       a -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
 split t  = loop  where
   loop stream = do
-    e <- lift $ S.next stream
+    e <- lift $ next stream
     case e of
         Left   r      ->  Return r
         Right (a, p') -> 
          if a /= t
-            then Step $ fmap loop (S.yield a >> S.break (== t) p')
+            then Step $ fmap loop (yield a >> break (== t) p')
             else loop p'
 {-#INLINABLE split #-}
 
