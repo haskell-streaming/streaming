@@ -10,6 +10,26 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      for an explanation. Elementary usage can be divined from the ghci examples in 
                      @Streaming.Prelude@
                      .
+                     The simplest form of interoperation with <http://hackage.haskell.org/package/pipes pipes>
+                     is accomplished with this isomorphism:
+                     .
+                     > Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
+                     > Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r                     
+                     .
+                     Interoperation with <http://hackage.haskell.org/package/io-streams io-streams> is thus:
+                     .
+                     > Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
+                     > IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
+                     .
+                     A simple exit to <http://hackage.haskell.org/package/conduit conduit> would be, e.g.:
+                     .
+                     > Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
+                     .
+                     These conversions should never be more expensive than a single @>->@ or @=$=@. Further
+                     points of comparison are discussed in the 
+                     <https://hackage.haskell.org/package/streaming#readme readme>
+                     below.
+                     .
                      Note also the 
                      <https://hackage.haskell.org/package/streaming-bytestring streaming bytestring> 
                      and 
@@ -49,6 +69,7 @@ library
                      , transformers >=0.4 && <0.5
                      , bytestring
                      , random
+                     , time
 
   default-language:  Haskell2010
   

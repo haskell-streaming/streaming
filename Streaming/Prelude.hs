@@ -81,6 +81,7 @@ module Streaming.Prelude (
     , filter
     , filterM
     , for
+    , delay
     , take
     , takeWhile
 --    , takeWhile'
@@ -100,11 +101,14 @@ module Streaming.Prelude (
     , next
     , uncons
     , splitAt
+    , split
+    , breaks
     , break
     , breakWhen
     , span
     , group
     , groupBy
+    , timed
  --   , split
  
     -- * Pair manipulation
@@ -186,6 +190,8 @@ import Control.Exception (throwIO, try)
 import Data.Monoid (Monoid (..))
 import Data.String (IsString (..))
 import qualified System.Random as R
+import Control.Concurrent (threadDelay)
+import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
     deriving (Data, Eq, Foldable, Ord,
@@ -292,7 +298,7 @@ break pred = loop where
       else Step (a :> loop rest)
 {-# INLINEABLE break #-}
 
-{- Yield elements, using a fold to maintain state, until the accumulated 
+{-| Yield elements, using a fold to maintain state, until the accumulated 
    value satifies the supplied predicate. The fold will then be short-circuited 
    and the element that breaks it will be included with the stream returned.
    This function is easiest to use with 'Control.Foldl.purely'
@@ -323,6 +329,27 @@ breakWhen step begin done pred = loop0 begin
             loop a' (step x a') rest
 {-# INLINABLE breakWhen #-}
 
+{- Break during periods where the predicate is not satisfied. 
+
+>>> S.print $ mapsM S.toListM' $ breaks even $ S.each [2,2,1,1,2,2,2,1,1]
+[1,1]
+[1,1]
+
+-}
+breaks
+  :: Monad m =>
+     (a -> Bool) -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
+breaks thus  = loop  where
+  loop stream = Delay $ do
+    e <- S.next stream
+    return $ case e of
+      Left   r      -> Return r
+      Right (a, p') -> 
+       if not (thus a)
+          then Step $ fmap loop (S.yield a >> S.break thus p')
+          else loop p'
+{-#INLINABLE breaks #-}
+          
 
 {-| Apply an action to all values flowing downstream
 
@@ -417,6 +444,14 @@ False
 cycle :: (Monad m, Functor f) => Stream f m r -> Stream f m s
 cycle = forever
 
+
+{-| Delay each element by the supplied number of seconds.
+mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
+
+-}
+delay :: MonadIO m => Double -> Stream (Of a) m r -> Stream (Of a) m r
+delay seconds = mapM go where
+  go a = liftIO (threadDelay (truncate (seconds * 1000000))) >> return a
 -- ---------------
 -- drain
 -- ---------------
@@ -526,7 +561,7 @@ each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
 -- enumFrom
 -- ------
 
-{- An infinite stream of enumerable values, starting from a given value.
+{-| An infinite stream of enumerable values, starting from a given value.
    @Streaming.Prelude.enumFrom@ is more desirable that @each [x..]@ for 
    the infinite case, because it has a polymorphic return type.
    
@@ -559,7 +594,7 @@ enumFrom = loop where
 {-# INLINEABLE enumFrom #-}
 
 
-{- An infinite sequence of enumerable values at a fixed distance, determined
+{-| An infinite sequence of enumerable values at a fixed distance, determined
    by the first and second values. See the discussion of 'Streaming.enumFrom'
 
 >>> S.print $ S.take 3 $ S.enumFromThen 100 200
@@ -828,8 +863,30 @@ iterateM f = loop where
 -- ---------------
 -- length
 -- ---------------
+
+{-| Run a stream, remembering only its length:
+
+>>> S.length $ S.each [1..10]
+10
+
+-}
 length :: Monad m => Stream (Of a) m () -> m Int
 length = fold (\n _ -> n + 1) 0 id
+
+{-| Run a stream, keeping its length and return value. As with all folds
+    this permits more complex mappings.
+
+>>> S.length' $ S.each [1..10]
+10 :> ()
+>>> fmap S.fst' $ S.length' $ S.each [1..10]
+10
+>>> S.print $ mapsM S.length' $ chunksOf 3 $ S.each [1..10]
+3
+3
+3
+1
+
+-}
 
 length' :: Monad m => Stream (Of a) m r -> m (Of Int r)
 length' = fold' (\n _ -> n + 1) 0 id
@@ -850,7 +907,10 @@ map f = loop where
 -- mapFoldable
 -- ---------------
 
-{-| For each element of a stream, stream a foldable container of elements instead
+{-| For each element of a stream, stream a foldable container of elements instead; compare
+    'Pipes.Prelude.mapFoldable'.
+
+> mapFoldable f str = for str (\a -> each (f a))
 
 >>> S.print $ S.mapFoldable show $ yield 12
 '1'
@@ -911,7 +971,7 @@ mapM_ f = loop where
 > IOStreams.unfoldM (liftM (either (const Nothing) Just) . next) :: Stream (Of a) IO b -> IO (InputStream a)
 > Conduit.unfoldM (liftM (either (const Nothing) Just) . next)   :: Stream (Of a) m r -> Source a m r
 
-     But see 'uncons'
+     But see 'uncons', which is better fitted to these @unfoldM@s
 -}
 next :: Monad m => Stream (Of a) m r -> m (Either r (a, Stream (Of a) m r))
 next = loop where
@@ -956,7 +1016,7 @@ product' = fold' (*) 1 id
 -- random
 -- ---------------
 
-{-| A simple infinite stream of random items, using @System.Random@
+{-| A crude infinite stream of random items, using @System.Random@
 
 >  randoms = liftIO Random.newStdGen >>= unfoldr (return . Right . Random.random)
 
@@ -971,7 +1031,7 @@ randoms = do
   g <- liftIO $ R.newStdGen
   unfoldr (return . Right . R.random) g
 
-{-| An simple infinite stream of random items between some bounds, using @System.Random@
+{-| A crude infinite stream of random items between some bounds, using @System.Random@
 
 >>> S.print $ S.take 4 $ S.randomRs (0,10^10::Int)
 6489666022
@@ -1021,9 +1081,10 @@ world<Enter>
 
 repeatM :: Monad m => m a -> Stream (Of a) m r
 repeatM ma = loop where
-  loop = Delay $ do 
-    a <- ma 
-    return (Step (a :> loop))
+  loop = do 
+    a <- lift ma 
+    yield a 
+    loop
 {-# INLINEABLE repeatM #-}
 
 -- ---------------
@@ -1146,6 +1207,7 @@ scanM step begin done str = do
 -}
 
 data Maybe' a = Just' a | Nothing'
+
 scanned :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of (a,b)) m r
 scanned step begin done = loop Nothing' begin
   where
@@ -1227,6 +1289,31 @@ span pred = loop where
       else Return (Step (a :> rest))
 {-# INLINEABLE span #-}
 
+                            
+{-| Split a stream of elements wherever a given element arises.
+    The action is like that of 'Prelude.words'. 
+
+>>> S.stdoutLn $ mapsM S.toListM' $ split ' ' "hello world  "
+hello
+world
+>>> Prelude.mapM_ Prelude.putStrLn (Prelude.words "hello world  ")
+hello
+world
+
+-}
+
+split :: (Eq a, Monad m) =>
+      a -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
+split t  = loop  where
+  loop stream = do
+    e <- lift $ S.next stream
+    case e of
+        Left   r      ->  Return r
+        Right (a, p') -> 
+         if a /= t
+            then Step $ fmap loop (S.yield a >> S.break (== t) p')
+            else loop p'
+{-#INLINABLE split #-}
 
 {-| Split a succession of layers after some number, returning a streaming or
 --   effectful pair. This function is the same as the 'splitsAt' exported by the
@@ -1240,27 +1327,6 @@ splitAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m
 splitAt = splitsAt
 {-# INLINE splitAt #-}
 
--- {-| Split a stream of elements on each occurrence of a value, omitting the value;
---     if it appears as the last item in the stream, an empty stream will follow.
--- -}
--- split :: (Monad m, Eq a) => a -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
--- split a stream = -- loop where
---   -- loop stream =
---   case stream of
---     Return r         -> Return r
---     Delay m          -> Delay (liftM (split a) m)
---     Step (a' :> rest) -> if a == a'
---       then Step $ do
---         e <- lift $ inspect $ split a rest
---         case e of
---             Left r ->  Return (Return r)
---             Right b -> b
---       else Step $ do
---         yield a'
---         e <- lift $ inspect $ split a rest
---         case e of
---             Left r ->  Return (Return r)
---             Right b -> b
           
 -- ---------------
 -- take
@@ -1305,7 +1371,38 @@ takeWhile pred = loop where
     Return r              -> Return ()
 {-# INLINEABLE takeWhile #-}
 
+{- Break a stream after the designated number of seconds.
 
+
+>>> rest <- S.print $ S.timed 1 $ S.delay 0.3 $ S.each [1..]
+1
+2
+3
+>>> S.print $ S.take 3 rest
+4
+5
+6
+
+
+
+
+-}
+
+timed :: MonadIO m => Double -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
+timed seconds str = do
+    utc <- liftIO getCurrentTime
+    loop utc str
+  where
+  cutoff = fromInteger $ truncate (1000000000 * seconds)
+  loop utc str = do
+    utc' <- liftIO getCurrentTime
+    if diffUTCTime utc' utc >  (cutoff / 1000000000)
+      then return str
+      else case str of
+        Return r -> return (return r)
+        Delay m -> Delay (liftM (loop utc) m)
+        Step (a:>rest) -> yield a >> loop utc rest
+  
 
 -- | Convert a pure @Stream (Of a)@ into a list of @as@
 toList :: Stream (Of a) Identity () -> [a]
@@ -1519,6 +1616,8 @@ toHandle handle = loop where
       loop rest
 {-# INLINABLE toHandle #-} 
 
+{-| Print the elements of a stream as they arise.
+-}
 print :: (MonadIO m, Show a) => Stream (Of a) m r -> m r
 print = loop where
   loop stream = case stream of 
@@ -1534,6 +1633,7 @@ print = loop where
 -- {-# INLINABLE seq #-}
 
 {-| Write 'String's to 'IO.stdout' using 'putStrLn'; terminates on a broken output pipe
+    (compare 'Pipes.Prelude.stdoutLn').
 
 >>> S.stdoutLn $ S.show (S.each [1..3])
 1
@@ -1563,21 +1663,11 @@ stdoutLn = loop
     This does not handle a broken output pipe, but has a polymorphic return
     value, which makes this possible:
 
->>> rest <- stdoutLn' $ S.splitAt 3 $ S.show (each [1..5])
-1
-2
-3
->>> stdoutLn' rest
-4
-5
-
-    Or indeed:
-
 >>> rest <- stdoutLn' $ S.show $ S.splitAt 3 (each [1..5])
 1
 2
 3
->>>S.sum rest
+>>> S.sum rest  
 9
 
 -}
