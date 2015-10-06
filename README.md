@@ -71,9 +71,11 @@ and can contemplate applying this or another folding operation to the 'second ha
 
     liftM (fmap folder) . folder . splitter :: S m x -> m (a, m (a,x))
     
-and can reshuffle to get a function `S m x -> m ((a,a), x)`. Notice that this function has the form of our original folder function, since it is polymorphic in `x`.
+and can reshuffle to get a function `S m x -> m ((a,a), x)`. This function has the form of our original folder function, since it is polymorphic in `x`.  
 
-Now, to return to the first point, suppose you have the idea the unfolding of some sort of stream from a Haskell value, a seed - a file name, as it might be. And suppose you *also* have some idea of a stream of individual Haskell values - maybe a stream of file names coming from something like `du`, subjected to some filter. Then you will also have the idea of a streaming *succession* of *such unfoldings* linked together end to end in accordance with the initial succession of seed values.
+That folds over streaming types should be polymorphic in their return type is written already into this simple material: we want to 'do one thing with the first half and something else - or the same thing - with the second half'. The thing we 'do with the first half' will have to be something we could do even if the second half doesn't exist, and it must preserve it if it does. In the simplest case, 'what we do with the first half' might be simply to throw it out, or drain it. 
+
+Now, to return to the first point, suppose you have the idea the unfolding of some sort of stream from an individual Haskell value, a seed - a file name, as it might be. And suppose you *also* have some idea of a stream *of* individual Haskell values - maybe a stream of file names coming from something like `du`, subjected to some filter. Then you will also have the idea of a streaming *succession* of *such unfoldings* linked together end to end in accordance with the initial succession of seed values.
 
 Call the thoughts above the ABCs of streaming. If you understood these ABCs you have a total comprehension of `Stream f m r`:
 
@@ -101,7 +103,7 @@ Either way, the pairing just links the present element with the rest of the stre
     conduit:    ConduitM () o m r
     streaming:  Stream (Of a) m r
 
-The only difference is that in `streaming` the simple Generator or Producer concept is formulated explicitly in terms of the *general* concept of successive connection. But this is a concept you need and already possess anyway, as your comprehension of the four sentences above showed.
+The only difference is that in `streaming` the simple generator or producer concept is formulated explicitly in terms of the *general* concept of successive connection. But *this is a concept you need and already possess anyway*, as your comprehension of the streaming ABCs showed.
 
 The special case of a *stream of individual Haskell values* that simply *comes to an end without a special result* is variously expressed thus:
 
@@ -197,7 +199,7 @@ If you want to tempt fate and replicate the irrationality of `Control.Monad.repl
 
     accumulate . Streaming.Prelude.replicateM :: Int -> m a -> m (Stream (Of a) Identity ())
 
-which is what we find in our diseased base libraries. But once you know how to operate with a stream directly you will see less and less point in what is called *extracting the (structured) value from IO*. The distinction between
+which is what we find in our diseased base libraries. But once you know how to operate with a stream directly you will see less and less point in what is called *extracting the (structured) value from IO*. Consider the apparently innocent distinction between
 
     "getContents" :: String
 
@@ -205,13 +207,13 @@ and
 
     getContents :: IO String 
 
-but, omitting consideration of eof, we might define `getContents` thus
+Omitting consideration of eof, we might define `getContents` thus
 
     getContents = sequence $ repeat getChar
 
 There it is again! The very devil! By contrast there is no distinction between
 
-    "getContents" :: Stream (Of Char) m ()
+    "getContents" :: Stream (Of Char) m ()  -- the IsString instance is monad-general
 
 and
 
@@ -229,10 +231,9 @@ I get, for example:
     splitAt 20 $ "getLine" >> getLine      :: String IO (String IO ())
     length $ "getLine" >> getLine          :: IO Int
 
-and can dispense with half the advice they will give you on `#haskell`. It is only a slight exaggeration to say that a stream should never be "extracted from IO".
+and can dispense with half the advice they will give you on `#haskell`. It is only a slight exaggeration to say that a stream should never be "extracted from IO". 
 
-With `sequence` and `traverse`, we accumulate a pure succession of pure values from a pure succession of monadic values.\
-Why bother if you have intrinsically monadic conception of succession or traversal? `Stream f m r` gives you an immense body of such structures and a simple discipline for working with them. Spinkle `id` freely though your program if you get homesick.
+With `sequence` and `traverse`, we accumulate a pure succession of pure values from a pure succession of monadic values. Why bother if you have intrinsically monadic conception of succession or traversal? `Stream f m r` gives you an immense body of such structures and a simple discipline for working with them. Spinkle `id` freely though your program, under various names, if you get homesick for `sequence` and company.
 
 Interoperation with the streaming-io libraries
 ----------------------------------------------
