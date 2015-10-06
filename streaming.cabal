@@ -1,5 +1,5 @@
 name:                streaming
-version:             0.1.1.0
+version:             0.1.1.1
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and a general monad transformer for streaming applications.
