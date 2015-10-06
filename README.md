@@ -15,24 +15,34 @@ The freely generated stream on a streamable functor
 As soon as you consider the idea of an effectful stream of any kind whatsoever, for example, a stream of bytes from a handle, however constituted, you will inevitably be forced to contemplate the idea of a streaming *succession* of *just such streams*. 
 Thus, for example, however you imagine your bytes streaming from a handle, you will want to consider a *succession* of *such streams* divided on newlines. 
 
-This is closely related to the fact that, as soon as you contemplate a complex streaming phenomenon, you will want to consider a break in the stream, a function that divides the stream into parts according to some internal characteristic, and allows us to handle the parts separately. This will not have the form:
+This is closely related to the fact that, as soon as you contemplate a complex streaming phenomenon, you will want to consider a break in the stream, a function that divides the stream into parts according to some internal characteristic, and allows us to handle the parts separately, making it possible to do one thing with the first part and another with the second. Such a function will not have the form:
 
     splitter :: S -> (S, S)
 
-as we find with lists and the like, e.g. 
+like the splitting operations we find with lists and the like, e.g. 
 
     splitAt 3 :: [a] -> ([a],[a])
 
-or, since we can assume an underlying monad m, which may be implicit (in `io-streams`, for example, `IO` is implicit in the types of `InputStream` and `Generator`):
+Since we can assume an underlying monad m, which may be implicit (in `io-streams`, for example, `IO` is implicit in the types of `InputStream` and `Generator`), we can write the candidate type thus:
 
     splitter :: S m -> (S m, S m)
 
-or the like. This type uses ordinary pure pairing, and cannot express the fundamental point that I cannot get to the 'second' stream without passing through the 'first'; the features of the 'second half' may depend causally on events in the first half. We do not repair this, but just make it worse, by complicating the type thus
+These types use ordinary "pure" pairing, and cannot express the fundamental point that I cannot get to the 'second' stream without passing through the 'first'; the features of the 'second half' may depend causally on events in the first half. We do not repair this, but just make it worse, by complicating the type thus
 
     splitter :: S m -> m (S m, S m)
     
 
-since the effects I must pass through to get to pair, and thus the second element, are precisely the effects putatively contained in the first. This point makes it inevitable that *a rational stream type will have a return value*. It will have the form 
+since the effects I must pass through to get to pair, and thus the second element, are precisely the effects putatively contained in the first element in the result type. My idea was to do "one thing with the first half" and "another thing with the second half"; in this type I somehow do the effects of the first half to get the pair, and still have the first half before me, coupled with the second half. If I am not proposing to repeat the action of the first part and I have not lost information, my type must secretly be something like 
+
+    splitter :: S m -> m (S Identity, S m)
+    
+or
+
+    splitAccum :: S m -> m ([z], S m)
+    
+as we see, e.g. [here](http://hackage.haskell.org/package/list-t-0.4.5.1/docs/src/ListT.html#splitAt) or, more obscurely in functions like [these](http://hackage.haskell.org/package/conduit-combinators-1.0.3/docs/src/Data-Conduit-Combinators.html#splitOnUnboundedE).
+
+This point makes it inevitable that *a rational stream type will have a return value*. It will have the form 
 
     S r
     
@@ -40,7 +50,7 @@ or
 
     S m r
     
-and the dividing function will have the form
+and the dividing functions will have the form
 
 
     splitter :: S r -> S (S r)  
@@ -48,6 +58,20 @@ and the dividing function will have the form
 or, where the underlying form of effect is explicit
 
     splitter :: S m r -> S m (S m r)
+    
+Now we can express what we meant by 'doing one thing with the first half and another with the second', we were thinking of applying some sort of polymorphic folds, maybe with types like
+
+    folder :: S m x -> m (a, x)
+    
+then we have
+
+    folder . splitter :: S m r -> m (a, S m r)
+    
+and can contemplate applying this or another folding operation to the 'second half', e.g.
+
+    liftM (fmap folder) . folder . splitter :: S m x -> m (a, m (a,x))
+    
+and can reshuffle to get a function `S m x -> m ((a,a), x)`. Notice that this function has the form of our original folder function, since it is polymorphic in `x`.
 
 Now, to return to the first point, suppose you have the idea the unfolding of some sort of stream from a Haskell value, a seed - a file name, as it might be. And suppose you *also* have some idea of a stream of individual Haskell values - maybe a stream of file names coming from something like `du`, subjected to some filter. Then you will also have the idea of a streaming *succession* of *such unfoldings* linked together end to end in accordance with the initial succession of seed values.
 
