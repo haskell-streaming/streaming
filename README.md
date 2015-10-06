@@ -40,7 +40,7 @@ or
 
     splitAccum :: S m -> m ([z], S m)
     
-as we see, e.g. [here](http://hackage.haskell.org/package/list-t-0.4.5.1/docs/src/ListT.html#splitAt) or, more obscurely in functions like [these](http://hackage.haskell.org/package/conduit-combinators-1.0.3/docs/src/Data-Conduit-Combinators.html#splitOnUnboundedE).
+as we see, e.g. [here](http://hackage.haskell.org/package/list-t-0.4.5.1/docs/src/ListT.html#splitAt) or, more obscurely in functions like [these](http://hackage.haskell.org/package/conduit-combinators-1.0.3/docs/src/Data-Conduit-Combinators.html#splitOnUnboundedE).  (I will return to this difficulty below.)
 
 This point makes it inevitable that *a rational stream type will have a return value*. It will have the form 
 
