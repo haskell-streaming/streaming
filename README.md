@@ -3,7 +3,11 @@ streaming
 
 
 
-`Stream` can be used wherever [FreeT](https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html) is used. The compiler's standard range of optimizations work better for operations written in terms of `Stream`. `FreeT f m r` and `Stream f m r` are of course extremely general, and many functor-general combinators are exported by the general module `Streaming`.
+`Stream` can be used wherever [FreeT](https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html) is used. The compiler's standard range of optimizations work better for operations written in terms of `Stream`. `FreeT f m r` and `Stream f m r` are of course extremely general, and many functor-general combinators are exported by the general module `Streaming`. 
+
+But the library is focused on uses of `Stream f m r` where `f` is itself in some sense "streaming". This means, very crudely, that it is possible to make strict left folds over it. Where `f` is complex, and has the form `t m`, these folds will have the form `t m r -> m (a, r)`, polymorphic in `r`. In particular, it will be possible, for example, to write the trivial left fold - a `drain` or `runEffects` function - `t m r -> m r` or `f r -> m r` - polymorphically. `Stream f m r` preserves this property. In particular, branching and failure are excluded; the latter is always handled in the monad `m`.  
+
+The abstraction is inevitable, though there are many ways of writing it. Once one possesses it, though, one is already in possession of an elementary streaming library, since `Stream ((,)a) m r` or its equivalent is the type of a producer, generator or source. I try to argue for this more elaborately below, bringing it into connection with the standard streaming io libraries. 
 
 The freely generated stream on a streamable functor
 ----------------------------------------------------
@@ -11,9 +15,43 @@ The freely generated stream on a streamable functor
 As soon as you consider the idea of an effectful stream of any kind whatsoever, for example, a stream of bytes from a handle, however constituted, you will inevitably be forced to contemplate the idea of a streaming *succession* of *just such streams*. 
 Thus, for example, however you imagine your bytes streaming from a handle, you will want to consider a *succession* of *such streams* divided on newlines. 
 
-Similarly, suppose you have the idea the unfolding of some sort of stream from a Haskell value, a seed - a file name, as it might be. And suppose you *also* have some idea of a stream of individual Haskell values - maybe a stream of file names coming from something like `du`, subjected to some filter. Then you will also have the idea of a streaming *succession* of *such unfoldings* linked together end to end in accordance with the initial succession of seed values.
+This is closely related to the fact that, as soon as you contemplate a complex streaming phenomenon, you will want to consider a break in the stream, a function that divides the stream into parts according to some internal characteristic, and allows us to handle the parts separately. This will not have the form:
 
-Call the thoughts in that paragraph the ABCs of streaming. If you understood these ABCs you have a total comprehension of `Stream f m r`:
+    splitter :: S -> (S, S)
+
+as we find with lists and the like, e.g. 
+
+    splitAt 3 :: [a] -> ([a],[a])
+
+or, since we can assume an underlying monad m, which may be implicit (in `io-streams`, for example, `IO` is implicit in the types of `InputStream` and `Generator`):
+
+    splitter :: S m -> (S m, S m)
+
+or the like. This type uses ordinary pure pairing, and cannot express the fundamental point that I cannot get to the 'second' stream without passing through the 'first'; the features of the 'second half' may depend causally on events in the first half. We do not repair this, but just make it worse, by complicating the type thus
+
+    splitter :: S m -> m (S m, S m)
+    
+
+since the effects I must pass through to get to pair, and thus the second element, are precisely the effects putatively contained in the first. This point makes it inevitable that *a rational stream type will have a return value*. It will have the form 
+
+    S r
+    
+or 
+
+    S m r
+    
+and the dividing function will have the form
+
+
+    splitter :: S r -> S (S r)  
+
+or, where the underlying form of effect is explicit
+
+    splitter :: S m r -> S m (S m r)
+
+Now, to return to the first point, suppose you have the idea the unfolding of some sort of stream from a Haskell value, a seed - a file name, as it might be. And suppose you *also* have some idea of a stream of individual Haskell values - maybe a stream of file names coming from something like `du`, subjected to some filter. Then you will also have the idea of a streaming *succession* of *such unfoldings* linked together end to end in accordance with the initial succession of seed values.
+
+Call the thoughts above the ABCs of streaming. If you understood these ABCs you have a total comprehension of `Stream f m r`:
 
 -   `Stream` expresses what the word "succession" meant in the ABCs
 -   The general parameter `f` expresses what was meant by "such streams"
