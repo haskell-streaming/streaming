@@ -68,7 +68,6 @@ library
                      , mmorph >=1.0 && <1.2
                      , transformers >=0.4 && <0.5
                      , bytestring
-                     , random
                      , time
 
   default-language:  Haskell2010

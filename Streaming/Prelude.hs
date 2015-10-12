@@ -57,8 +57,6 @@ module Streaming.Prelude (
     , replicateM
     , enumFrom
     , enumFromThen
-    , randomRs
-    , randoms
     
     -- * Consuming streams of elements
     -- $consumers
@@ -189,7 +187,6 @@ import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception (throwIO, try)
 import Data.Monoid (Monoid (..))
 import Data.String (IsString (..))
-import qualified System.Random as R
 import Control.Concurrent (threadDelay)
 import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
 -- | A left-strict pair; the base functor for streams of individual elements.
@@ -362,9 +359,13 @@ breaks thus  = loop  where
 -}
 
 chain :: Monad m => (a -> m ()) -> Stream (Of a) m r -> Stream (Of a) m r
-chain f str = for str $ \a -> do
-    lift (f a)
-    yield a
+chain f = loop where 
+  loop str = case str of 
+    Return r -> return r
+    Delay mn  -> Delay (liftM loop mn)
+    Step (a :> rest) -> Delay $ do
+      f a
+      return (Step (a :> loop rest))
 {-# INLINE chain #-}
 
 {-| Make a stream of traversable containers into a stream of their separate elements.
@@ -691,7 +692,7 @@ filterM pred = loop where
 fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m () -> m b
 fold step begin done stream0 = loop stream0 begin
   where
-    loop stream !x = case stream of 
+    loop !stream !x = case stream of 
       Return r         -> return (done x)
       Delay m          -> m >>= \s -> loop s x
       Step (a :> rest) -> loop rest (step x a)
@@ -925,11 +926,12 @@ mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapM f = loop where
   loop str = case str of 
     Return r       -> Return r 
-    Delay m        -> Delay $ liftM loop m
+    Delay m        -> Delay (liftM loop m)
     Step (a :> as) -> Delay $ do 
       a' <- f a 
-      return $ Step (a' :> loop as) 
+      return (Step (a' :> loop as) )
 {-# INLINEABLE mapM #-}
+
 
 
 {-| Reduce a stream to its return value with a monadic action.
@@ -1011,38 +1013,6 @@ product' :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
 product' = fold' (*) 1 id
 {-# INLINE product' #-}
 
-
--- ---------------
--- random
--- ---------------
-
-{-| A crude infinite stream of random items, using @System.Random@
-
->  randoms = liftIO Random.newStdGen >>= unfoldr (return . Right . Random.random)
-
->>>  S.print $ S.take 4 (S.randoms :: Stream (Of Bool) IO ())
-True
-False
-True
-True
--}
-randoms :: (R.Random a, MonadIO m) => Stream (Of a) m r
-randoms = do 
-  g <- liftIO $ R.newStdGen
-  unfoldr (return . Right . R.random) g
-
-{-| A crude infinite stream of random items between some bounds, using @System.Random@
-
->>> S.print $ S.take 4 $ S.randomRs (0,10^10::Int)
-6489666022
-3984407086
-4271461383
-3632382535
--}
-randomRs :: (R.Random a, MonadIO m) => (a, a) -> Stream (Of a) m r
-randomRs limits = do 
-  g <- liftIO $ R.getStdGen
-  unfoldr (return . Right . R.randomR limits) g
 
 -- ---------------
 -- read

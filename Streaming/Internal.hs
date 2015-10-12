@@ -11,7 +11,7 @@ module Streaming.Internal (
     , replicates
     , repeats
     , repeatsM
-    , mwrap
+    , effect
     , wrap
     , elevate
     
@@ -220,10 +220,10 @@ destroy str = destroy (observe str)
 destroy
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroy stream0 construct mwrap done = loop (unexposed stream0) where
+destroy stream0 construct effect done = loop (unexposed stream0) where
   loop stream = case stream of
     Return r -> done r
-    Delay m  -> mwrap (liftM loop m)
+    Delay m  -> effect (liftM loop m)
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroy #-}
 
@@ -238,26 +238,26 @@ destroy stream0 construct mwrap done = loop (unexposed stream0) where
 >>> :t destroyWith (join . lift) return
 (Monad m, Monad (t m), Functor f, MonadTrans t) =>
      (f (t m a) -> t m a) -> Stream f m a -> t m a  -- iterTM
->>> :t destroyWith mwrap return
+>>> :t destroyWith effect return
 (Monad m, Functor f, Functor f1) =>
      (f (Stream f1 m r) -> Stream f1 m r) -> Stream f m r -> Stream f1 m r
->>> :t destroyWith mwrap return (wrap . lazily)
+>>> :t destroyWith effect return (wrap . lazily)
 Monad m => 
      Stream (Of a) m r -> Stream ((,) a) m r
->>> :t destroyWith mwrap return (wrap . strictly)
+>>> :t destroyWith effect return (wrap . strictly)
 Monad m => 
      Stream ((,) a) m r -> Stream (Of a) m r
->>> :t destroyWith Data.ByteString.Streaming.mwrap return  
+>>> :t destroyWith Data.ByteString.Streaming.effect return  
 (Monad m, Functor f) =>
      (f (ByteString m r) -> ByteString m r) -> Stream f m r -> ByteString m r
->>> :t destroyWith Data.ByteString.Streaming.mwrap return (\(a:>b) -> consChunk a b) 
+>>> :t destroyWith Data.ByteString.Streaming.effect return (\(a:>b) -> consChunk a b) 
 Monad m => 
      Stream (Of B.ByteString) m r -> ByteString m r -- fromChunks
 -}
 destroyWith
   :: (Functor f, Monad m) =>
      (m b -> b) -> (r -> b) -> (f b -> b) -> Stream f m r -> b
-destroyWith mwrap done construct stream  = destroy stream construct mwrap done
+destroyWith effect done construct stream  = destroy stream construct effect done
 
 -- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
 construct
@@ -312,6 +312,25 @@ maps phi = loop where
     Step f    -> Step (phi (fmap loop f))
 {-# INLINABLE maps #-}
 
+-- newtype NT g f = NT {runNT :: forall x . f x -> g x}
+-- newtype NTM g m f = NTM {runNTM :: forall x . f x -> m (g x)}
+-- compNTNT :: NT f g -> NT g h -> NT f h
+-- compNTNT (NT f) (NT g) = NT (f . g)
+-- compNTNTM :: Monad m => NT f g -> NTM g m h -> NTM f m h
+-- compNTNTM (NT f) (NTM g) = NTM (liftM f . g)
+-- compNTMNT :: Monad m =>  NTM f m g -> NT g h -> NTM f m h
+-- compNTMNT (NTM f) (NT g) = NTM (f . g)
+-- compNTMNTM ::  Monad m =>  NTM f m g -> NTM g m h -> NTM f m h
+-- compNTMNTM (NTM f) (NTM g) = NTM (f <=< g)
+--
+-- {-# NOINLINE [0] mapsNT #-}
+-- mapsNT :: (Functor f, Functor g, Monad m) => NT g f -> Stream f m r -> Stream g m r
+-- mapsNT (NT phi) = loop where
+--   loop stream = case stream of
+--     Return r  -> Return r
+--     Delay m   -> Delay (liftM loop m)
+--     Step f    -> Step (phi (fmap loop f))
+
 {- | Map layers of one functor to another with a transformation involving the base monad
      @maps@ is more fundamental than @mapsM@, which is best understood as a convenience
      for effecting this frequent composition:
@@ -363,16 +382,6 @@ mapsM_ :: (Functor f, Monad m) => (forall x . f x -> m x) -> Stream f m r -> m r
 mapsM_ f str = run (maps f str)
 {-# INLINABLE mapsM_ #-}
 
-
-{-| Lift for items in the base functor. Makes a singleton or
-    one-layer succession. It is named by similarity to lift: 
-
-> lift :: (Monad m, Functor f)     => m r -> Stream f m r
-> elevate ::  (Monad m, Functor f) => f r -> Stream f m r
--}
-
-elevate ::  (Monad m, Functor f) => f r -> Stream f m r
-elevate fr = Step (fmap Return fr)
 
 {-| Interpolate a layer at each segment. This specializes to e.g.
 
@@ -557,15 +566,15 @@ mapsMExposed phi = loop where
 --     See Atkey "Reasoning about Stream Processing with Effects"
 
 
-destroyExposed stream0 construct mwrap done = loop stream0 where
+destroyExposed stream0 construct effect done = loop stream0 where
   loop stream = case stream of
     Return r -> done r
-    Delay m  -> mwrap (liftM loop m)
+    Delay m  -> effect (liftM loop m)
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroyExposed #-}
 
 
-{-| This is akin to the @observe@ of @Pipes.Internal@ . It remwraps the layering
+{-| This is akin to the @observe@ of @Pipes.Internal@ . It reeffects the layering
     in instances of @Stream f m r@ so that it replicates that of 
     @FreeT@. 
 
@@ -580,11 +589,22 @@ unexposed = Delay . loop where
 
 
 
-mwrap :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
-mwrap = Delay
+effect :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
+effect = Delay
 
 wrap :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
 wrap = Step
+
+
+{-| Lift for items in the base functor. Makes a singleton or
+    one-layer succession. It is named by similarity to lift: 
+
+> lift :: (Monad m, Functor f)     => m r -> Stream f m r
+> elevate ::  (Monad m, Functor f) => f r -> Stream f m r
+-}
+
+elevate ::  (Monad m, Functor f) => f r -> Stream f m r
+elevate fr = Step (fmap Return fr)
 
 
 zipsWith :: (Monad m, Functor h) 
