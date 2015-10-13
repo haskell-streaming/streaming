@@ -65,7 +65,7 @@ module Streaming.Prelude (
     , mapM_
     , print
     , toHandle
-    , drain
+    , effects
     , drained
 
     -- * Stream transformers
@@ -115,12 +115,21 @@ module Streaming.Prelude (
     , fst'
     , snd'
     
+    -- * Sum manipulation
+    
+    , distinguish   
+    , switch
+    , separate
+    , unseparate
+    , eitherSum
+    
     -- * Folds
     -- $folds
     , fold
     , fold'
     , foldM
     , foldM'
+    , foldInL
     , sum
     , sum'
     , product
@@ -154,6 +163,7 @@ module Streaming.Prelude (
     , zip
     , zipWith
     
+    
     -- * Interoperation
     , reread
     
@@ -166,6 +176,7 @@ import Streaming.Internal
 import Control.Monad hiding (filterM, mapM, mapM_, foldM, replicateM, sequence)
 import Data.Data ( Data, Typeable )
 import Data.Functor.Identity
+import Data.Functor.Sum
 import Control.Monad.Trans
 import Control.Applicative (Applicative (..))
 import Data.Functor (Functor (..), (<$))
@@ -454,7 +465,7 @@ delay :: MonadIO m => Double -> Stream (Of a) m r -> Stream (Of a) m r
 delay seconds = mapM go where
   go a = liftIO (threadDelay (truncate (seconds * 1000000))) >> return a
 -- ---------------
--- drain
+-- effects
 -- ---------------
 
 {- | Reduce a stream, performing its actions but ignoring its elements. 
@@ -463,29 +474,29 @@ delay seconds = mapM go where
 >>> let effect = lift (putStrLn "Effect!")
 >>> let stream = do {yield 1; effect; yield 2; effect; return (2^100)} 
 
->>> S.drain stream
+>>> S.effects stream
 Effect!
 Effect!
 1267650600228229401496703205376
 
->>> S.drain $ S.takeWhile (<2) stream
+>>> S.effects $ S.takeWhile (<2) stream
 Effect!
 
 -}
-drain :: Monad m => Stream (Of a) m r -> m r
-drain = loop where
+effects :: Monad m => Stream (Of a) m r -> m r
+effects = loop where
   loop stream = case stream of 
     Return r         -> return r
     Delay m          -> m >>= loop 
     Step (_ :> rest) -> loop rest
-{-#INLINABLE drain #-}
+{-#INLINABLE effects #-}
   
 {-| Where a transformer returns a stream, run the effects of the stream, keeping
    the return value. This is usually used at the type
 
 > drained :: Monad m => Stream (Of a) m (Stream (Of b) m r) -> Stream (Of a) m r
 
-> drained = join . fmap (lift . drain)
+> drained = join . fmap (lift . effects)
 
 >>> let take' n = S.drained . S.splitAt n
 >>> S.print $ concats $ maps (take' 1) $ S.group $ S.each "wwwwarrrrr"
@@ -496,7 +507,7 @@ drain = loop where
     
 -}
 drained :: (Monad m, Monad (t m), Functor (t m), MonadTrans t) => t m (Stream (Of a) m r) -> t m r
-drained = join . fmap (lift . drain)
+drained = join . fmap (lift . effects)
 {-#INLINE drained #-}
 
 -- ---------------
@@ -777,6 +788,34 @@ foldM' step begin done str = do
         x' <- step x a
         loop rest x'
 {-# INLINABLE foldM' #-}
+
+
+{-| Given a Stream on a sum of functors, run a left fold on the left functor.
+    This function is mostly defined here to exhibit its implementation
+
+> foldInL step begin done = fold' step begin done .  separate
+
+    So, for example, using 
+
+> distinguish :: (a -> Bool) -> Of a r -> Sum (Of a) (Of a) r
+
+    which puts the 'failed' items @InL@, we can write
+
+>>> S.print $ S.foldInL (+) 0 id $ S.maps (S.distinguish even) $ S.each [1..10]
+2
+4
+6
+8
+10
+25 :> ()
+
+
+
+-}
+foldInL 
+  :: (Monad m, Functor g) 
+  =>  (x -> a -> x)  -> x -> (x -> b)  -> Stream (Sum (Of a) g) m r -> Stream g m (Of b r)
+foldInL step begin done = fold' step begin done .  separate
 
 {-| A natural right fold for consuming a stream of elements. 
     See also the more general 'iterTM' in the 'Streaming' module 
@@ -1422,7 +1461,7 @@ hello
 goodbye<Enter>
 goodbye
 
->>> S.drain $ S.unfoldr P.next (P.stdinLn P.>-> P.take 2 P.>-> P.stdoutLn)
+>>> S.effects $ S.unfoldr P.next (P.stdinLn P.>-> P.take 2 P.>-> P.stdoutLn)
 hello<Enter>
 hello
 goodbye<Enter>
@@ -1666,7 +1705,7 @@ stdoutLn' = loop where
 -- , mapM_ --
 -- , print -- 
 -- , toHandle --
--- , drain --
+-- , effects --
 --
 -- -- * Pipes
 -- -- $pipes
@@ -1722,3 +1761,13 @@ stdoutLn' = loop where
 -- , zip --
 -- , zipWith --
 --
+
+distinguish :: (a -> Bool) -> Of a r -> Sum (Of a) (Of a) r
+distinguish predicate (a :> b) = if predicate a then InR (a :> b) else InL (a :> b)
+{-#INLINE distinguish #-}
+
+
+eitherSum :: Of (Either a b) r -> Sum (Of a) (Of b) r
+eitherSum s = case s of  
+  Left a :> r  -> InL (a :> r)
+  Right b :> r -> InR (b :> r)

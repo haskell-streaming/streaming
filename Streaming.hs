@@ -12,7 +12,7 @@ module Streaming
    replicates,
    repeats,
    repeatsM,
-   effect,
+   mwrap,
    wrap,
    
    -- * Transforming streams
@@ -20,7 +20,8 @@ module Streaming
    maps,
    mapsM,
    distribute,
-   eithers,
+   separate,
+   unseparate, 
    
    -- * Inspecting a stream
    inspect,
@@ -48,6 +49,7 @@ module Streaming
    Of (..),
    lazily,
    strictly,
+   
    
    -- * re-exports
    MFunctor(..),

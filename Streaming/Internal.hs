@@ -11,7 +11,7 @@ module Streaming.Internal (
     , replicates
     , repeats
     , repeatsM
-    , effect
+    , mwrap
     , wrap
     , elevate
     
@@ -31,9 +31,10 @@ module Streaming.Internal (
     , mapsM 
     , decompose
     , mapsM_
-    , eithers
     , run
     , distribute
+    , separate
+    , unseparate
     
     -- *  Splitting streams
     , chunksOf 
@@ -44,6 +45,10 @@ module Streaming.Internal (
     , zipsWith
     , zips
     , interleaves
+    
+    -- * Assorted Data.Functor.x help
+    
+    , switch
     
     -- *  For use in implementation
     , unexposed
@@ -165,19 +170,19 @@ instance (Functor f, Monad m) => Applicative (Stream f m) where
   {-# INLINE pure #-}
   streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)}   
   {-# INLINABLE (<*>) #-}    
-  stra0 *> strb = loop stra0 where
-    loop stra = case stra of
-      Return _ -> strb
-      Delay m  -> Delay (do {stra' <- m ; return (stra' *> strb)})
-      Step fstr -> Step (fmap (*> strb) fstr)
-  {-# INLINABLE (*>) #-}    
-  stra <* strb0 = loop strb0 where
-    loop strb = case strb of
-      Return _ -> stra
-      Delay m  -> Delay (do {strb' <- m ; return (stra <* strb')})
-      Step fstr -> Step (fmap (stra <*) fstr)
-  {-# INLINABLE (<*) #-}    
-    
+  -- stra0 *> strb = loop stra0 where
+  --   loop stra = case stra of
+  --     Return _ -> strb
+  --     Delay m  -> Delay (do {stra' <- m ; return (stra' *> strb)})
+  --     Step fstr -> Step (fmap (*> strb) fstr)
+  -- {-# INLINABLE (*>) #-}
+  -- stra <* strb0 = loop strb0 where
+  --   loop strb = case strb of
+  --     Return _ -> stra
+  --     Delay m  -> Delay (do {strb' <- m ; return (stra <* strb')})
+  --     Step fstr -> Step (fmap (stra <*) fstr)
+  -- {-# INLINABLE (<*) #-}
+  --
 instance Functor f => MonadTrans (Stream f) where
   lift = Delay . liftM Return
   {-# INLINE lift #-}
@@ -312,6 +317,9 @@ maps phi = loop where
     Step f    -> Step (phi (fmap loop f))
 {-# INLINABLE maps #-}
 
+
+
+
 -- newtype NT g f = NT {runNT :: forall x . f x -> g x}
 -- newtype NTM g m f = NTM {runNTM :: forall x . f x -> m (g x)}
 -- compNTNT :: NT f g -> NT g h -> NT f h
@@ -414,7 +422,7 @@ iterTM ::
   (Functor f, Monad m, MonadTrans t,
    Monad (t m)) =>
   (f (t m a) -> t m a) -> Stream f m a -> t m a
-iterTM out stream = destroy stream out (join . lift) return
+iterTM out stream = destroyExposed stream out (join . lift) return
 {-# INLINE iterTM #-}
 
 {-| Specialized fold
@@ -423,7 +431,7 @@ iterTM out stream = destroy stream out (join . lift) return
 -}
 iterT ::
   (Functor f, Monad m) => (f (m a) -> m a) -> Stream f m a -> m a
-iterT out stream = destroy stream out join return
+iterT out stream = destroyExposed stream out join return
 {-# INLINE iterT #-}
 
 {-| Dissolves the segmentation into layers of @Stream f m@ layers.
@@ -589,8 +597,8 @@ unexposed = Delay . loop where
 
 
 
-effect :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
-effect = Delay
+mwrap :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
+mwrap = Delay
 
 wrap :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
 wrap = Step
@@ -645,16 +653,81 @@ interleaves = zipsWith (liftA2 (,))
 {-# INLINE interleaves #-}   
 
 
-eithers :: (Monad m, Applicative h) => 
-    (forall x . f x -> h x) -> (forall x . g x -> h x) -> Stream (Sum f g) m r -> Stream h m r
-eithers f g = loop where
-  loop str = case str of 
-    Return r -> Return r
-    Delay m -> Delay (liftM loop m)
-    Step str' -> case str' of 
-      InL s -> Step (fmap loop (f s))
-      InR t -> Step (fmap loop (g t))
-      
+{-| Swap the order of functors in a sum of functors. 
+
+
+>>> S.toListM' $ S.print $ separate $ maps S.switch $ maps (S.distinguish (=='a')) $ S.each "banana"
+'a'
+'a'
+'a'
+"bnn" :> ()
+>>> S.toListM' $ S.print $ separate $ maps (S.distinguish (=='a')) $ S.each "banana"
+'b'
+'n'
+'n'
+"aaa" :> ()
+-}
+switch :: Sum f g r -> Sum g f r
+switch s = case s of InL a -> InR a; InR a -> InL a
+{-#INLINE switch #-}
+
+
+  
+{-| Given a stream on a sum of functors, make it a stream on the left functor,
+    with the streaming on the other functor as the governing monad. This is
+    useful for acting on one or the other functor with a fold.
+  
+>>> let odd_even = S.maps (S.distinguish even) $ S.each [1..10]
+>>> :t S.effects $ separate odd_even
+
+    Now, for example, it is convenient to fold on the left and right values separately:
+
+>>>  toListM' $ toList' (separate odd_even)
+[2,4,6,8,10] :> ([1,3,5,7,9] :> ())
+>>>  S.toListM' $ S.print $ separate $  odd_even
+1
+3
+5
+7
+9
+[2,4,6,8,10] :> ()
+  
+    We can easily use this device in place of filter:
+  
+> filter = S.effects . separate . maps (distinguish f)
+  
+>>> :t hoist S.effects $ separate odd_even
+hoist S.effects $ separate odd_even :: Monad n => Stream (Of Int) n ()
+>>>  S.print $ effects $ separate odd_even
+2
+4
+6
+8
+10
+>>>  S.print $ hoist effects $ separate odd_even
+1
+3
+5
+7
+9
+
+-}
+
+separate :: (Monad m, Functor f, Functor g) => Stream (Sum f g) m r -> Stream f (Stream g m) r
+separate str = destroyExposed 
+  str 
+  (\x -> case x of InL fss -> wrap fss; InR gss -> mwrap (elevate gss))
+  (mwrap . lift) 
+  return 
+{-#INLINE separate #-}
+
+unseparate :: (Monad m, Functor f, Functor g) =>  Stream f (Stream g m) r -> Stream (Sum f g) m r
+unseparate str = destroyExposed 
+  str 
+  (wrap . InL) 
+  (join . maps InR) 
+  return 
+{-#INLINE unseparate #-}
   
   
   
