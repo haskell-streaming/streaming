@@ -13,7 +13,7 @@ module Streaming.Internal (
     , repeatsM
     , mwrap
     , wrap
-    , elevate
+    , yields
     
     -- * Eliminating a stream
     , intercalates 
@@ -21,7 +21,6 @@ module Streaming.Internal (
     , iterT 
     , iterTM 
     , destroy 
-    , destroyWith
     
     -- * Inspecting a stream wrap by wrap
     , inspect 
@@ -35,6 +34,8 @@ module Streaming.Internal (
     , distribute
     , separate
     , unseparate
+    , groups
+--    , groupInL
     
     -- *  Splitting streams
     , chunksOf 
@@ -375,7 +376,7 @@ decompose = loop where
 
 {-| Run the effects in a stream that merely layers effects.
 -}
-run :: Monad m => Stream m m r  -> m r
+run :: Monad m => Stream m m r -> m r
 run = loop where
   loop stream = case stream of
     Return r -> return r
@@ -608,11 +609,11 @@ wrap = Step
     one-layer succession. It is named by similarity to lift: 
 
 > lift :: (Monad m, Functor f)     => m r -> Stream f m r
-> elevate ::  (Monad m, Functor f) => f r -> Stream f m r
+> yields ::  (Monad m, Functor f) => f r -> Stream f m r
 -}
 
-elevate ::  (Monad m, Functor f) => f r -> Stream f m r
-elevate fr = Step (fmap Return fr)
+yields ::  (Monad m, Functor f) => f r -> Stream f m r
+yields fr = Step (fmap Return fr)
 
 
 zipsWith :: (Monad m, Functor h) 
@@ -716,7 +717,7 @@ hoist S.effects $ separate odd_even :: Monad n => Stream (Of Int) n ()
 separate :: (Monad m, Functor f, Functor g) => Stream (Sum f g) m r -> Stream f (Stream g m) r
 separate str = destroyExposed 
   str 
-  (\x -> case x of InL fss -> wrap fss; InR gss -> mwrap (elevate gss))
+  (\x -> case x of InL fss -> wrap fss; InR gss -> mwrap (yields gss))
   (mwrap . lift) 
   return 
 {-#INLINE separate #-}
@@ -729,5 +730,62 @@ unseparate str = destroyExposed
   return 
 {-#INLINE unseparate #-}
   
-  
-  
+{-| Group layers in an alternating stream into adjoining sub-streams
+    of one type or another. 
+=
+-}
+groups :: (Monad m, Functor f, Functor g) 
+           => Stream (Sum f g) m r 
+           -> Stream (Sum (Stream f m) (Stream g m)) m r
+groups = loop 
+  where
+  loop str = do
+    e <- lift $ inspect str
+    case e of
+      Left r -> return r
+      Right ostr -> case ostr of
+        InR gstr -> wrap $ InR (fmap loop (cleanR (wrap (InR gstr))))
+        InL fstr -> wrap $ InL (fmap loop (cleanL (wrap (InL fstr))))
+
+  cleanL  :: (Monad m, Functor f, Functor g) =>
+       Stream (Sum f g) m r -> Stream f m (Stream (Sum f g) m r)
+  cleanL = loop where
+    loop s = do
+     e <- lift $ inspect s
+     case e of
+      Left r           -> return (return r)
+      Right (InL fstr) -> wrap (fmap loop fstr)
+      Right (InR gstr) -> return (wrap (InR gstr))
+
+  cleanR  :: (Monad m, Functor f, Functor g) =>
+       Stream (Sum f g) m r -> Stream g m (Stream (Sum f g) m r)
+--  cleanR = fmap (maps switch) . cleanL . maps switch
+  cleanR = loop where
+    loop s = do
+     e <- lift $ inspect s
+     case e of
+      Left r           -> return (return r)
+      Right (InL fstr) -> return (wrap (InL fstr))
+      Right (InR gstr) -> wrap (fmap loop gstr)
+
+-- groupInL :: (Monad m, Functor f, Functor g)
+--                      => Stream (Sum f g) m r
+--                      -> Stream (Sum (Stream f m) g) m r
+-- groupInL = loop
+--   where
+--   loop str = do
+--     e <- lift $ inspect str
+--     case e of
+--       Left r -> return r
+--       Right ostr -> case ostr of
+--         InR gstr -> wrap $ InR (fmap loop gstr)
+--         InL fstr -> wrap $ InL (fmap loop (cleanL (wrap (InL fstr))))
+--   cleanL  :: (Monad m, Functor f, Functor g) =>
+--        Stream (Sum f g) m r -> Stream f m (Stream (Sum f g) m r)
+--   cleanL = loop where
+--     loop s = dos
+--      e <- lift $ inspect s
+--      case e of
+--       Left r           -> return (return r)
+--       Right (InL fstr) -> wrap (fmap loop fstr)
+--       Right (InR gstr) -> return (wrap (InR gstr))

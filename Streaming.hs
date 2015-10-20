@@ -8,7 +8,7 @@ module Streaming
    unfold,
    construct,
    for,
-   elevate,
+   yields,
    replicates,
    repeats,
    repeatsM,
@@ -22,6 +22,7 @@ module Streaming
    distribute,
    separate,
    unseparate, 
+   groups,
    
    -- * Inspecting a stream
    inspect,

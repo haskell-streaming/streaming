@@ -52,6 +52,7 @@ module Streaming.Prelude (
     , fromHandle
     , iterate
     , repeat
+    , replicate
     , cycle
     , repeatM
     , replicateM
@@ -106,6 +107,7 @@ module Streaming.Prelude (
     , span
     , group
     , groupBy
+    , groupedBy
     , timed
  --   , split
  
@@ -115,30 +117,32 @@ module Streaming.Prelude (
     , fst'
     , snd'
     
-    -- * Sum manipulation
+    -- * Sum and Compose manipulation
     
     , distinguish   
     , switch
     , separate
     , unseparate
-    , eitherSum
+    , eitherToSum
+    , sumToCompose
+    , composeToSum
     
     -- * Folds
     -- $folds
+    , fold_
     , fold
-    , fold'
     , foldM
-    , foldM'
-    , foldInL
+    , foldM_
     , sum
-    , sum'
+    , sum_
     , product
-    , product'
+    , product_
     , length
-    , length'
+    , length_
     , toList
-    , toListM
-    , toListM'
+    , toList_
+    , mconcat
+    , mconcat_
     , foldrM
     , foldrT
     
@@ -173,7 +177,7 @@ module Streaming.Prelude (
   ) where
 import Streaming.Internal
 
-import Control.Monad hiding (filterM, mapM, mapM_, foldM, replicateM, sequence)
+import Control.Monad hiding (filterM, mapM, mapM_, foldM, foldM_, replicateM, sequence)
 import Data.Data ( Data, Typeable )
 import Data.Functor.Identity
 import Data.Functor.Sum
@@ -186,7 +190,7 @@ import Data.Foldable (Foldable)
 import Data.Traversable (Traversable)
 import qualified Data.Foldable as Foldable
 import Text.Read (readMaybe)
-import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, sum, product
+import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat, sum, product
                       , iterate, repeat, cycle, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
                       , print, zipWith, zip, seq, show, read
@@ -196,10 +200,12 @@ import qualified GHC.IO.Exception as G
 import qualified System.IO as IO
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception (throwIO, try)
-import Data.Monoid (Monoid (..))
+import Data.Monoid (Monoid (mappend, mempty))
 import Data.String (IsString (..))
 import Control.Concurrent (threadDelay)
 import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
+import Data.Functor.Classes
+import Data.Functor.Compose
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
     deriving (Data, Eq, Foldable, Ord,
@@ -240,6 +246,11 @@ instance Monoid a => Monad (Of a) where
 
 instance (r ~ (), Monad m, f ~ Of Char) => IsString (Stream f m r) where
   fromString = each
+
+instance (Eq a) => Eq1 (Of a) where eq1 = (==)
+instance (Ord a) => Ord1 (Of a) where compare1 = compare
+instance (Read a) => Read1 (Of a) where readsPrec1 = readsPrec
+instance (Show a) => Show1 (Of a) where showsPrec1 = showsPrec
 
 {-| Note that 'lazily', 'strictly', 'fst'', and 'mapOf' are all so-called /natural transformations/ on the primitive @Of a@ functor
     If we write 
@@ -339,10 +350,13 @@ breakWhen step begin done pred = loop0 begin
 
 {- Break during periods where the predicate is not satisfied. 
 
->>> S.print $ mapsM S.toListM' $ breaks even $ S.each [2,2,1,1,2,2,2,1,1]
-[1,1]
-[1,1]
-
+>>> S.print $ mapsM S.toList $ S.breaks not $ S.each [False,True,True,False,True,True,False]
+[True,True]
+[True,True]
+>>> S.print $ mapsM S.toList $ S.breaks id $ S.each [False,True,True,False,True,True,False]
+[False]
+[False]
+[False]
 -}
 breaks
   :: Monad m =>
@@ -366,7 +380,8 @@ breaks thus  = loop  where
 2
 3
 4
-24
+24 :> ()
+
 -}
 
 chain :: Monad m => (a -> m ()) -> Stream (Of a) m r -> Stream (Of a) m r
@@ -663,32 +678,33 @@ filterM pred = loop where
 {- $folds
     Use these to fold the elements of a 'Stream'.  
 
->>> S.fold (+) 0 id $ S.each [1..0]
+>>> S.fold_ (+) 0 id $ S.each [1..0]
 50
 
-    The general folds 'fold', fold\'', 'foldM' and 'foldM\'' are arranged 
+    The general folds 'fold', fold_', 'foldM' and 'foldM_' are arranged 
     for use with 'Control.Foldl'
 
->>> L.purely fold L.sum $ each [1..10]
+>>> L.purely fold_ L.sum $ each [1..10]
 55
->>> L.purely fold (liftA3 (,,) L.sum L.product L.list) $ each [1..10]
+>>> L.purely fold_ (liftA3 (,,) L.sum L.product L.list) $ each [1..10]
 (55,3628800,[1,2,3,4,5,6,7,8,9,10])
 
-    All functions marked with a single quote 
-    (e.g. @fold'@, @sum'@ carry the stream's return value in a left-strict pair.
-    These are convenient for @mapsM@-ing over a @Stream (Stream (Of a) m) m r@, 
+    All functions marked with an underscore omit 
+    (e.g. @fold_@, @sum_@) the stream's return value in a left-strict pair.
+    They are good for exiting streaming completely, 
+    but when you are, e.g. @mapsM@-ing over a @Stream (Stream (Of a) m) m r@, 
     which is to be compared with @[[a]]@. Specializing, we have e.g.
 
->  mapsM sum' :: (Monad m, Num n) => Stream (Stream (Of Int)) IO () -> Stream (Of n) IO ()
->  mapsM (fold' mappend mempty id) :: Stream (Stream (Of Int)) IO () -> Stream (Of Int) IO ()
+>  mapsM sum :: (Monad m, Num n) => Stream (Stream (Of Int)) IO () -> Stream (Of n) IO ()
+>  mapsM (fold mappend mempty id) :: Stream (Stream (Of Int)) IO () -> Stream (Of Int) IO ()
 
->>> S.print $ mapsM sum' $ chunksOf 3 $ each [1..10]
+>>> S.print $ mapsM S.sum $ chunksOf 3 $ S.each [1..10]
 6
 15
 24
 10
 
->>> let three_folds = L.purely S.fold' (liftA3 (,,) L.sum L.product L.list)
+>>> let three_folds = L.purely S.fold (liftA3 (,,) L.sum L.product L.list)
 >>> S.print $ mapsM three_folds $ chunksOf 3 (each [1..10])
 (6,6,[1,2,3])
 (15,120,[4,5,6])
@@ -700,24 +716,24 @@ filterM pred = loop where
 
 > Control.Foldl.purely fold :: Monad m => Fold a b -> Stream (Of a) m () -> m b
 -}
-fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m () -> m b
-fold step begin done stream0 = loop stream0 begin
+fold_ :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m b
+fold_ step begin done stream0 = loop stream0 begin
   where
     loop !stream !x = case stream of 
       Return r         -> return (done x)
       Delay m          -> m >>= \s -> loop s x
       Step (a :> rest) -> loop rest (step x a)
-{-# INLINABLE fold #-}
+{-# INLINABLE fold_ #-}
 
 {-| Strict fold of a 'Stream' of elements that preserves the return value. 
 
->>> S.sum' $ each [1..10]
+>>> S.sum $ each [1..10]
 55 :> ()
 
->>> (n :> rest)  <- sum' $ S.splitAt 3 (each [1..10])
+>>> (n :> rest)  <- S.sum $ S.splitAt 3 (each [1..10])
 >>> print n
 6
->>> (m :> rest') <- sum' $ S.splitAt 3 rest
+>>> (m :> rest') <- S.sum $ S.splitAt 3 rest
 >>> print m
 15
 >>> S.print rest'
@@ -727,38 +743,38 @@ fold step begin done stream0 = loop stream0 begin
 
     The type provides for interoperation with the foldl library.
 
-> Control.Foldl.purely fold' :: Monad m => Fold a b -> Stream (Of a) m r -> m (Of b r)
+> Control.Foldl.purely fold :: Monad m => Fold a b -> Stream (Of a) m r -> m (Of b r)
 
     Thus, specializing a bit:
 
-> L.purely fold' L.sum :: Stream (Of Int) Int r -> m (Of Int r)
-> maps (L.purely fold' L.sum) :: Stream (Stream (Of Int)) IO r -> Stream (Of Int) IO r
+> L.purely fold L.sum :: Stream (Of Int) Int r -> m (Of Int r)
+> maps (L.purely fold L.sum) :: Stream (Stream (Of Int)) IO r -> Stream (Of Int) IO r
 
 
->>> S.print $ mapsM (L.purely S.fold' (liftA2 (,) L.list L.sum)) $ chunksOf 3 $ each [1..10]
+>>> S.print $ mapsM (L.purely S.fold (liftA2 (,) L.list L.sum)) $ chunksOf 3 $ each [1..10]
 ([1,2,3],6)
 ([4,5,6],15)
 ([7,8,9],24)
 ([10],10)
 -}
 
-fold' :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
-fold' step begin done s0 = loop s0 begin
+fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
+fold step begin done s0 = loop s0 begin
   where
     loop stream !x = case stream of 
       Return r         -> return (done x :> r)
       Delay m          -> m >>= \s -> loop s x
       Step (a :> rest) -> loop rest (step x a)
-{-# INLINABLE fold' #-}
+{-# INLINABLE fold #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
 
 > Control.Foldl.impurely foldM :: Monad m => FoldM a b -> Stream (Of a) m () -> m b
 -}
-foldM
+foldM_
     :: Monad m
-    => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m () -> m b
-foldM step begin done s0 = do
+    => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> m b
+foldM_ step begin done s0 = do
     x0 <- begin
     loop s0 x0
   where
@@ -768,16 +784,16 @@ foldM step begin done s0 = do
       Step (a :> rest) -> do
         x' <- step x a
         loop rest x'
-{-# INLINABLE foldM #-}
+{-# INLINABLE foldM_ #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
 
 > Control.Foldl.impurely foldM' :: Monad m => FoldM a b -> Stream (Of a) m r -> m (b, r)
 -}
-foldM'
+foldM
     :: Monad m
     => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r ->m (Of b r)
-foldM' step begin done str = do
+foldM step begin done str = do
     x0 <- begin
     loop str x0
   where
@@ -787,35 +803,9 @@ foldM' step begin done str = do
       Step (a :> rest) -> do
         x' <- step x a
         loop rest x'
-{-# INLINABLE foldM' #-}
+{-# INLINABLE foldM #-}
 
 
-{-| Given a Stream on a sum of functors, run a left fold on the left functor.
-    This function is mostly defined here to exhibit its implementation
-
-> foldInL step begin done = fold' step begin done .  separate
-
-    So, for example, using 
-
-> distinguish :: (a -> Bool) -> Of a r -> Sum (Of a) (Of a) r
-
-    which puts the 'failed' items @InL@, we can write
-
->>> S.print $ S.foldInL (+) 0 id $ S.maps (S.distinguish even) $ S.each [1..10]
-2
-4
-6
-8
-10
-25 :> ()
-
-
-
--}
-foldInL 
-  :: (Monad m, Functor g) 
-  =>  (x -> a -> x)  -> x -> (x -> b)  -> Stream (Sum (Of a) g) m r -> Stream g m (Of b r)
-foldInL step begin done = fold' step begin done .  separate
 
 {-| A natural right fold for consuming a stream of elements. 
     See also the more general 'iterTM' in the 'Streaming' module 
@@ -864,7 +854,35 @@ for str0 act = loop str0 where
       loop rest
 {-# INLINEABLE for #-}
 
+{-| Group layers of any functor by comparisons on a preliminary annotation 
 
+-}
+groupedBy
+  :: (Monad m, Functor f) =>
+     (a -> a -> Bool)
+     -> Stream (Compose (Of a) f) m r
+     -> Stream (Stream (Compose (Of a) f) m) m r
+groupedBy equals = loop  where
+  loop stream = Delay $ do
+        e <- inspect stream
+        return $ case e of
+            Left   r      -> Return r
+            Right s@(Compose (a :> p')) -> Step $
+                fmap loop (Step $ Compose (a :> fmap (span' (equals a)) p'))
+  span' :: (Monad m, Functor f) => (a -> Bool) -> Stream (Compose (Of a) f) m r
+        -> Stream (Compose (Of a) f) m (Stream (Compose (Of a) f) m r)
+  span' pred = loop where
+    loop str = case str of
+      Return r         -> Return (Return r)
+      Delay m          -> Delay $ liftM loop m
+      Step s@(Compose (a :> rest)) -> case pred a  of
+        True  -> Step (Compose (a :> fmap loop rest))
+        False -> Return (Step s)
+{-# INLINEABLE groupedBy #-}   
+
+{-| Group elements of a stream by comparisons on a preliminary annotation 
+
+-}
 groupBy :: Monad m  
   => (a -> a -> Bool)
   -> Stream (Of a) m r 
@@ -877,6 +895,8 @@ groupBy equals = loop  where
             Right (a, p') -> Step $
                 fmap loop (yield a >> span (equals a) p')
                 
+{-# INLINEABLE groupBy #-}               
+
 group :: (Monad m, Eq a)  => Stream (Of a) m r -> Stream (Stream (Of a) m) m r                
 group = groupBy (==)
 
@@ -910,17 +930,13 @@ iterateM f = loop where
 10
 
 -}
-length :: Monad m => Stream (Of a) m () -> m Int
-length = fold (\n _ -> n + 1) 0 id
+length_ :: Monad m => Stream (Of a) m r -> m Int
+length_ = fold_ (\n _ -> n + 1) 0 id
+{-#INLINE length_#-}
 
-{-| Run a stream, keeping its length and return value. As with all folds
-    this permits more complex mappings.
+{-| Run a stream, keeping its length and its return value. 
 
->>> S.length' $ S.each [1..10]
-10 :> ()
->>> fmap S.fst' $ S.length' $ S.each [1..10]
-10
->>> S.print $ mapsM S.length' $ chunksOf 3 $ S.each [1..10]
+>>> S.print $ mapsM S.length $ chunksOf 3 $ S.each [1..10]
 3
 3
 3
@@ -928,8 +944,9 @@ length = fold (\n _ -> n + 1) 0 id
 
 -}
 
-length' :: Monad m => Stream (Of a) m r -> m (Of Int r)
-length' = fold' (\n _ -> n + 1) 0 id
+length :: Monad m => Stream (Of a) m r -> m (Of Int r)
+length = fold (\n _ -> n + 1) 0 id
+{-#INLINE length #-}
 -- ---------------
 -- map
 -- ---------------
@@ -993,6 +1010,13 @@ mapM_ f = loop where
 {-# INLINEABLE mapM_ #-}
 
 
+mconcat :: (Monad m, Monoid w) => Stream (Of w) m r -> m (Of w r)
+mconcat = fold mappend mempty id
+{-#INLINE mconcat #-}
+
+mconcat_ :: (Monad m, Monoid w) => Stream (Of w) m r -> m w
+mconcat_ = fold_ mappend mempty id
+
 {-| The standard way of inspecting the first item in a stream of elements, if the
      stream is still \'running\'. The @Right@ case contains a 
      Haskell pair, where the more general @inspect@ would return a left-strict pair. 
@@ -1040,17 +1064,17 @@ uncons = loop where
 
 
 -- | Fold a 'Stream' of numbers into their product
-product :: (Monad m, Num a) => Stream (Of a) m () -> m a
-product = fold (*) 1 id
-{-# INLINE product #-}
+product_ :: (Monad m, Num a) => Stream (Of a) m () -> m a
+product_ = fold_ (*) 1 id
+{-# INLINE product_ #-}
 
 {-| Fold a 'Stream' of numbers into their product with the return value
 
 >  maps' product' :: Stream (Stream (Of Int)) m r -> Stream (Of Int) m r
 -}
-product' :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
-product' = fold' (*) 1 id
-{-# INLINE product' #-}
+product :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
+product = fold (*) 1 id
+{-# INLINE product #-}
 
 
 -- ---------------
@@ -1270,17 +1294,17 @@ show = map Prelude.show
 -- ---------------
 
 -- | Fold a 'Stream' of numbers into their sum
-sum :: (Monad m, Num a) => Stream (Of a) m () -> m a
-sum = fold (+) 0 id
-{-# INLINE sum #-}
+sum_ :: (Monad m, Num a) => Stream (Of a) m () -> m a
+sum_ = fold_ (+) 0 id
+{-# INLINE sum_ #-}
 
 {-| Fold a 'Stream' of numbers into their sum with the return value
 
 >  maps' sum' :: Stream (Stream (Of Int)) m r -> Stream (Of Int) m r
 -}
-sum' :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
-sum' = fold' (+) 0 id
-{-# INLINE sum' #-}
+sum :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
+sum = fold (+) 0 id
+{-# INLINE sum #-}
 
 -- ---------------
 -- span
@@ -1302,7 +1326,7 @@ span pred = loop where
 {-| Split a stream of elements wherever a given element arises.
     The action is like that of 'Prelude.words'. 
 
->>> S.stdoutLn $ mapsM S.toListM' $ split ' ' "hello world  "
+>>> S.stdoutLn $ mapsM S.toList $ split ' ' "hello world  "
 hello
 world
 >>> Prelude.mapM_ Prelude.putStrLn (Prelude.words "hello world  ")
@@ -1347,14 +1371,9 @@ splitAt = splitsAt
     just a number of items from a stream of elements, but a number 
     of substreams and the like.
 
->>> S.print $ mapsM sum' $ S.take 2 $ chunksOf 3 $ each [1..]
+>>> S.print $ mapsM S.sum $ S.take 2 $ chunksOf 3 $ each [1..]
 6   -- sum of first group of 3
 15  -- sum of second group of 3
->>> S.print $ mapsM S.sum' $ S.take 2 $ chunksOf 3 $ S.each [1..4] >> S.readLn
-6     -- sum of first group of 3, which is already in [1..4]
-100   -- user input
-10000 -- user input
-10104 -- sum of second group of 3
 
 -}
 
@@ -1413,15 +1432,6 @@ timed seconds str = do
         Step (a:>rest) -> yield a >> loop utc rest
   
 
--- | Convert a pure @Stream (Of a)@ into a list of @as@
-toList :: Stream (Of a) Identity () -> [a]
-toList = loop
-  where
-    loop stream = case stream of
-       Return _                 -> []
-       Delay (Identity stream') -> loop stream'
-       Step (a :> rest)         -> a : loop rest
-{-# INLINABLE toList #-}
 
 {-| Convert an effectful 'Stream (Of a)' into a list of @as@
 
@@ -1431,18 +1441,18 @@ toList = loop
     is a leading cause of space leaks.
     
 -}
-toListM :: Monad m => Stream (Of a) m () -> m [a]
-toListM = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
-{-# INLINE toListM #-}
+toList_ :: Monad m => Stream (Of a) m () -> m [a]
+toList_ = fold_ (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
+{-# INLINE toList_ #-}
 
 
 {-| Convert an effectful 'Stream' into a list alongside the return value
 
->  maps' toListM' :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m 
+>  mapsM toListM :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m 
 -}
-toListM' :: Monad m => Stream (Of a) m r -> m (Of [a] r)
-toListM' = fold' (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
-{-# INLINE toListM' #-}
+toList :: Monad m => Stream (Of a) m r -> m (Of [a] r)
+toList = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
+{-# INLINE toList #-}
 
 {-| Build a @Stream@ by unfolding steps starting from a seed. 
 
@@ -1767,7 +1777,18 @@ distinguish predicate (a :> b) = if predicate a then InR (a :> b) else InL (a :>
 {-#INLINE distinguish #-}
 
 
-eitherSum :: Of (Either a b) r -> Sum (Of a) (Of b) r
-eitherSum s = case s of  
+eitherToSum :: Of (Either a b) r -> Sum (Of a) (Of b) r
+eitherToSum s = case s of  
   Left a :> r  -> InL (a :> r)
   Right b :> r -> InR (b :> r)
+  
+composeToSum ::  Compose (Of Bool) f r -> Sum f f r
+composeToSum x = case x of 
+  Compose (True :> f) -> InR f
+  Compose (False :> f) -> InL f
+
+sumToCompose :: Sum f f r -> Compose (Of Bool) f r 
+sumToCompose x = case x of
+  InR f -> Compose (True :> f) 
+  InL f -> Compose (False :> f)
+  
