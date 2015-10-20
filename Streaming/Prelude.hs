@@ -114,12 +114,7 @@ module Streaming.Prelude (
     , timed
  --   , split
  
-    -- * Pair manipulation
-    , lazily
-    , strictly
-    , fst'
-    , snd'
-    
+
     -- * Sum and Compose manipulation
     
     , distinguish   
@@ -132,8 +127,8 @@ module Streaming.Prelude (
     
     -- * Folds
     -- $folds
-    , fold_
     , fold
+    , fold_
     , foldM
     , foldM_
     , sum
@@ -170,6 +165,11 @@ module Streaming.Prelude (
     , zip
     , zipWith
     
+    -- * Pair manipulation
+    , lazily
+    , strictly
+    , fst'
+    , snd'
     
     -- * Interoperation
     , reread
@@ -349,7 +349,7 @@ breakWhen step begin done pred = loop0 begin
             loop a' (step x a') rest
 {-# INLINABLE breakWhen #-}
 
-{- Break during periods where the predicate is not satisfied. 
+{- Break during periods where the predicate is not satisfied, grouping the periods when it is. 
 
 >>> S.print $ mapsM S.toList $ S.breaks not $ S.each [False,True,True,False,True,True,False]
 [True,True]
@@ -380,7 +380,7 @@ breaks thus  = loop  where
 >>> S.product (S.chain Prelude.print (S.each [2..4])) >>= Prelude.print
 2
 3
-4
+4f
 24 :> ()
 
 -}
