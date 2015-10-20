@@ -217,8 +217,6 @@ instance (Monoid a, Monoid b) => Monoid (Of a b) where
   {-#INLINE mempty #-}
   mappend (m :> w) (m' :> w') = mappend m m' :> mappend w w'
   {-#INLINE mappend #-}
-  mconcat = foldr mappend mempty
-  {-#INLINE mconcat #-}
 
 instance Functor (Of a) where
   fmap f (a :> x) = a :> f x
