@@ -12,6 +12,9 @@
     For the examples below, one sometimes needs
 
 > import Streaming.Prelude (each, yield, stdoutLn, stdinLn)
+
+   Other libraries that come up in passing are
+
 > import qualified Control.Foldl as L -- cabal install foldl
 > import qualified Pipes as P
 > import qualified Pipes.Prelude as P
