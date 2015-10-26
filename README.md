@@ -278,7 +278,7 @@ This library defines an optimized `FreeT` with an eye to use with streaming libr
     data Stream f m r
          = Return r
          | Step !(f (Stream f m r))
-         | Delay (m (Stream f m r))
+         | Effect (m (Stream f m r))
 
 in place of the standard `FreeT` that we find in the `free` library, which is approximately:
 

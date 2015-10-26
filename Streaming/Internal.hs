@@ -80,7 +80,7 @@ import Data.Functor.Sum
     succession of steps, where the form of the steps or 'commands' is 
     specified by the first (functor) parameter. 
 
-> data Stream f m r = Step !(f (Stream f m r)) | Delay (m (Stream f m r)) | Return r
+> data Stream f m r = Step !(f (Stream f m r)) | Effect (m (Stream f m r)) | Return r
 
     The /producer/ concept uses the simple functor @ (a,_) @ \- or the stricter 
     @ Of a _ @. Then the news at each step or layer is just: an individual item of type @a@. 
@@ -96,7 +96,7 @@ import Data.Functor.Sum
     The constructors are exported by the 'Internal' module.
 -}
 data Stream f m r = Step !(f (Stream f m r))
-                  | Delay (m (Stream f m r))
+                  | Effect (m (Stream f m r))
                   | Return r
 #if __GLASGOW_HASKELL__ >= 710
                   deriving (Typeable)
@@ -113,13 +113,13 @@ instance (Functor f, Monad m) => Functor (Stream f m) where
   fmap f = loop where
     loop stream = case stream of
       Return r -> Return (f r)
-      Delay m  -> Delay (do {stream' <- m; return (loop stream')})
+      Effect m  -> Effect (do {stream' <- m; return (loop stream')})
       Step f   -> Step (fmap loop f)
   {-# INLINABLE fmap #-}
   a <$ stream0 = loop stream0 where
     loop stream = case stream of
       Return r -> Return a
-      Delay m  -> Delay (do {stream' <- m; return (loop stream')})
+      Effect m  -> Effect (do {stream' <- m; return (loop stream')})
       Step f    -> Step (fmap loop f)
   {-# INLINABLE (<$) #-}    
   
@@ -129,7 +129,7 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
   stream1 >> stream2 = loop stream1 where
     loop stream = case stream of
       Return _ -> stream2
-      Delay m  -> Delay (liftM loop m)
+      Effect m  -> Effect (liftM loop m)
       Step f   -> Step (fmap loop f)    
   {-# INLINABLE (>>) #-}
   (>>=) = _bind
@@ -137,7 +137,7 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
   --   loop stream where
   --   loop stream0 = case stream0 of
   --     Step fstr -> Step (fmap loop fstr)
-  --     Delay m   -> Delay (liftM loop m)
+  --     Effect m   -> Effect (liftM loop m)
   --     Return r  -> f r
   -- {-# INLINABLE (>>=) #-}                         
 
@@ -152,14 +152,14 @@ _bind
 _bind p0 f = go p0 where
     go p = case p of
       Step fstr  -> Step (fmap go fstr)
-      Delay m   -> Delay (m >>= \s -> return (go s))
+      Effect m   -> Effect (m >>= \s -> return (go s))
       Return r  -> f r
 
 {-# RULES
     "_bind (Step    fstr) f" forall  fstr f .
         _bind (Step fstr) f = Step (fmap (\p -> _bind p f) fstr);
-    "_bind (Delay      m) f" forall m    f .
-        _bind (Delay   m) f = Delay (m >>= \p -> return (_bind p f));
+    "_bind (Effect      m) f" forall m    f .
+        _bind (Effect   m) f = Effect (m >>= \p -> return (_bind p f));
     "_bind (Return     r) f" forall r    f .
         _bind (Return  r) f = f r;
   #-}
@@ -174,25 +174,25 @@ instance (Functor f, Monad m) => Applicative (Stream f m) where
   -- stra0 *> strb = loop stra0 where
   --   loop stra = case stra of
   --     Return _ -> strb
-  --     Delay m  -> Delay (do {stra' <- m ; return (stra' *> strb)})
+  --     Effect m  -> Effect (do {stra' <- m ; return (stra' *> strb)})
   --     Step fstr -> Step (fmap (*> strb) fstr)
   -- {-# INLINABLE (*>) #-}
   -- stra <* strb0 = loop strb0 where
   --   loop strb = case strb of
   --     Return _ -> stra
-  --     Delay m  -> Delay (do {strb' <- m ; return (stra <* strb')})
+  --     Effect m  -> Effect (do {strb' <- m ; return (stra <* strb')})
   --     Step fstr -> Step (fmap (stra <*) fstr)
   -- {-# INLINABLE (<*) #-}
   --
 instance Functor f => MonadTrans (Stream f) where
-  lift = Delay . liftM Return
+  lift = Effect . liftM Return
   {-# INLINE lift #-}
 
 instance Functor f => MFunctor (Stream f) where
   hoist trans = loop . unexposed where
     loop stream = case stream of 
       Return r  -> Return r
-      Delay m   -> Delay (trans (liftM loop m))
+      Effect m   -> Effect (trans (liftM loop m))
       Step f    -> Step (fmap loop f)
   {-# INLINABLE hoist #-}    
 
@@ -200,12 +200,12 @@ instance Functor f => MMonad (Stream f) where
   embed phi = loop where
     loop stream = case stream of
       Return r -> Return r
-      Delay  m -> phi m >>= loop
+      Effect  m -> phi m >>= loop
       Step   f -> Step (fmap loop f)
   {-# INLINABLE embed #-}   
 
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
-  liftIO = Delay . liftM Return . liftIO
+  liftIO = Effect . liftM Return . liftIO
   {-# INLINE liftIO #-}
 
 
@@ -229,7 +229,7 @@ destroy
 destroy stream0 construct effect done = loop (unexposed stream0) where
   loop stream = case stream of
     Return r -> done r
-    Delay m  -> effect (liftM loop m)
+    Effect m  -> effect (liftM loop m)
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroy #-}
 
@@ -268,7 +268,7 @@ destroyWith effect done construct stream  = destroy stream construct effect done
 -- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
 construct
   :: (forall b . (f b -> b) -> (m b -> b) -> (r -> b) -> b) ->  Stream f m r
-construct = \phi -> phi Step Delay Return
+construct = \phi -> phi Step Effect Return
 {-# INLINE construct #-}
 
 
@@ -284,7 +284,7 @@ inspect :: (Functor f, Monad m) =>
 inspect = loop where
   loop stream = case stream of
     Return r -> return (Left r)
-    Delay m  -> m >>= loop
+    Effect m  -> m >>= loop
     Step fs  -> return (Right fs)
 {-# INLINABLE inspect #-}
     
@@ -300,7 +300,7 @@ inspect = loop where
 unfold :: (Monad m, Functor f) 
         => (s -> m (Either r (f s))) -> s -> Stream f m r
 unfold step = loop where
-  loop s0 = Delay $ do 
+  loop s0 = Effect $ do 
     e <- step s0
     case e of
       Left r -> return (Return r)
@@ -314,7 +314,7 @@ maps :: (Monad m, Functor f)
 maps phi = loop where
   loop stream = case stream of 
     Return r  -> Return r
-    Delay m   -> Delay (liftM loop m)
+    Effect m   -> Effect (liftM loop m)
     Step f    -> Step (phi (fmap loop f))
 {-# INLINABLE maps #-}
 
@@ -337,7 +337,7 @@ maps phi = loop where
 -- mapsNT (NT phi) = loop where
 --   loop stream = case stream of
 --     Return r  -> Return r
---     Delay m   -> Delay (liftM loop m)
+--     Effect m   -> Effect (liftM loop m)
 --     Step f    -> Step (phi (fmap loop f))
 
 {- | Map layers of one functor to another with a transformation involving the base monad
@@ -350,8 +350,8 @@ mapsM :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> 
 mapsM phi = loop where
   loop stream = case stream of 
     Return r  -> Return r
-    Delay m   -> Delay (liftM loop m)
-    Step f    -> Delay (liftM Step (phi (fmap loop f)))
+    Effect m   -> Effect (liftM loop m)
+    Step f    -> Effect (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsM #-}
 
 {-| Resort a succession of layers of the form @m (f x)@. Though @mapsM@ 
@@ -368,8 +368,8 @@ decompose :: (Monad m, Functor f) => Stream (Compose m f) m r -> Stream f m r
 decompose = loop where
   loop stream = case stream of 
     Return r -> Return r 
-    Delay m ->  Delay (liftM loop m)
-    Step (Compose mstr) -> Delay $ do
+    Effect m ->  Effect (liftM loop m)
+    Step (Compose mstr) -> Effect $ do
       str <- mstr
       return (Step (fmap loop str))
 
@@ -380,7 +380,7 @@ run :: Monad m => Stream m m r -> m r
 run = loop where
   loop stream = case stream of
     Return r -> return r
-    Delay  m -> m >>= loop
+    Effect  m -> m >>= loop
     Step mrest -> mrest >>= loop
 {-# INLINABLE run #-}
 
@@ -402,13 +402,13 @@ intercalates sep = go0
   where
     go0 f = case f of 
       Return r -> return r 
-      Delay m -> lift m >>= go0 
+      Effect m -> lift m >>= go0 
       Step fstr -> do
                 f' <- fstr
                 go1 f'
     go1 f = case f of 
       Return r -> return r 
-      Delay m     -> lift m >>= go1
+      Effect m     -> lift m >>= go1
       Step fstr ->  do
                 sep
                 f' <- fstr
@@ -454,7 +454,7 @@ concats :: (Monad m, Functor f) => Stream (Stream f m) m r -> Stream f m r
 concats  = loop where
   loop stream = case stream of
     Return r -> return r
-    Delay m  -> join $ lift (liftM loop m)
+    Effect m  -> join $ lift (liftM loop m)
     Step fs  -> join (fmap loop fs)
 {-# INLINE concats #-}
 
@@ -473,7 +473,7 @@ splitsAt = loop where
     | n <= 0 = Return stream
     | otherwise = case stream of
         Return r       -> Return (Return r)
-        Delay m        -> Delay (liftM (loop n) m)
+        Effect m        -> Effect (liftM (loop n) m)
         Step fs        -> case n of 
           0 -> Return (Step fs)
           _ -> Step (fmap (loop (n-1)) fs)
@@ -495,7 +495,7 @@ chunksOf :: (Monad m, Functor f) => Int -> Stream f m r -> Stream (Stream f m) m
 chunksOf n0 = loop where
   loop stream = case stream of
     Return r       -> Return r
-    Delay m        -> Delay (liftM loop m)
+    Effect m        -> Effect (liftM loop m)
     Step fs        -> Step $ Step $ fmap (fmap loop . splitsAt (n0-1)) fs
 {-# INLINABLE chunksOf #-}          
 
@@ -506,7 +506,7 @@ distribute :: (Monad m, Functor f, MonadTrans t, MFunctor t, Monad (t (Stream f 
 distribute = loop where
   loop stream = case stream of 
     Return r    -> lift $ Return r
-    Delay tmstr -> hoist lift tmstr >>= distribute
+    Effect tmstr -> hoist lift tmstr >>= distribute
     Step fstr   -> join $ lift (Step (fmap (Return . distribute) fstr))
     
 -- | Repeat a functorial layer, command or instruction forever.
@@ -517,7 +517,7 @@ repeats f = loop where
 -- Repeat a functorial layer, command or instruction forever.
 repeatsM :: (Monad m, Functor f) => m (f ()) -> Stream f m r 
 repeatsM mf = loop where
-  loop = Delay $ do
+  loop = Effect $ do
      f <- mf
      return $ Step $ fmap (\_ -> loop) f
 
@@ -545,7 +545,7 @@ cycles = forever
 hoistExposed trans = loop where
   loop stream = case stream of 
     Return r  -> Return r
-    Delay m   -> Delay (trans (liftM loop m))
+    Effect m   -> Effect (trans (liftM loop m))
     Step f    -> Step (fmap loop f)
 
 mapsExposed :: (Monad m, Functor f) 
@@ -553,15 +553,15 @@ mapsExposed :: (Monad m, Functor f)
 mapsExposed phi = loop where
   loop stream = case stream of 
     Return r  -> Return r
-    Delay m   -> Delay (liftM loop m)
+    Effect m   -> Effect (liftM loop m)
     Step f    -> Step (phi (fmap loop f))
 {-# INLINABLE mapsExposed #-}
 
 mapsMExposed phi = loop where
   loop stream = case stream of 
     Return r  -> Return r
-    Delay m   -> Delay (liftM loop m)
-    Step f    -> Delay (liftM Step (phi (fmap loop f)))
+    Effect m   -> Effect (liftM loop m)
+    Step f    -> Effect (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsMExposed #-}
 
 --     Map a stream directly to its church encoding; compare @Data.List.foldr@
@@ -578,7 +578,7 @@ mapsMExposed phi = loop where
 destroyExposed stream0 construct effect done = loop stream0 where
   loop stream = case stream of
     Return r -> done r
-    Delay m  -> effect (liftM loop m)
+    Effect m  -> effect (liftM loop m)
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroyExposed #-}
 
@@ -589,17 +589,17 @@ destroyExposed stream0 construct effect done = loop stream0 where
 
 -}
 unexposed :: (Functor f, Monad m) => Stream f m r -> Stream f m r
-unexposed = Delay . loop where
+unexposed = Effect . loop where
   loop stream = case stream of 
     Return r -> return (Return r)
-    Delay  m -> m >>= loop
-    Step   f -> return (Step (fmap (Delay . loop) f))
+    Effect  m -> m >>= loop
+    Step   f -> return (Step (fmap (Effect . loop) f))
 {-# INLINABLE unexposed #-}   
 
 
 
 mwrap :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
-mwrap = Delay
+mwrap = Effect
 
 wrap :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
 wrap = Step
@@ -620,11 +620,11 @@ zipsWith :: (Monad m, Functor h)
   => (forall x y . f x -> g y -> h (x,y)) 
   -> Stream f m r -> Stream g m r -> Stream h m r
 zipsWith phi = curry loop where
-  loop (s1, s2) = Delay $ go s1 s2
+  loop (s1, s2) = Effect $ go s1 s2
   go (Return r)  p        = return $ Return r
   go q         (Return s) = return $ Return s
-  go (Delay m) p          = m >>= \s -> go s p
-  go q         (Delay m)  = m >>= go q
+  go (Effect m) p          = m >>= \s -> go s p
+  go q         (Effect m)  = m >>= go q
   go (Step f) (Step g)    = return $ Step $ fmap loop (phi f g)
 {-# INLINABLE zipsWith #-}   
   

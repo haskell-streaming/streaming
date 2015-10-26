@@ -164,6 +164,8 @@ module Streaming.Prelude (
     -- * Zips
     , zip
     , zipWith
+    , zip3
+    , zipWith3
     
     -- * Pair manipulation
     , lazily
@@ -196,7 +198,7 @@ import Text.Read (readMaybe)
 import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat, sum, product
                       , iterate, repeat, cycle, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
-                      , print, zipWith, zip, seq, show, read
+                      , print, zipWith, zip, zipWith3, zip3, seq, show, read
                       , readLn, sequence, concat, span, break)
 
 import qualified GHC.IO.Exception as G
@@ -312,7 +314,7 @@ break :: Monad m => (a -> Bool) -> Stream (Of a) m r
 break pred = loop where
   loop str = case str of 
     Return r         -> Return (Return r)
-    Delay m          -> Delay $ liftM loop m
+    Effect m          -> Effect $ liftM loop m
     Step (a :> rest) -> if (pred a) 
       then Return (Step (a :> rest))
       else Step (a :> loop rest)
@@ -336,14 +338,14 @@ breakWhen step begin done pred = loop0 begin
   where
     loop0 x stream = case stream of 
         Return r -> return (return r)
-        Delay mn  -> Delay $ liftM (loop0 x) mn
+        Effect mn  -> Effect $ liftM (loop0 x) mn
         Step (a :> rest) -> loop a (step x a) rest
     loop a !x stream = do
       if pred (done x) 
         then return (yield a >> stream) 
         else case stream of 
           Return r -> yield a >> return (return r)
-          Delay mn  -> Delay $ liftM (loop a x) mn
+          Effect mn  -> Effect $ liftM (loop a x) mn
           Step (a' :> rest) -> do
             yield a
             loop a' (step x a') rest
@@ -363,7 +365,7 @@ breaks
   :: Monad m =>
      (a -> Bool) -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
 breaks thus  = loop  where
-  loop stream = Delay $ do
+  loop stream = Effect $ do
     e <- next stream
     return $ case e of
       Left   r      -> Return r
@@ -389,8 +391,8 @@ chain :: Monad m => (a -> m ()) -> Stream (Of a) m r -> Stream (Of a) m r
 chain f = loop where 
   loop str = case str of 
     Return r -> return r
-    Delay mn  -> Delay (liftM loop mn)
-    Step (a :> rest) -> Delay $ do
+    Effect mn  -> Effect (liftM loop mn)
+    Step (a :> rest) -> Effect $ do
       f a
       return (Step (a :> loop rest))
 {-# INLINE chain #-}
@@ -473,7 +475,7 @@ cycle :: (Monad m, Functor f) => Stream f m r -> Stream f m s
 cycle = forever
 
 
-{-| Delay each element by the supplied number of seconds.
+{-| Effect each element by the supplied number of seconds.
 mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
 
 -}
@@ -503,7 +505,7 @@ effects :: Monad m => Stream (Of a) m r -> m r
 effects = loop where
   loop stream = case stream of 
     Return r         -> return r
-    Delay m          -> m >>= loop 
+    Effect m          -> m >>= loop 
     Step (_ :> rest) -> loop rest
 {-#INLINABLE effects #-}
   
@@ -537,7 +539,7 @@ drop = loop where
     | n <= 0    = stream
     | otherwise = case stream of
       Return r       -> Return r
-      Delay ma       -> Delay (liftM (loop n) ma)
+      Effect ma       -> Effect (liftM (loop n) ma)
       Step (a :> as) -> loop (n-1) as
 {-# INLINEABLE drop #-}
 
@@ -557,7 +559,7 @@ dropWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 dropWhile pred = loop where 
   loop stream = case stream of
     Return r       -> Return r
-    Delay ma       -> Delay (liftM loop ma)
+    Effect ma       -> Effect (liftM loop ma)
     Step (a :> as) -> if pred a 
       then loop as
       else Step (a :> as)
@@ -649,7 +651,7 @@ filter  :: (Monad m) => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 filter pred = loop where
   loop !str = case str of
     Return r       -> Return r
-    Delay m        -> Delay (liftM loop m)
+    Effect m        -> Effect (liftM loop m)
     Step (a :> as) -> if pred a 
                          then Step (a :> loop as)
                          else loop as
@@ -664,8 +666,8 @@ filterM  :: (Monad m) => (a -> m Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 filterM pred = loop where
   loop str = case str of
     Return r       -> Return r
-    Delay m        -> Delay $ liftM loop m
-    Step (a :> as) -> Delay $ do 
+    Effect m        -> Effect $ liftM loop m
+    Step (a :> as) -> Effect $ do 
       bool <- pred a
       if bool 
         then return $ Step (a :> loop as)
@@ -722,7 +724,7 @@ fold_ step begin done stream0 = loop stream0 begin
   where
     loop !stream !x = case stream of 
       Return r         -> return (done x)
-      Delay m          -> m >>= \s -> loop s x
+      Effect m          -> m >>= \s -> loop s x
       Step (a :> rest) -> loop rest (step x a)
 {-# INLINABLE fold_ #-}
 
@@ -764,7 +766,7 @@ fold step begin done s0 = loop s0 begin
   where
     loop stream !x = case stream of 
       Return r         -> return (done x :> r)
-      Delay m          -> m >>= \s -> loop s x
+      Effect m          -> m >>= \s -> loop s x
       Step (a :> rest) -> loop rest (step x a)
 {-# INLINABLE fold #-}
 
@@ -781,7 +783,7 @@ foldM_ step begin done s0 = do
   where
     loop stream !x = case stream of 
       Return r         -> done x 
-      Delay m          -> m >>= \s -> loop s x
+      Effect m          -> m >>= \s -> loop s x
       Step (a :> rest) -> do
         x' <- step x a
         loop rest x'
@@ -800,7 +802,7 @@ foldM step begin done str = do
   where
     loop stream !x = case stream of 
       Return r         -> done x >>= \b -> return (b :> r)
-      Delay m          -> m >>= \s -> loop s x
+      Effect m          -> m >>= \s -> loop s x
       Step (a :> rest) -> do
         x' <- step x a
         loop rest x'
@@ -822,7 +824,7 @@ foldrT :: (Monad m, MonadTrans t, Monad (t m))
 foldrT step = loop where
   loop stream = case stream of
     Return r       -> return r
-    Delay m        -> lift m >>= loop
+    Effect m        -> lift m >>= loop
     Step (a :> as) -> step a (loop as)
 {-# INLINABLE foldrT #-}  
 
@@ -835,7 +837,7 @@ foldrM :: Monad m
 foldrM step = loop where
   loop stream = case stream of
     Return r       -> return r
-    Delay m        -> m >>= loop
+    Effect m        -> m >>= loop
     Step (a :> as) -> step a (loop as)
 {-# INLINABLE foldrM #-}  
 
@@ -849,7 +851,7 @@ for :: (Monad m, Functor f) => Stream (Of a) m r -> (a -> Stream f m x) -> Strea
 for str0 act = loop str0 where
   loop str = case str of
     Return r         -> Return r 
-    Delay m          -> Delay $ liftM loop m
+    Effect m          -> Effect $ liftM loop m
     Step (a :> rest) -> do
       act a
       loop rest
@@ -864,7 +866,7 @@ groupedBy
      -> Stream (Compose (Of a) f) m r
      -> Stream (Stream (Compose (Of a) f) m) m r
 groupedBy equals = loop  where
-  loop stream = Delay $ do
+  loop stream = Effect $ do
         e <- inspect stream
         return $ case e of
             Left   r      -> Return r
@@ -875,7 +877,7 @@ groupedBy equals = loop  where
   span' pred = loop where
     loop str = case str of
       Return r         -> Return (Return r)
-      Delay m          -> Delay $ liftM loop m
+      Effect m          -> Effect $ liftM loop m
       Step s@(Compose (a :> rest)) -> case pred a  of
         True  -> Step (Compose (a :> fmap loop rest))
         False -> Return (Step s)
@@ -889,7 +891,7 @@ groupBy :: Monad m
   -> Stream (Of a) m r 
   -> Stream (Stream (Of a) m) m r
 groupBy equals = loop  where
-  loop stream = Delay $ do
+  loop stream = Effect $ do
         e <- next stream
         return $ case e of
             Left   r      -> Return r
@@ -915,7 +917,7 @@ iterate f = loop where
 -- | Iterate a monadic function from a seed value, streaming the results forever
 iterateM :: Monad m => (a -> m a) -> m a -> Stream (Of a) m r
 iterateM f = loop where
-  loop ma  = Delay $ do 
+  loop ma  = Effect $ do 
     a <- ma
     return (Step (a :> loop (f a)))
 {-# INLINEABLE iterateM #-}
@@ -957,7 +959,7 @@ map :: Monad m => (a -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 map f = loop where
   loop stream = case stream of
     Return r -> Return r
-    Delay m -> Delay (liftM loop m)
+    Effect m -> Effect (liftM loop m)
     Step (a :> as) -> Step (f a :> loop as)
 {-# INLINEABLE map #-}
 
@@ -983,8 +985,8 @@ mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapM f = loop where
   loop str = case str of 
     Return r       -> Return r 
-    Delay m        -> Delay (liftM loop m)
-    Step (a :> as) -> Delay $ do 
+    Effect m        -> Effect (liftM loop m)
+    Step (a :> as) -> Effect $ do 
       a' <- f a 
       return (Step (a' :> loop as) )
 {-# INLINEABLE mapM #-}
@@ -1004,7 +1006,7 @@ mapM_ :: Monad m => (a -> m b) -> Stream (Of a) m r -> m r
 mapM_ f = loop where
   loop str = case str of 
     Return r       -> return r 
-    Delay m        -> m >>= loop
+    Effect m        -> m >>= loop
     Step (a :> as) -> do 
       f a 
       loop as 
@@ -1043,7 +1045,7 @@ next :: Monad m => Stream (Of a) m r -> m (Either r (a, Stream (Of a) m r))
 next = loop where
   loop stream = case stream of
     Return r         -> return (Left r)
-    Delay m          -> m >>= loop
+    Effect m          -> m >>= loop
     Step (a :> rest) -> return (Right (a,rest))
 {-# INLINABLE next #-}
 
@@ -1059,7 +1061,7 @@ uncons :: Monad m => Stream (Of a) m () -> m (Maybe (a, Stream (Of a) m ()))
 uncons = loop where
   loop stream = case stream of
     Return ()        -> return Nothing
-    Delay m          -> m >>= loop
+    Effect m          -> m >>= loop
     Step (a :> rest) -> return (Just (a,rest))
 {-# INLINABLE uncons #-}
 
@@ -1142,7 +1144,7 @@ replicate n a = loop n where
 replicateM :: Monad m => Int -> m a -> Stream (Of a) m ()
 replicateM n ma = loop n where 
   loop 0 = Return ()
-  loop n = Delay $ do 
+  loop n = Effect $ do 
     a <- ma 
     return (Step $ a :> loop (n-1))
 {-# INLINEABLE replicateM #-}
@@ -1155,7 +1157,7 @@ replicateM n ma = loop n where
 -}
 reread :: Monad m => (s -> m (Maybe a)) -> s -> Stream (Of a) m ()
 reread step s = loop where 
-  loop = Delay $ do 
+  loop = Effect $ do 
     m <- step s
     case m of 
       Nothing -> return (Return ())
@@ -1190,7 +1192,7 @@ scan step begin done = loop begin
       yield (done x)
       case stream of 
         Return r -> Return r
-        Delay m  -> Delay $ liftM (loop x) m
+        Effect m  -> Effect $ liftM (loop x) m
         Step (a :> rest) -> do
           let x' = step x a
           loop x' rest
@@ -1219,7 +1221,7 @@ scanM step begin done str = do
       yield b
       case stream of 
         Return r -> Return r
-        Delay m  -> Delay $ liftM (loop x) m
+        Effect m  -> Effect $ liftM (loop x) m
         Step (a :> rest) -> do
           x' <- lift $ step x a
           loop x' rest
@@ -1248,7 +1250,7 @@ scanned step begin done = loop Nothing' begin
     loop !m !x stream = do 
       case stream of 
         Return r -> return r
-        Delay mn  -> Delay $ liftM (loop m x) mn
+        Effect mn  -> Effect $ liftM (loop m x) mn
         Step (a :> rest) -> do
           case m of 
             Nothing' -> do 
@@ -1277,8 +1279,8 @@ sequence :: Monad m => Stream (Of (m a)) m r -> Stream (Of a) m r
 sequence = loop where
   loop stream = case stream of
     Return r          -> Return r
-    Delay m           -> Delay $ liftM loop m
-    Step (ma :> rest) -> Delay $ do
+    Effect m           -> Effect $ liftM loop m
+    Step (ma :> rest) -> Effect $ do
       a <- ma
       return (Step (a :> loop rest))
 {-# INLINEABLE sequence #-}
@@ -1317,7 +1319,7 @@ span :: Monad m => (a -> Bool) -> Stream (Of a) m r
 span pred = loop where
   loop str = case str of 
     Return r         -> Return (Return r)
-    Delay m          -> Delay $ liftM loop m
+    Effect m          -> Effect $ liftM loop m
     Step (a :> rest) -> if pred a 
       then Step (a :> loop rest)
       else Return (Step (a :> rest))
@@ -1382,7 +1384,7 @@ take :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
 take = loop where
   loop n p = when (n > 0) $
     case p of Step fas -> Step (fmap (loop (n-1)) fas)
-              Delay m -> Delay (liftM (loop n) m)
+              Effect m -> Effect (liftM (loop n) m)
               Return r -> Return ()
 {-# INLINEABLE take #-}
 
@@ -1396,7 +1398,7 @@ takeWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m ()
 takeWhile pred = loop where
   loop str = case str of 
     Step (a :> as) -> when (pred a) (Step (a :> loop as))
-    Delay m              -> Delay (liftM loop m)
+    Effect m              -> Effect (liftM loop m)
     Return r              -> Return ()
 {-# INLINEABLE takeWhile #-}
 
@@ -1429,7 +1431,7 @@ timed seconds str = do
       then return str
       else case str of
         Return r -> return (return r)
-        Delay m -> Delay (liftM (loop utc) m)
+        Effect m -> Effect (liftM (loop utc) m)
         Step (a:>rest) -> yield a >> loop utc rest
   
 
@@ -1493,7 +1495,7 @@ goodbye
 unfoldr :: Monad m 
         => (s -> m (Either r (a, s))) -> s -> Stream (Of a) m r
 unfoldr step = loop where
-  loop s0 = Delay $ do 
+  loop s0 = Effect $ do 
     e <- step s0
     case e of
       Left r      -> return (Return r)
@@ -1552,13 +1554,46 @@ zipWith f = loop
   where
     loop str0 str1 = case str0 of
       Return r          -> Return r
-      Delay m           -> Delay $ liftM (\str -> loop str str1) m 
+      Effect m           -> Effect $ liftM (\str -> loop str str1) m 
       Step (a :> rest0) -> case str1 of
         Return r          -> Return r
-        Delay m           -> Delay $ liftM (loop str0) m
+        Effect m           -> Effect $ liftM (loop str0) m
         Step (b :> rest1) -> Step (f a b :>loop rest0 rest1)
 {-# INLINABLE zipWith #-}
 
+
+
+zipWith3 :: Monad m =>
+       (a -> b -> c -> d)
+       -> Stream (Of a) m r
+       -> Stream (Of b) m r
+       -> Stream (Of c) m r
+       -> Stream (Of d) m r
+zipWith3 op = loop where
+  loop str0 str1 str2 = do
+    e0 <- lift (next str0)
+    e1 <- lift (next str1)
+    e2 <- lift (next str2)
+    case e0 of 
+      Left r0 -> return r0
+      Right (a0,rest0) -> case e1 of
+        Left r1 -> return r1
+        Right (a1,rest1) -> case e2 of
+          Left r2 -> return r2
+          Right (a2,rest2) -> do 
+            yield (op a0 a1 a2)
+            loop rest0 rest1 rest2
+{-# INLINABLE zipWith3 #-}            
+            
+            
+--
+zip3 :: Monad m
+    => (Stream (Of a) m r)
+    -> (Stream (Of b) m r)
+    -> (Stream (Of c) m r)
+    -> (Stream (Of (a,b,c)) m r)
+zip3 = zipWith3 (,,)
+{-# INLINABLE zip3 #-}
 -- --------------
 -- IO fripperies 
 -- --------------
@@ -1630,7 +1665,7 @@ toHandle :: MonadIO m => IO.Handle -> Stream (Of String) m r -> m r
 toHandle handle = loop where
   loop str = case str of
     Return r         -> return r
-    Delay m          -> m >>= loop 
+    Effect m          -> m >>= loop 
     Step (s :> rest) -> do 
       liftIO $ IO.hPutStrLn handle s
       loop rest
@@ -1642,7 +1677,7 @@ print :: (MonadIO m, Show a) => Stream (Of a) m r -> m r
 print = loop where
   loop stream = case stream of 
     Return r         -> return r 
-    Delay m          -> m >>= loop
+    Effect m          -> m >>= loop
     Step (a :> rest) -> do 
       liftIO (Prelude.print a)
       loop rest
@@ -1665,7 +1700,7 @@ stdoutLn = loop
   where
     loop stream = case stream of 
       Return _         -> return () 
-      Delay m          -> m >>= loop
+      Effect m          -> m >>= loop
       Step (s :> rest) -> do
         x   <- liftIO $ try (putStrLn s)
         case x of
@@ -1696,7 +1731,7 @@ stdoutLn' :: MonadIO m => Stream (Of String) m r -> m r
 stdoutLn' = loop where 
   loop stream = case stream of 
     Return r         -> return r 
-    Delay m          -> m >>= loop
+    Effect m          -> m >>= loop
     Step (s :> rest) -> liftIO (putStrLn s) >> loop rest
 {-# INLINE stdoutLn' #-}
 
