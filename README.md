@@ -1,6 +1,16 @@
 streaming
 =========
 
+- The freely generated stream on a streamable functor
+- A freely generated stream of individual Haskell values is a Producer, Generator or Source
+- `Streaming.Prelude`
+- Mother's `Prelude` v. `Streaming.Prelude`
+- How come there's not one of those fancy "ListT done right" implementations in here?
+- Didn't I hear that free monads are a dog from the point of view of efficiency?
+- Interoperation with the streaming-io libraries
+- Where can I find examples of use?
+- Problems
+- Implementation and benchmarking notes
 
 
 `Stream` can be used wherever [FreeT](https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html) is used. The compiler's standard range of optimizations work better for operations written in terms of `Stream`. `FreeT f m r` and `Stream f m r` are of course extremely general, and many functor-general combinators are exported by the general module `Streaming`. 
@@ -11,6 +21,8 @@ The abstraction is inevitable, though there are many ways of writing it. Once on
 
 The freely generated stream on a streamable functor
 ----------------------------------------------------
+
+(This section is a rather abstract defense of the inevitability of the leading type we are discussing, `Stream f m r` ; it may be well to skip to the next section.)
 
 As soon as you consider the idea of an effectful stream of any kind whatsoever, for example, a stream of bytes from a handle, however constituted, you will inevitably be forced to contemplate the idea of a streaming *succession* of *just such streams*. 
 Thus, for example, however you imagine your bytes streaming from a handle, you will want to consider a *succession* of *such streams* divided on newlines. 
@@ -271,8 +283,8 @@ Questions about this library can be put as issues through the github site or on 
 
 
 
-Implementation notes
---------------------
+Implementation and benchmarking notes
+--------------------------------------
 
 This library defines an optimized `FreeT` with an eye to use with streaming libraries, namely:
 

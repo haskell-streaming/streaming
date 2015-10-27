@@ -1562,7 +1562,7 @@ zipWith f = loop
 {-# INLINABLE zipWith #-}
 
 
-
+--| Zip three 'Stream's with a combining function
 zipWith3 :: Monad m =>
        (a -> b -> c -> d)
        -> Stream (Of a) m r
@@ -1572,21 +1572,21 @@ zipWith3 :: Monad m =>
 zipWith3 op = loop where
   loop str0 str1 str2 = do
     e0 <- lift (next str0)
-    e1 <- lift (next str1)
-    e2 <- lift (next str2)
     case e0 of 
       Left r0 -> return r0
-      Right (a0,rest0) -> case e1 of
-        Left r1 -> return r1
-        Right (a1,rest1) -> case e2 of
-          Left r2 -> return r2
-          Right (a2,rest2) -> do 
-            yield (op a0 a1 a2)
-            loop rest0 rest1 rest2
+      Right (a0,rest0) -> do 
+        e1 <- lift (next str1)
+        case e1 of
+          Left r1 -> return r1
+          Right (a1,rest1) -> do 
+            e2 <- lift (next str2)
+            case e2 of
+              Left r2 -> return r2
+              Right (a2,rest2) -> do 
+                yield (op a0 a1 a2)
+                loop rest0 rest1 rest2
 {-# INLINABLE zipWith3 #-}            
             
-            
---
 zip3 :: Monad m
     => (Stream (Of a) m r)
     -> (Stream (Of b) m r)
