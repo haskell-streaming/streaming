@@ -1562,7 +1562,7 @@ zipWith f = loop
 {-# INLINABLE zipWith #-}
 
 
---| Zip three 'Stream's with a combining function
+-- | Zip three 'Stream's with a combining function
 zipWith3 :: Monad m =>
        (a -> b -> c -> d)
        -> Stream (Of a) m r
@@ -1587,6 +1587,8 @@ zipWith3 op = loop where
                 loop rest0 rest1 rest2
 {-# INLINABLE zipWith3 #-}            
             
+            
+-- | Zip three streams together 
 zip3 :: Monad m
     => (Stream (Of a) m r)
     -> (Stream (Of b) m r)
@@ -1594,6 +1596,7 @@ zip3 :: Monad m
     -> (Stream (Of (a,b,c)) m r)
 zip3 = zipWith3 (,,)
 {-# INLINABLE zip3 #-}
+
 -- --------------
 -- IO fripperies 
 -- --------------

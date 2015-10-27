@@ -1,16 +1,16 @@
 streaming
 =========
 
-- The freely generated stream on a streamable functor
-- A freely generated stream of individual Haskell values is a Producer, Generator or Source
-- `Streaming.Prelude`
-- Mother's `Prelude` v. `Streaming.Prelude`
-- How come there's not one of those fancy "ListT done right" implementations in here?
-- Didn't I hear that free monads are a dog from the point of view of efficiency?
-- Interoperation with the streaming-io libraries
-- Where can I find examples of use?
-- Problems
-- Implementation and benchmarking notes
+1.  The freely generated stream on a streamable functor
+2.  A freely generated stream of individual Haskell values is a Producer, Generator or Source
+3.  `Streaming.Prelude`
+4.  Mother's `Prelude` v. `Streaming.Prelude`
+5.  How come there's not one of those fancy "ListT done right" implementations in here?
+6.  Didn't I hear that free monads are a dog from the point of view of efficiency?
+7.  Interoperation with the streaming-io libraries
+8.  Where can I find examples of use?
+9.  Problems
+10. Implementation and benchmarking notes
 
 
 `Stream` can be used wherever [FreeT](https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html) is used. The compiler's standard range of optimizations work better for operations written in terms of `Stream`. `FreeT f m r` and `Stream f m r` are of course extremely general, and many functor-general combinators are exported by the general module `Streaming`. 
@@ -19,8 +19,8 @@ But the library is focused on uses of `Stream f m r` where `f` is itself in some
 
 The abstraction is inevitable, though there are many ways of writing it. Once one possesses it, though, one is already in possession of an elementary streaming library, since `Stream ((,)a) m r` or its equivalent is the type of a producer, generator or source. I try to argue for this more elaborately below, bringing it into connection with the standard streaming io libraries. 
 
-The freely generated stream on a streamable functor
-----------------------------------------------------
+1. The freely generated stream on a streamable functor
+-------------------------------------------------------
 
 (This section is a rather abstract defense of the inevitability of the leading type we are discussing, `Stream f m r` ; it may be well to skip to the next section.)
 
@@ -97,8 +97,8 @@ Call the thoughts above the ABCs of streaming. If you understood these ABCs you 
 
 General combinators for working with this idea of succession __irrespective of the form of succession__ are contained in the module `Stream`. They can be used, or example, to organize a succession of io-streams `Generator`s or pipes `Producer`s or the effectful bytestreams of the [streaming-bytestring](https://hackage.haskell.org/package/streaming-bytestring) library, or whatever stream-form you can express in a Haskell functor.
 
-A freely generated stream of individual Haskell values is a Producer, Generator or Source
----------------------------------------------------------------------------------------------------
+2. A freely generated stream of individual Haskell values is a Producer, Generator or Source
+------------------------------------------------------------------------------------------------------
 
 But, of course, as soon as you grasp the general form of *succession*, you are already in possession of the most basic concrete form: a simple *succession of individual Haskell values* one after another. This is just `Stream ((,) a) m r`. Here we prefer `Stream (Of a) m r`, strictifying the left element of the pair with 
 
@@ -125,8 +125,8 @@ The special case of a *stream of individual Haskell values* that simply *comes t
     machines:   SourceT m a (= forall k. MachineT m k a)
     streaming:  Stream (Of a) m ()
 
-`Streaming.Prelude`
--------------------
+3. `Streaming.Prelude`
+----------------------
 
 `Streaming.Prelude` closely follows `Pipes.Prelude`. But since it restricts itself to use only of the general idea of streaming, it cleverly *omits the pipes*:
 
@@ -147,8 +147,8 @@ Here's a little *connect and resume*, as the streaming-io experts call it:
 
 Somehow, we didn't even need a four-character operator for that, nor advice about best practices! - just ordinary Haskell common sense.
 
-Mother's `Prelude` v. `Streaming.Prelude`
------------------------------------------
+4. Mother's `Prelude` v. `Streaming.Prelude`
+--------------------------------------------
 
 The effort of `Streaming.Prelude` is to leverage the intuition the user has acquired in mastering `Prelude` and `Data.List` and to elevate her understanding into a general comprehension of effectful streaming transformations. Unsurprisingly, it takes longer to type out the signatures. It cannot be emphasized enough, thought, that *the transpositions are totally mechanical*:
 
@@ -165,8 +165,8 @@ These concepts are "functor general", in the jargon used in the documentation, a
 
 It is easy to prove that *resistance to these types is resistance to effectful streaming itself*. I will labor this point a bit more below, but you can also find it developed, with greater skill, in the documentation for the pipes libraries.
 
-How come there's not one of those fancy "ListT done right" implementations in here?
------------------------------------------------------------------------------------
+5. How come there's not one of those fancy "ListT done right" implementations in here?
+---------------------------------------------------------------------------------------
 
 The use of the final return value appears to be a complication, but in fact it is essentially contained in the idea of effectful streaming. This is why this library does not export a \_ListT done right/, which would be simple enough - following `pipes`, as usual:
 
@@ -181,8 +181,8 @@ To see the trouble, consider [this signature](http://hackage.haskell.org/package
 
 Note similarly that you can write a certain kind of [take](http://hackage.haskell.org/package/machines-0.5.1/docs/Data-Machine-Process.html#v:taking) and [drop](http://hackage.haskell.org/package/machines-0.5.1/docs/Data-Machine-Process.html#v:dropping) with the `machines` library - as you can even with a "`ListT` done right". But I wish you luck writing `splitAt`! Similarly you can write a [getContents](http://hackage.haskell.org/package/machines-io-0.2.0.6/docs/System-IO-Machine.html); but I wish you luck dividing the resulting bytestream on its lines. This is - as usual! - because the library was not written with the general concept of effectful succession or streaming in view. Materials for sinking some elements of a stream in one way, and others in other ways - copying each line to a different file, as it might be, but without accumulation - are documented within. So are are myriad other elementary operations of streaming io.
 
-Didn't I hear that free monads are a dog from the point of view of efficiency?
-------------------------------------------------------------------------------
+6. Didn't I hear that free monads are a dog from the point of view of efficiency?
+----------------------------------------------------------------------------------
 
 We noted above that if we instantiate `Stream f m r` to `Stream ((,) a) m r` or the like, we get the standard idea of a producer or generator. If it is instantiated to `Stream f Identity m r` then we have the standard \_free monad construction/. This construction is subject to certain familiar objections from an efficiency perspective; efforts have been made to substitute exotic cps-ed implementations and so forth. It is an interesting topic.
 
@@ -247,8 +247,8 @@ and can dispense with half the advice they will give you on `#haskell`. It is on
 
 With `sequence` and `traverse`, we accumulate a pure succession of pure values from a pure succession of monadic values. Why bother if you have intrinsically monadic conception of succession or traversal? `Stream f m r` gives you an immense body of such structures and a simple discipline for working with them. Spinkle `id` freely though your program, under various names, if you get homesick for `sequence` and company.
 
-Interoperation with the streaming-io libraries
-----------------------------------------------
+7. Interoperation with the streaming-io libraries
+--------------------------------------------------
 
 The simplest form of interoperation with [pipes](http://hackage.haskell.org/package/pipes) is accomplished with this isomorphism:
 
@@ -271,20 +271,20 @@ At a much more general level, we also of course have interoperation with [free](
     Free.iterTM  Stream.wrap              :: FreeT f m a -> Stream f m a
     Stream.iterTM Free.wrap               :: Stream f m a -> FreeT f m a 
 
-Where can I find examples of use?
----------------------------------
+8. Where can I find examples of use?
+-------------------------------------
 
-For some simple ghci examples, see the commentary throughout the Prelude module. For slightly more advanced usage see the commentary in the haddocks of [streaming-bytestring](https://hackage.haskell.org/package/streaming-bytestring) and e.g. [these replicas](https://gist.github.com/michaelt/6c6843e6dd8030e95d58) of shell-like programs from the io-streams tutorial. Here's a simple [streaming GET request](https://gist.github.com/michaelt/2dcea1ba32562c091357) with intrinsically streaming byte streams.
+For some simple ghci examples, see the commentary throughout the Prelude module. For slightly more advanced usage see the commentary in the haddocks of [streaming-bytestring](https://hackage.haskell.org/package/streaming-bytestring) and e.g. [these replicas](https://gist.github.com/michaelt/6c6843e6dd8030e95d58) of shell-like programs from the io-streams tutorial. Here's a simple [streaming GET request](https://gist.github.com/michaelt/2dcea1ba32562c091357) with intrinsically streaming byte streams.  Here is a comically simple ['high - low' game](https://gist.github.com/michaelt/242f6a23267707ad29e9)
 
-Problems
---------
+9. Problems
+------------
 
 Questions about this library can be put as issues through the github site or on the [pipes mailing list](https://groups.google.com/forum/#!forum/haskell-pipes). (This library understands itself as part of the pipes "ecosystem.")
 
 
 
-Implementation and benchmarking notes
---------------------------------------
+10. Implementation and benchmarking notes
+------------------------------------------
 
 This library defines an optimized `FreeT` with an eye to use with streaming libraries, namely:
 
