@@ -51,6 +51,9 @@ module Streaming
    lazily,
    strictly,
    
+   -- * ResourceT help
+   
+   bracketP,
    
    -- * re-exports
    MFunctor(..),
@@ -58,6 +61,10 @@ module Streaming
    MonadTrans(..),
    MonadIO(..),
    Compose(..),
+   MonadThrow(..),
+   MonadResource(..),
+   MonadBase(..),
+   ResourceT(..),
    join,
    liftA2,
    liftA3,
@@ -72,6 +79,8 @@ import Control.Applicative
 import Control.Monad.Trans
 import Data.Functor.Compose 
 
+import Control.Monad.Base
+import Control.Monad.Trans.Resource
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
