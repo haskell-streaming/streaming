@@ -8,7 +8,13 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      optimized for streaming applications and replacing @FreeT@. See the 
                      <https://hackage.haskell.org/package/streaming#readme readme> below
                      for an explanation. Elementary usage can be divined from the ghci examples in 
-                     @Streaming.Prelude@
+                     @Streaming.Prelude@ and from the remarks somewhat theoretical
+                     <https://hackage.haskell.org/package/streaming#readme readme>
+                     below, including the examples linked there. Note also the 
+                     <https://hackage.haskell.org/package/streaming-bytestring streaming bytestring> 
+                     and 
+                     <https://hackage.haskell.org/package/streaming-utils streaming utils> 
+                     packages.
                      .
                      The simplest form of interoperation with <http://hackage.haskell.org/package/pipes pipes>
                      is accomplished with this isomorphism:
@@ -30,11 +36,15 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      <https://hackage.haskell.org/package/streaming#readme readme>
                      below.
                      .
-                     Note also the 
-                     <https://hackage.haskell.org/package/streaming-bytestring streaming bytestring> 
-                     and 
-                     <https://hackage.haskell.org/package/streaming-utils streaming utils> 
-                     packages.
+                     Here are some results for an 
+                     <https://gist.github.com/michaelt/f19bef01423b17f29ffd expansion> 
+                     of the little 
+                     <https://github.com/ekmett/machines/blob/master/benchmarks/Benchmarks.hs benchmarks> 
+                     included in the machines package:
+                     .
+                     <<http://i.imgur.com/sSG5MvH.png>>
+                     .
+                     
                      
 license:             BSD3
 license-file:        LICENSE
@@ -67,8 +77,10 @@ library
                      , mtl >=2.1 && <2.3
                      , mmorph >=1.0 && <1.2
                      , transformers >=0.4 && <0.5
+                     , transformers-base
                      , bytestring
                      , time
+                     , resourcet
 
   default-language:  Haskell2010
   

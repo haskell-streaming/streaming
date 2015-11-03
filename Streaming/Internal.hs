@@ -1,5 +1,5 @@
 {-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
-{-# LANGUAGE UndecidableInstances, CPP #-} -- for show, data instances
+{-# LANGUAGE UndecidableInstances, CPP, FlexibleInstances, MultiParamTypeClasses  #-} 
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
@@ -51,6 +51,10 @@ module Streaming.Internal (
     
     , switch
     
+    -- * ResourceT help
+    
+    , bracketP
+    
     -- *  For use in implementation
     , unexposed
     , hoistExposed
@@ -74,6 +78,9 @@ import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
 import Data.Functor.Sum
+
+import Control.Monad.Base
+import Control.Monad.Trans.Resource
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
@@ -207,7 +214,27 @@ instance Functor f => MMonad (Stream f) where
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   liftIO = Effect . liftM Return . liftIO
   {-# INLINE liftIO #-}
+  
+instance (MonadBase b m, Functor f) => MonadBase b (Stream f m) where
+  liftBase  = mwrap . fmap return . liftBase
 
+instance (MonadThrow m, Functor f) => MonadThrow (Stream f m) where
+  throwM = lift . throwM 
+
+instance (MonadResource m, Functor f) => MonadResource (Stream f m) where
+  liftResourceT = lift . liftResourceT
+
+bracketP :: (Functor f, MonadResource m) =>
+       IO a -> (a -> IO ()) -> (a -> Stream f m b) -> Stream f m b
+bracketP alloc free inside = do
+        (key, seed) <- lift (allocate alloc free)
+        clean key (inside seed)
+  where
+    clean key = loop where
+      loop str = case str of 
+        Return r -> Effect (release key >> return (Return r))
+        Effect m -> Effect (liftM loop m)
+        Step f   -> Step (fmap loop f)
 
 {-| Map a stream directly to its church encoding; compare @Data.List.foldr@
     It permits distinctions that should be hidden, as can be seen from
