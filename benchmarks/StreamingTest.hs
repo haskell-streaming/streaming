@@ -7,8 +7,9 @@ import           Control.Exception
 import           Criterion.Main
 import           Data.Conduit as C
 import           Data.Conduit.Combinators as C
-import           Fusion as F hiding ((&))
-import           Data.Function ((&))
+--
+-- import           Fusion as F hiding ((&))
+-- import           Data.Function ((&))
 
 import           Pipes as P
 import qualified Pipes.Prelude as P

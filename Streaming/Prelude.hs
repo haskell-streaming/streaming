@@ -98,6 +98,7 @@ module Streaming.Prelude (
     , read
     , show
     , cons
+    , duplicate
 
     -- * Splitting and inspecting streams of elements
     , next
@@ -535,13 +536,12 @@ drained = join . fmap (lift . effects)
 -- | Ignore the first n elements of a stream, but carry out the actions
 drop :: (Monad m) => Int -> Stream (Of a) m r -> Stream (Of a) m r
 drop = loop where
-  loop !n stream 
-    | n <= 0    = stream
-    | otherwise = case stream of
+  loop 0 stream = stream
+  loop n stream = case stream of
       Return r       -> Return r
-      Effect ma       -> Effect (liftM (loop n) ma)
+      Effect ma      -> Effect (liftM (loop n) ma)
       Step (a :> as) -> loop (n-1) as
-{-# INLINEABLE drop #-}
+{-# INLINE drop #-}
 
 -- ---------------
 -- dropWhile
@@ -563,7 +563,7 @@ dropWhile pred = loop where
     Step (a :> as) -> if pred a 
       then loop as
       else Step (a :> as)
-{-# INLINEABLE dropWhile #-}
+{-# INLINE dropWhile #-}
 
 -- ---------------
 -- each 
@@ -649,13 +649,13 @@ enumFromThen first second = Streaming.Prelude.map toEnum (loop _first)
 -- | Skip elements of a stream that fail a predicate
 filter  :: (Monad m) => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 filter pred = loop where
-  loop !str = case str of
+  loop str = case str of
     Return r       -> Return r
     Effect m        -> Effect (liftM loop m)
     Step (a :> as) -> if pred a 
                          then Step (a :> loop as)
                          else loop as
-{-# INLINEABLE filter #-}
+{-# INLINE filter #-}
 
 -- ---------------
 -- filterM
@@ -961,7 +961,7 @@ map f = loop where
     Return r -> Return r
     Effect m -> Effect (liftM loop m)
     Step (a :> as) -> Step (f a :> loop as)
-{-# INLINEABLE map #-}
+{-# INLINE map #-}
 
 -- ---------------
 -- mapFoldable
@@ -1188,15 +1188,14 @@ reread step s = loop where
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 scan step begin done = loop begin
   where
-    loop !x stream = do 
-      yield (done x)
-      case stream of 
+    loop !x stream = Step $ 
+      done x :>  case stream of 
         Return r -> Return r
         Effect m  -> Effect $ liftM (loop x) m
         Step (a :> rest) -> do
-          let x' = step x a
+          let !x' = step x a
           loop x' rest
-{-# INLINABLE scan #-}
+{-# INLINE scan #-}
 
 {-| Strict, monadic left scan
 
@@ -1329,7 +1328,7 @@ span pred = loop where
 {-| Split a stream of elements wherever a given element arises.
     The action is like that of 'Prelude.words'. 
 
->>> S.stdoutLn $ mapsM S.toList $ split ' ' "hello world  "
+>>> S.stdoutLn $ mapsM S.toList $ split ' ' "hello world  " 
 hello
 world
 >>> Prelude.mapM_ Prelude.putStrLn (Prelude.words "hello world  ")
@@ -1382,11 +1381,12 @@ splitAt = splitsAt
 
 take :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
 take = loop where
-  loop n p = when (n > 0) $
+  loop 0 p = return ()
+  loop n p = 
     case p of Step fas -> Step (fmap (loop (n-1)) fas)
               Effect m -> Effect (liftM (loop n) m)
               Return r -> Return ()
-{-# INLINEABLE take #-}
+{-# INLINE take #-}
 
 -- ---------------
 -- takeWhile
@@ -1400,7 +1400,7 @@ takeWhile pred = loop where
     Step (a :> as) -> when (pred a) (Step (a :> loop as))
     Effect m              -> Effect (liftM loop m)
     Return r              -> Return ()
-{-# INLINEABLE takeWhile #-}
+{-# INLINE takeWhile #-}
 
 {- Break a stream after the designated number of seconds.
 
@@ -1820,14 +1820,31 @@ eitherToSum :: Of (Either a b) r -> Sum (Of a) (Of b) r
 eitherToSum s = case s of  
   Left a :> r  -> InL (a :> r)
   Right b :> r -> InR (b :> r)
-  
+{-#INLINE eitherToSum #-}
 composeToSum ::  Compose (Of Bool) f r -> Sum f f r
 composeToSum x = case x of 
   Compose (True :> f) -> InR f
   Compose (False :> f) -> InL f
+{-#INLINE composeToSum #-}
 
 sumToCompose :: Sum f f r -> Compose (Of Bool) f r 
 sumToCompose x = case x of
   InR f -> Compose (True :> f) 
   InL f -> Compose (False :> f)
-  
+{-#INLINE sumToCompose #-}
+
+duplicate
+  :: Monad m =>
+     Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
+duplicate = loop where
+loop str = do 
+  e <- lift (lift (next str))
+  case e of
+    Left r -> return r
+    Right (a, rest) -> do
+      yield a 
+      mwrap $ do
+        yield a
+        return (loop rest)
+{-#INLINABLE duplicate#-}
+        

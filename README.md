@@ -309,18 +309,59 @@ I ran a simple [benchmark](https://gist.github.com/michaelt/7f89dc8b366b30bb6acc
     . filter even 
     . each
 
+as it interpreted by various libraries - `streaming`, `conduit`, (Weigley's) `simple-conduit`, `io-streams` and `machines`.
+
 The the results were fairly pleasing:
 
-    benchmarking basic/streaming
-    time                 84.50 ms   (79.81 ms .. 87.90 ms)
-
-    benchmarking basic/iostreams
-    time                 266.2 ms   (235.6 ms .. 292.0 ms)
-
-    benchmarking basic/pipes
-    time                 232.0 ms   (206.6 ms .. 246.7 ms)
+    benchmarking basic/stream
+    time                 85.45 ms   (81.63 ms .. 89.32 ms)
+                         0.994 R²   (0.982 R² .. 0.999 R²)
+    mean                 86.53 ms   (84.16 ms .. 90.51 ms)
+    std dev              4.987 ms   (2.301 ms .. 7.906 ms)
+    variance introduced by outliers: 18% (moderately inflated)
 
     benchmarking basic/conduit
-    time                 102.3 ms   (96.24 ms .. 110.0 ms)
+    time                 101.3 ms   (88.77 ms .. 111.3 ms)
+                         0.976 R²   (0.911 R² .. 0.996 R²)
+    mean                 95.56 ms   (84.90 ms .. 103.6 ms)
+    std dev              13.76 ms   (8.210 ms .. 21.79 ms)
+    variance introduced by outliers: 43% (moderately inflated)
+
+    benchmarking basic/simple-conduit
+    time                 199.2 ms   (174.1 ms .. 215.6 ms)
+                         0.993 R²   (0.978 R² .. 1.000 R²)
+    mean                 198.4 ms   (190.0 ms .. 202.2 ms)
+    std dev              7.091 ms   (1.565 ms .. 10.000 ms)
+    variance introduced by outliers: 14% (moderately inflated)
+
+    benchmarking basic/pipes
+    time                 211.7 ms   (180.8 ms .. 232.7 ms)
+                         0.991 R²   (0.974 R² .. 1.000 R²)
+    mean                 207.7 ms   (199.1 ms .. 218.7 ms)
+    std dev              12.34 ms   (5.989 ms .. 17.67 ms)
+    variance introduced by outliers: 15% (moderately inflated)
+
+    benchmarking basic/data-list
+    time                 202.7 ms   (186.5 ms .. 225.5 ms)
+                         0.990 R²   (0.970 R² .. 1.000 R²)
+    mean                 199.3 ms   (188.4 ms .. 207.4 ms)
+    std dev              11.67 ms   (6.966 ms .. 15.11 ms)
+    variance introduced by outliers: 15% (moderately inflated)
+
+    benchmarking basic/iostreams
+    time                 265.7 ms   (247.2 ms .. 284.8 ms)
+                         0.997 R²   (0.990 R² .. 1.000 R²)
+    mean                 265.6 ms   (261.9 ms .. 272.8 ms)
+    std dev              7.094 ms   (146.8 μs .. 8.387 ms)
+    variance introduced by outliers: 16% (moderately inflated)
+
+    benchmarking basic/machines
+    time                 1.123 s    (NaN s .. 1.206 s)
+                         0.999 R²   (0.999 R² .. 1.000 R²)
+    mean                 1.134 s    (1.114 s .. 1.145 s)
+    std dev              17.29 ms   (0.0 s .. 19.07 ms)
+    variance introduced by outliers: 19% (moderately inflated)
+
+
 
 This sequence of pre-packaged combinators is, I think, as friendly as it could possibly be to the more recent conduit fusion framework. That framework of course doesn't apply to user-defined operations; there we should expect times like those shown for pipes. Since the combinators from `streaming` are defined with naive recursion, more or less as the user might, we have reason to think this result is characteristic, but much more benchmarking is needed before anything can be said with certainty.
