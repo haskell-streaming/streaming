@@ -36,15 +36,18 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      <https://hackage.haskell.org/package/streaming#readme readme>
                      below.
                      .
-                     Here are some results for an 
-                     <https://gist.github.com/michaelt/f19bef01423b17f29ffd expansion> 
-                     of the little 
-                     <https://github.com/ekmett/machines/blob/master/benchmarks/Benchmarks.hs benchmarks> 
+                     Here are some
+                     <https://gist.github.com/michaelt/f19bef01423b17f29ffd benchmarks> 
+                     following
+                     <https://github.com/ekmett/machines/blob/master/benchmarks/Benchmarks.hs those> 
                      included in the machines package:
                      .
                      <<http://i.imgur.com/sSG5MvH.png>>
                      .
-                     
+                     Here are a few compositions:
+                     .
+                     <<http://i.imgur.com/usVfKfh.png>>
+                     .
                      
 license:             BSD3
 license-file:        LICENSE
@@ -83,6 +86,7 @@ library
                      , resourcet
 
   default-language:  Haskell2010
+  
   
 
 

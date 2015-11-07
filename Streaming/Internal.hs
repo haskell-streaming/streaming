@@ -53,7 +53,7 @@ module Streaming.Internal (
     
     -- * ResourceT help
     
-    , bracketP
+    , bracketStream
     
     -- *  For use in implementation
     , unexposed
@@ -224,9 +224,9 @@ instance (MonadThrow m, Functor f) => MonadThrow (Stream f m) where
 instance (MonadResource m, Functor f) => MonadResource (Stream f m) where
   liftResourceT = lift . liftResourceT
 
-bracketP :: (Functor f, MonadResource m) =>
+bracketStream :: (Functor f, MonadResource m) =>
        IO a -> (a -> IO ()) -> (a -> Stream f m b) -> Stream f m b
-bracketP alloc free inside = do
+bracketStream alloc free inside = do
         (key, seed) <- lift (allocate alloc free)
         clean key (inside seed)
   where

@@ -53,6 +53,7 @@ module Streaming.Prelude (
     , stdinLn
     , readLn
     , fromHandle
+    , readFile
     , iterate
     , repeat
     , replicate
@@ -200,7 +201,7 @@ import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat,
                       , iterate, repeat, cycle, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
                       , print, zipWith, zip, zipWith3, zip3, seq, show, read
-                      , readLn, sequence, concat, span, break)
+                      , readLn, sequence, concat, span, break, readFile)
 
 import qualified GHC.IO.Exception as G
 import qualified System.IO as IO
@@ -212,6 +213,7 @@ import Control.Concurrent (threadDelay)
 import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
 import Data.Functor.Classes
 import Data.Functor.Compose
+import Control.Monad.Trans.Resource
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
     deriving (Data, Eq, Foldable, Ord,
@@ -319,7 +321,7 @@ break pred = loop where
     Step (a :> rest) -> if (pred a) 
       then Return (Step (a :> rest))
       else Step (a :> loop rest)
-{-# INLINEABLE break #-}
+{-# INLINABLE break #-}
 
 {-| Yield elements, using a fold to maintain state, until the accumulated 
    value satifies the supplied predicate. The fold will then be short-circuited 
@@ -541,7 +543,7 @@ drop = loop where
       Return r       -> Return r
       Effect ma      -> Effect (liftM (loop n) ma)
       Step (a :> as) -> loop (n-1) as
-{-# INLINE drop #-}
+{-# INLINABLE drop #-}
 
 -- ---------------
 -- dropWhile
@@ -563,7 +565,7 @@ dropWhile pred = loop where
     Step (a :> as) -> if pred a 
       then loop as
       else Step (a :> as)
-{-# INLINE dropWhile #-}
+{-# INLINABLE dropWhile #-}
 
 -- ---------------
 -- each 
@@ -621,7 +623,7 @@ each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
 enumFrom :: (Monad m, Enum n) => n -> Stream (Of n) m r
 enumFrom = loop where
   loop !n = Step (n :> loop (succ n))
-{-# INLINEABLE enumFrom #-}
+{-# INLINABLE enumFrom #-}
 
 
 {-| An infinite sequence of enumerable values at a fixed distance, determined
@@ -640,7 +642,7 @@ enumFromThen first second = Streaming.Prelude.map toEnum (loop _first)
     _second = fromEnum second
     diff = _second - _first
     loop !s =  Step (s :> loop (s+diff))
-{-# INLINEABLE enumFromThen #-}
+{-# INLINABLE enumFromThen #-}
 
 -- ---------------
 -- filter 
@@ -672,7 +674,7 @@ filterM pred = loop where
       if bool 
         then return $ Step (a :> loop as)
         else return $ loop as
-{-# INLINEABLE filterM #-}
+{-# INLINABLE filterM #-}
 
 -- ---------------
 -- fold
@@ -764,10 +766,10 @@ fold_ step begin done stream0 = loop stream0 begin
 fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
 fold step begin done s0 = loop s0 begin
   where
-    loop stream !x = case stream of 
+    loop stream x = case stream of 
       Return r         -> return (done x :> r)
-      Effect m          -> m >>= \s -> loop s x
-      Step (a :> rest) -> loop rest (step x a)
+      Effect m         -> m >>= \s -> loop s x
+      Step (a :> rest) -> loop rest $! step x a
 {-# INLINABLE fold #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
@@ -855,7 +857,7 @@ for str0 act = loop str0 where
     Step (a :> rest) -> do
       act a
       loop rest
-{-# INLINEABLE for #-}
+{-# INLINABLE for #-}
 
 {-| Group layers of any functor by comparisons on a preliminary annotation 
 
@@ -881,7 +883,7 @@ groupedBy equals = loop  where
       Step s@(Compose (a :> rest)) -> case pred a  of
         True  -> Step (Compose (a :> fmap loop rest))
         False -> Return (Step s)
-{-# INLINEABLE groupedBy #-}   
+{-# INLINABLE groupedBy #-}   
 
 {-| Group elements of a stream by comparisons on a preliminary annotation 
 
@@ -898,7 +900,7 @@ groupBy equals = loop  where
             Right (a, p') -> Step $
                 fmap loop (yield a >> span (equals a) p')
                 
-{-# INLINEABLE groupBy #-}               
+{-# INLINABLE groupBy #-}               
 
 group :: (Monad m, Eq a)  => Stream (Of a) m r -> Stream (Stream (Of a) m) m r                
 group = groupBy (==)
@@ -912,7 +914,7 @@ group = groupBy (==)
 iterate :: (a -> a) -> a -> Stream (Of a) m r
 iterate f = loop where
   loop a' = Step (a' :> loop (f a'))
-{-# INLINEABLE iterate #-}
+{-# INLINABLE iterate #-}
 
 -- | Iterate a monadic function from a seed value, streaming the results forever
 iterateM :: Monad m => (a -> m a) -> m a -> Stream (Of a) m r
@@ -920,7 +922,7 @@ iterateM f = loop where
   loop ma  = Effect $ do 
     a <- ma
     return (Step (a :> loop (f a)))
-{-# INLINEABLE iterateM #-}
+{-# INLINABLE iterateM #-}
 
 
 -- ---------------
@@ -961,7 +963,7 @@ map f = loop where
     Return r -> Return r
     Effect m -> Effect (liftM loop m)
     Step (a :> as) -> Step (f a :> loop as)
-{-# INLINE map #-}
+{-# INLINABLE map #-}
 
 -- ---------------
 -- mapFoldable
@@ -989,7 +991,7 @@ mapM f = loop where
     Step (a :> as) -> Effect $ do 
       a' <- f a 
       return (Step (a' :> loop as) )
-{-# INLINEABLE mapM #-}
+{-# INLINABLE mapM #-}
 
 
 
@@ -1010,7 +1012,7 @@ mapM_ f = loop where
     Step (a :> as) -> do 
       f a 
       loop as 
-{-# INLINEABLE mapM_ #-}
+{-# INLINABLE mapM_ #-}
 
 
 mconcat :: (Monad m, Monoid w) => Stream (Of w) m r -> m (Of w r)
@@ -1121,7 +1123,7 @@ repeatM ma = loop where
     a <- lift ma 
     yield a 
     loop
-{-# INLINEABLE repeatM #-}
+{-# INLINABLE repeatM #-}
 
 -- ---------------
 -- replicate 
@@ -1132,7 +1134,7 @@ replicate :: Monad m => Int -> a -> Stream (Of a) m ()
 replicate n a = loop n where
   loop 0 = Return ()
   loop m = Step (a :> loop (m-1))
-{-# INLINEABLE replicate #-}
+{-# INLINABLE replicate #-}
 
 {-| Repeat an action several times, streaming the results.
 
@@ -1147,7 +1149,7 @@ replicateM n ma = loop n where
   loop n = Effect $ do 
     a <- ma 
     return (Step $ a :> loop (n-1))
-{-# INLINEABLE replicateM #-}
+{-# INLINABLE replicateM #-}
 
 {-| Read an @IORef (Maybe a)@ or a similar device until it reads @Nothing@.
     @reread@ provides convenient exit from the @io-streams@ library
@@ -1162,7 +1164,7 @@ reread step s = loop where
     case m of 
       Nothing -> return (Return ())
       Just a  -> return (Step (a :> loop))
-{-# INLINEABLE reread #-}
+{-# INLINABLE reread #-}
 
 {-| Strict left scan, streaming, e.g. successive partial results.
 
@@ -1195,7 +1197,7 @@ scan step begin done = loop begin
         Step (a :> rest) -> do
           let !x' = step x a
           loop x' rest
-{-# INLINE scan #-}
+{-# INLINABLE scan #-}
 
 {-| Strict, monadic left scan
 
@@ -1282,7 +1284,7 @@ sequence = loop where
     Step (ma :> rest) -> Effect $ do
       a <- ma
       return (Step (a :> loop rest))
-{-# INLINEABLE sequence #-}
+{-# INLINABLE sequence #-}
 
 -- ---------------
 -- show
@@ -1322,7 +1324,7 @@ span pred = loop where
     Step (a :> rest) -> if pred a 
       then Step (a :> loop rest)
       else Return (Step (a :> rest))
-{-# INLINEABLE span #-}
+{-# INLINABLE span #-}
 
                             
 {-| Split a stream of elements wherever a given element arises.
@@ -1386,7 +1388,7 @@ take = loop where
     case p of Step fas -> Step (fmap (loop (n-1)) fas)
               Effect m -> Effect (liftM (loop n) m)
               Return r -> Return ()
-{-# INLINE take #-}
+{-# INLINABLE take #-}
 
 -- ---------------
 -- takeWhile
@@ -1740,6 +1742,9 @@ stdoutLn' = loop where
     Step (s :> rest) -> liftIO (putStrLn s) >> loop rest
 {-# INLINE stdoutLn' #-}
 
+
+readFile :: MonadResource m => FilePath -> Stream (Of String) m ()
+readFile f = bracketStream (IO.openFile f IO.ReadMode) (IO.hClose) fromHandle
 
 -- -- * Producers
 -- -- $producers

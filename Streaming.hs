@@ -53,7 +53,7 @@ module Streaming
    
    -- * ResourceT help
    
-   bracketP,
+   bracketStream,
    
    -- * re-exports
    MFunctor(..),
@@ -65,6 +65,7 @@ module Streaming
    MonadResource(..),
    MonadBase(..),
    ResourceT(..),
+   runResourceT,
    join,
    liftA2,
    liftA3,
