@@ -41,7 +41,8 @@ module Streaming.Internal (
     , chunksOf 
     , splitsAt
     , takes
-    , timed
+    , period
+    , periods
     
     -- * Zipping streams
     , zipsWith
@@ -749,7 +750,7 @@ separate str = destroyExposed
   (\x -> case x of InL fss -> wrap fss; InR gss -> mwrap (yields gss))
   (mwrap . lift) 
   return 
-{-#INLINE separate #-}
+{-#INLINABLE separate #-}
 
 unseparate :: (Monad m, Functor f, Functor g) =>  Stream f (Stream g m) r -> Stream (Sum f g) m r
 unseparate str = destroyExposed 
@@ -757,7 +758,7 @@ unseparate str = destroyExposed
   (wrap . InL) 
   (join . maps InR) 
   return 
-{-#INLINE unseparate #-}
+{-#INLINABLE unseparate #-}
   
 {-| Group layers in an alternating stream into adjoining sub-streams
     of one type or another. 
@@ -820,8 +821,8 @@ groups = loop
 --       Right (InL fstr) -> wrap (fmap loop fstr)
 --       Right (InR gstr) -> return (wrap (InR gstr))
 
-timed :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream f m (Stream f m r)
-timed seconds str = do
+period :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream f m (Stream f m r)
+period seconds str = do
     utc <- liftIO getCurrentTime
     loop utc str
   where
@@ -833,5 +834,13 @@ timed seconds str = do
       else case str of
         Return r -> Return (return r)
         Effect m -> Effect (liftM (loop utc) m)
-        Step (frest) -> Step (fmap (loop utc) frest)
-{-#INLINABLE timed #-}
+        Step frest -> Step (fmap (loop utc) frest)
+{-#INLINABLE period #-}
+
+periods :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream (Stream f m) m r
+periods n0 = loop where
+  loop stream = case stream of
+    Return r       -> Return r
+    Effect m        -> Effect (liftM loop m)
+    Step fs        -> Step $ Step $ fmap (fmap loop . period n0) fs
+{-# INLINABLE periods #-}  
