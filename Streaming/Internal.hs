@@ -41,6 +41,7 @@ module Streaming.Internal (
     , chunksOf 
     , splitsAt
     , takes
+    , timed
     
     -- * Zipping streams
     , zipsWith
@@ -78,6 +79,7 @@ import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
 import Data.Functor.Sum
+import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
 
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
@@ -794,7 +796,8 @@ groups = loop
       Left r           -> return (return r)
       Right (InL fstr) -> return (wrap (InL fstr))
       Right (InR gstr) -> wrap (fmap loop gstr)
-
+{-#INLINABLE groups #-}
+      
 -- groupInL :: (Monad m, Functor f, Functor g)
 --                      => Stream (Sum f g) m r
 --                      -> Stream (Sum (Stream f m) g) m r
@@ -816,3 +819,19 @@ groups = loop
 --       Left r           -> return (return r)
 --       Right (InL fstr) -> wrap (fmap loop fstr)
 --       Right (InR gstr) -> return (wrap (InR gstr))
+
+timed :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream f m (Stream f m r)
+timed seconds str = do
+    utc <- liftIO getCurrentTime
+    loop utc str
+  where
+  cutoff = fromInteger (truncate (1000000000 * seconds))
+  loop utc str = do
+    utc' <- liftIO getCurrentTime
+    if diffUTCTime utc' utc >  (cutoff / 1000000000)
+      then return str
+      else case str of
+        Return r -> Return (return r)
+        Effect m -> Effect (liftM (loop utc) m)
+        Step (frest) -> Step (fmap (loop utc) frest)
+{-#INLINABLE timed #-}

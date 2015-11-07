@@ -113,7 +113,6 @@ module Streaming.Prelude (
     , group
     , groupBy
     , groupedBy
-    , timed
  --   , split
  
 
@@ -143,6 +142,12 @@ module Streaming.Prelude (
     , toList_
     , mconcat
     , mconcat_
+    , minimum
+    , minimum_
+    , maximum
+    , maximum_
+    , elem
+    , elem_
     , foldrM
     , foldrT
     
@@ -201,7 +206,8 @@ import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat,
                       , iterate, repeat, cycle, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
                       , print, zipWith, zip, zipWith3, zip3, seq, show, read
-                      , readLn, sequence, concat, span, break, readFile)
+                      , readLn, sequence, concat, span, break, readFile,
+                      minimum, maximum, elem)
 
 import qualified GHC.IO.Exception as G
 import qualified System.IO as IO
@@ -475,7 +481,8 @@ False
 -}
 
 cycle :: (Monad m, Functor f) => Stream f m r -> Stream f m s
-cycle = forever
+cycle str = loop where loop = str >> loop
+{-#INLINABLE cycle #-}
 
 
 {-| Effect each element by the supplied number of seconds.
@@ -587,7 +594,22 @@ dropWhile pred = loop where
 -}
 each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
 each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
-{-# INLINE each #-}
+{-# INLINABLE each #-}
+
+
+elem :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m (Of Bool r)
+elem a = fold op False id where
+  op True _ = True
+  op False a' | a == a' = True
+  op _ _ = False
+{-#INLINABLE elem #-}
+  
+elem_ :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m Bool
+elem_ a = fold_ op False id where
+  op True _ = True
+  op False a' | a == a' = True
+  op _ _ = False
+{-#INLINABLE elem_ #-}
 
 -- -----
 -- enumFrom
@@ -1022,6 +1044,23 @@ mconcat = fold mappend mempty id
 mconcat_ :: (Monad m, Monoid w) => Stream (Of w) m r -> m w
 mconcat_ = fold_ mappend mempty id
 
+
+minimum :: (Monad m, Ord a) => Stream (Of a) m r -> m (Of (Maybe a) r)
+minimum = fold (\m a -> case m of Nothing -> Just a ; Just a' -> Just (min a a')) Nothing id
+{-#INLINE minimum #-}
+
+minimum_ :: (Monad m, Ord a) => Stream (Of a) m r -> m (Maybe a) 
+minimum_ = fold_ (\m a -> case m of Nothing -> Just a ; Just a' -> Just (min a a')) Nothing id
+{-#INLINE minimum_ #-}
+
+maximum :: (Monad m, Ord a) => Stream (Of a) m r -> m (Of (Maybe a) r)
+maximum = fold (\m a -> case m of Nothing -> Just a ; Just a' -> Just (max a a')) Nothing id
+{-#INLINE maximum #-}
+
+maximum_ :: (Monad m, Ord a) => Stream (Of a) m r -> m (Maybe a)
+maximum_ = fold_ (\m a -> case m of Nothing -> Just a ; Just a' -> Just (max a a')) Nothing id
+{-#INLINE maximum_ #-}
+
 {-| The standard way of inspecting the first item in a stream of elements, if the
      stream is still \'running\'. The @Right@ case contains a 
      Haskell pair, where the more general @inspect@ would return a left-strict pair. 
@@ -1421,21 +1460,6 @@ takeWhile pred = loop where
 
 -}
 
-timed :: MonadIO m => Double -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
-timed seconds str = do
-    utc <- liftIO getCurrentTime
-    loop utc str
-  where
-  cutoff = fromInteger $ truncate (1000000000 * seconds)
-  loop utc str = do
-    utc' <- liftIO getCurrentTime
-    if diffUTCTime utc' utc >  (cutoff / 1000000000)
-      then return str
-      else case str of
-        Return r -> return (return r)
-        Effect m -> Effect (liftM (loop utc) m)
-        Step (a:>rest) -> yield a >> loop utc rest
-  
 
 
 {-| Convert an effectful 'Stream (Of a)' into a list of @as@
