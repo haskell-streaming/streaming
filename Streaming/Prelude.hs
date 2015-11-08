@@ -220,6 +220,14 @@ import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
 import Data.Functor.Classes
 import Data.Functor.Compose
 import Control.Monad.Trans.Resource
+
+
+import GHC.Exts ( SpecConstrAnnotation(..) )
+
+
+data SPEC = SPEC | SPEC2 
+
+{-# ANN type SPEC ForceSpecConstr #-}
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
     deriving (Data, Eq, Foldable, Ord,
@@ -786,12 +794,13 @@ fold_ step begin done stream0 = loop stream0 begin
 -}
 
 fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
-fold step begin done s0 = loop s0 begin
+fold step begin done = fold_loop SPEC begin
   where
-    loop stream x = case stream of 
+    {-#INLINABLE fold_loop #-}
+    fold_loop !_ x stream = case stream of 
       Return r         -> return (done x :> r)
-      Effect m         -> m >>= \s -> loop s x
-      Step (a :> rest) -> loop rest $! step x a
+      Effect m         -> m >>= fold_loop SPEC x
+      Step (a :> rest) -> fold_loop SPEC (step x a) rest
 {-# INLINABLE fold #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
@@ -921,7 +930,6 @@ groupBy equals = loop  where
             Left   r      -> Return r
             Right (a, p') -> Step $
                 fmap loop (yield a >> span (equals a) p')
-                
 {-# INLINABLE groupBy #-}               
 
 group :: (Monad m, Eq a)  => Stream (Of a) m r -> Stream (Stream (Of a) m) m r                
@@ -980,11 +988,12 @@ length = fold (\n _ -> n + 1) 0 id
 
 -- | Standard map on the elements of a stream.
 map :: Monad m => (a -> b) -> Stream (Of a) m r -> Stream (Of b) m r
-map f = loop where
-  loop stream = case stream of
-    Return r -> Return r
-    Effect m -> Effect (liftM loop m)
-    Step (a :> as) -> Step (f a :> loop as)
+map f = maps (\(x :> rest) -> f x :> rest)
+  -- loop where
+  -- loop stream = case stream of
+  --   Return r -> Return r
+  --   Effect m -> Effect (liftM loop m)
+  --   Step (a :> as) -> Step (f a :> loop as)
 {-# INLINABLE map #-}
 
 -- ---------------
@@ -1347,7 +1356,7 @@ sum_ = fold_ (+) 0 id
 -}
 sum :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
 sum = fold (+) 0 id
-{-# INLINE sum #-}
+{-# INLINABLE sum #-}
 
 -- ---------------
 -- span

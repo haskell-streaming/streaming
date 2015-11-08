@@ -827,20 +827,37 @@ period seconds str = do
     loop utc str
   where
   cutoff = fromInteger (truncate (1000000000 * seconds))
-  loop utc str = do
-    utc' <- liftIO getCurrentTime
-    if diffUTCTime utc' utc >  (cutoff / 1000000000)
-      then return str
-      else case str of
-        Return r -> Return (return r)
-        Effect m -> Effect (liftM (loop utc) m)
-        Step frest -> Step (fmap (loop utc) frest)
+  loop utc str = case str of
+    Return r   -> Return (Return r)
+    Effect m   -> Effect $ liftM (loop utc) m
+
+    Step frest -> do
+      utc' <- liftIO getCurrentTime
+      if diffUTCTime utc' utc > (cutoff / 1000000000)
+        then Return (Step frest)
+        else Step (fmap (loop utc) frest)
+
+
 {-#INLINABLE period #-}
 
 periods :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream (Stream f m) m r
-periods n0 = loop where
-  loop stream = case stream of
-    Return r       -> Return r
-    Effect m        -> Effect (liftM loop m)
-    Step fs        -> Step $ Step $ fmap (fmap loop . period n0) fs
+periods seconds = loop
+  where
+  loop stream = do 
+    utc <- liftIO getCurrentTime
+    case stream of
+      Return r  -> Return r
+      Effect m  -> Effect (liftM loop m)
+      Step fs   -> Step (Step (fmap (fmap loop . period seconds) fs))
+  --
+  -- cutoff = fromInteger (truncate (1000000000 * seconds))
+  --
+  -- ploop utc str = do
+  --   utc' <- liftIO getCurrentTime
+  --   if diffUTCTime utc' utc > (cutoff / 1000000000)
+  --     then return str
+  --     else case str of
+  --       Return r -> Return (return r)
+  --       Effect m -> Effect (liftM (ploop utc) m)
+  --       Step frest -> Step (fmap (ploop utc) frest)
 {-# INLINABLE periods #-}  
