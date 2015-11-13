@@ -687,7 +687,7 @@ filter pred = loop where
     Step (a :> as) -> if pred a 
                          then Step (a :> loop as)
                          else loop as
-{-# INLINE filter #-}
+{-# INLINABLE filter #-}
 
 -- ---------------
 -- filterM
@@ -752,13 +752,8 @@ filterM pred = loop where
 > Control.Foldl.purely fold :: Monad m => Fold a b -> Stream (Of a) m () -> m b
 -}
 fold_ :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m b
-fold_ step begin done stream0 = loop stream0 begin
-  where
-    loop !stream !x = case stream of 
-      Return r         -> return (done x)
-      Effect m          -> m >>= \s -> loop s x
-      Step (a :> rest) -> loop rest (step x a)
-{-# INLINABLE fold_ #-}
+fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
+{-#INLINE fold_ #-}
 
 {-| Strict fold of a 'Stream' of elements that preserves the return value. 
 
@@ -803,6 +798,7 @@ fold step begin done = fold_loop SPEC begin
       Step (a :> rest) -> fold_loop SPEC (step x a) rest
 {-# INLINABLE fold #-}
 
+
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
 
 > Control.Foldl.impurely foldM :: Monad m => FoldM a b -> Stream (Of a) m () -> m b
@@ -810,17 +806,8 @@ fold step begin done = fold_loop SPEC begin
 foldM_
     :: Monad m
     => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> m b
-foldM_ step begin done s0 = do
-    x0 <- begin
-    loop s0 x0
-  where
-    loop stream !x = case stream of 
-      Return r         -> done x 
-      Effect m          -> m >>= \s -> loop s x
-      Step (a :> rest) -> do
-        x' <- step x a
-        loop rest x'
-{-# INLINABLE foldM_ #-}
+foldM_ step begin done  = liftM (\(a:>rest) -> a) . foldM step begin done
+{-#INLINE foldM_ #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
 
@@ -1245,7 +1232,7 @@ scan step begin done = loop begin
         Step (a :> rest) -> do
           let !x' = step x a
           loop x' rest
-{-# INLINABLE scan #-}
+{-# INLINABLE[0] scan #-}
 
 {-| Strict, monadic left scan
 
@@ -1705,7 +1692,7 @@ toHandle handle = loop where
     Return r         -> return r
     Effect m          -> m >>= loop 
     Step (s :> rest) -> do 
-      liftIO $ IO.hPutStrLn handle s
+      liftIO (IO.hPutStrLn handle s)
       loop rest
 {-# INLINABLE toHandle #-} 
 
@@ -1778,7 +1765,8 @@ stdoutLn' = loop where
 
 readFile :: MonadResource m => FilePath -> Stream (Of String) m ()
 readFile f = bracketStream (IO.openFile f IO.ReadMode) (IO.hClose) fromHandle
-
+-- writeFile :: MonadResource m => FilePath -> Stream (Of String) m r -> m r
+-- writeFile f str = bracketStream (IO.openFile f IO.WriteMode) (IO.hClose) toHandle
 -- -- * Producers
 -- -- $producers
 --   stdinLn  -- 
@@ -1887,4 +1875,14 @@ loop str = do
         yield a
         return (loop rest)
 {-#INLINABLE duplicate#-}
-        
+
+
+-- "fold/map" forall step begin done f str .
+-- fold step begin done (map f str) = fold (\x a -> step x $! f a) begin done str;
+--
+-- "fold/filter" forall step begin done pred str .
+-- fold step begin done (filter pred str) = fold (\x a -> if pred a then step x a else x) begin done str;
+--
+-- "scan/map" forall step begin done f str .
+-- scan step begin done (map f str) = scan (\x a -> step x $! f a) begin done str
+--

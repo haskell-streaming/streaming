@@ -80,7 +80,7 @@ import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
 import Data.Functor.Sum
-import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
+import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime, addUTCTime)
 
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
@@ -105,7 +105,7 @@ import Control.Monad.Trans.Resource
     \- or, in the producer case, 'Streaming.Prelude.next'
     The constructors are exported by the 'Internal' module.
 -}
-data Stream f m r = Step !(f (Stream f m r))
+data Stream f m r = Step (f (Stream f m r))
                   | Effect (m (Stream f m r))
                   | Return r
 #if __GLASGOW_HASKELL__ >= 710
@@ -326,7 +326,6 @@ inspect = loop where
 > unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
 
 -}
-
 unfold :: (Monad m, Functor f) 
         => (s -> m (Either r (f s))) -> s -> Stream f m r
 unfold step = loop where
@@ -821,43 +820,75 @@ groups = loop
 --       Right (InL fstr) -> wrap (fmap loop fstr)
 --       Right (InR gstr) -> return (wrap (InR gstr))
 
+{-| Permit streamed actions to proceed unless the clock has run out. 
+
+-}
 period :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream f m (Stream f m r)
 period seconds str = do
     utc <- liftIO getCurrentTime
-    loop utc str
+    let loop s = do
+          utc' <- liftIO getCurrentTime
+          if diffUTCTime utc' utc > (cutoff / 1000000000)
+            then return s
+            else case s of
+              Return r -> Return (Return r)
+              Effect m -> Effect (liftM loop m)
+              Step f   -> Step (fmap loop f)
+    loop str
   where
   cutoff = fromInteger (truncate (1000000000 * seconds))
-  loop utc str = case str of
-    Return r   -> Return (Return r)
-    Effect m   -> Effect $ liftM (loop utc) m
-
-    Step frest -> do
-      utc' <- liftIO getCurrentTime
-      if diffUTCTime utc' utc > (cutoff / 1000000000)
-        then Return (Step frest)
-        else Step (fmap (loop utc) frest)
-
-
 {-#INLINABLE period #-}
 
+
+{-| Divide a succession of phases according to a specified time interval. If time runs out
+    while an action is proceeding, it is allowed to run to completion. The clock is only then
+    restarted. 
+-}
 periods :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream (Stream f m) m r
-periods seconds = loop
+periods seconds s = do 
+  utc <- liftIO getCurrentTime
+  loop (addUTCTime cutoff utc) s
+  
   where
-  loop stream = do 
+  cutoff = fromInteger (truncate (1000000000 * seconds)) / 1000000000
+  loop final stream = do 
     utc <- liftIO getCurrentTime
-    case stream of
-      Return r  -> Return r
-      Effect m  -> Effect (liftM loop m)
-      Step fs   -> Step (Step (fmap (fmap loop . period seconds) fs))
-  --
-  -- cutoff = fromInteger (truncate (1000000000 * seconds))
-  --
-  -- ploop utc str = do
-  --   utc' <- liftIO getCurrentTime
-  --   if diffUTCTime utc' utc > (cutoff / 1000000000)
-  --     then return str
-  --     else case str of
-  --       Return r -> Return (return r)
-  --       Effect m -> Effect (liftM (ploop utc) m)
-  --       Step frest -> Step (fmap (ploop utc) frest)
+    if utc > final 
+      then loop (addUTCTime cutoff utc) stream
+      else case stream of
+        Return r  -> Return r
+        Effect m  -> Effect $ liftM (loop final) m
+        Step fstr -> Step $ fmap (periods seconds) (cutoff_ final (Step fstr))
+        
+        -- do
+        --   let sloop s = do
+        --         utc' <- liftIO getCurrentTime
+        --         if final < utc'
+        --           then return s
+        --           else case s of
+        --             Return r -> Return (Return r)
+        --             Effect m -> Effect (liftM sloop m)
+        --             Step f   -> Step (fmap sloop f)
+        --   Step (Step (fmap (fmap (periods seconds) . sloop) fstr))
+          -- str <- m
+          -- utc' <- liftIO getCurrentTime
+          -- if diffUTCTime utc' utc > (cutoff / 1000000000)
+          --   then return (loop utc' str)
+          --   else return (loop utc str)
+        -- Step fs   -> do
+        --   let check str = do
+        --         utc' <- liftIO getCurrentTime
+        --         loop utc' str
+        --  
 {-# INLINABLE periods #-}  
+
+cutoff_ final str = do
+    let loop s = do
+          utc' <- liftIO getCurrentTime
+          if utc' > final
+            then Return s
+            else case s of
+              Return r -> Return (Return r)
+              Effect m -> Effect (liftM loop m)
+              Step f   -> Step (fmap loop f)
+    loop str
