@@ -1765,8 +1765,15 @@ stdoutLn' = loop where
 
 readFile :: MonadResource m => FilePath -> Stream (Of String) m ()
 readFile f = bracketStream (IO.openFile f IO.ReadMode) (IO.hClose) fromHandle
--- writeFile :: MonadResource m => FilePath -> Stream (Of String) m r -> m r
--- writeFile f str = bracketStream (IO.openFile f IO.WriteMode) (IO.hClose) toHandle
+
+-- allocate ::
+--  MonadResource m => IO a -> (a -> IO ()) -> m (ReleaseKey, a)
+writeFile :: MonadResource m => FilePath -> Stream (Of String) m r -> m r
+writeFile f str = do 
+  (key, handle) <- allocate (IO.openFile f IO.WriteMode) (IO.hClose) 
+  r <- toHandle handle str
+  release key
+  return r
 -- -- * Producers
 -- -- $producers
 --   stdinLn  -- 
