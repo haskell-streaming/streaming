@@ -70,8 +70,10 @@ module Streaming.Prelude (
     , mapM_
     , print
     , toHandle
+    , writeFile
     , effects
     , drained
+    
 
     -- * Stream transformers
     -- $pipes
@@ -206,8 +208,8 @@ import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat,
                       , iterate, repeat, cycle, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
                       , print, zipWith, zip, zipWith3, zip3, seq, show, read
-                      , readLn, sequence, concat, span, break, readFile,
-                      minimum, maximum, elem)
+                      , readLn, sequence, concat, span, break, readFile, writeFile
+                      , minimum, maximum, elem)
 
 import qualified GHC.IO.Exception as G
 import qualified System.IO as IO
@@ -1766,8 +1768,6 @@ stdoutLn' = loop where
 readFile :: MonadResource m => FilePath -> Stream (Of String) m ()
 readFile f = bracketStream (IO.openFile f IO.ReadMode) (IO.hClose) fromHandle
 
--- allocate ::
---  MonadResource m => IO a -> (a -> IO ()) -> m (ReleaseKey, a)
 writeFile :: MonadResource m => FilePath -> Stream (Of String) m r -> m r
 writeFile f str = do 
   (key, handle) <- allocate (IO.openFile f IO.WriteMode) (IO.hClose) 
