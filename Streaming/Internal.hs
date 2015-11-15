@@ -820,75 +820,75 @@ groups = loop
 --       Right (InL fstr) -> wrap (fmap loop fstr)
 --       Right (InR gstr) -> return (wrap (InR gstr))
 
-{-| Permit streamed actions to proceed unless the clock has run out. 
-
--}
-period :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream f m (Stream f m r)
-period seconds str = do
-    utc <- liftIO getCurrentTime
-    let loop s = do
-          utc' <- liftIO getCurrentTime
-          if diffUTCTime utc' utc > (cutoff / 1000000000)
-            then return s
-            else case s of
-              Return r -> Return (Return r)
-              Effect m -> Effect (liftM loop m)
-              Step f   -> Step (fmap loop f)
-    loop str
-  where
-  cutoff = fromInteger (truncate (1000000000 * seconds))
-{-#INLINABLE period #-}
-
-
-{-| Divide a succession of phases according to a specified time interval. If time runs out
-    while an action is proceeding, it is allowed to run to completion. The clock is only then
-    restarted. 
--}
-periods :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream (Stream f m) m r
-periods seconds s = do 
-  utc <- liftIO getCurrentTime
-  loop (addUTCTime cutoff utc) s
-  
-  where
-  cutoff = fromInteger (truncate (1000000000 * seconds)) / 1000000000
-  loop final stream = do 
-    utc <- liftIO getCurrentTime
-    if utc > final 
-      then loop (addUTCTime cutoff utc) stream
-      else case stream of
-        Return r  -> Return r
-        Effect m  -> Effect $ liftM (loop final) m
-        Step fstr -> Step $ fmap (periods seconds) (cutoff_ final (Step fstr))
-        
-        -- do
-        --   let sloop s = do
-        --         utc' <- liftIO getCurrentTime
-        --         if final < utc'
-        --           then return s
-        --           else case s of
-        --             Return r -> Return (Return r)
-        --             Effect m -> Effect (liftM sloop m)
-        --             Step f   -> Step (fmap sloop f)
-        --   Step (Step (fmap (fmap (periods seconds) . sloop) fstr))
-          -- str <- m
-          -- utc' <- liftIO getCurrentTime
-          -- if diffUTCTime utc' utc > (cutoff / 1000000000)
-          --   then return (loop utc' str)
-          --   else return (loop utc str)
-        -- Step fs   -> do
-        --   let check str = do
-        --         utc' <- liftIO getCurrentTime
-        --         loop utc' str
-        --  
-{-# INLINABLE periods #-}  
-
-cutoff_ final str = do
-    let loop s = do
-          utc' <- liftIO getCurrentTime
-          if utc' > final
-            then Return s
-            else case s of
-              Return r -> Return (Return r)
-              Effect m -> Effect (liftM loop m)
-              Step f   -> Step (fmap loop f)
-    loop str
+-- {-| Permit streamed actions to proceed unless the clock has run out.
+--
+-- -}
+-- period :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream f m (Stream f m r)
+-- period seconds str = do
+--     utc <- liftIO getCurrentTime
+--     let loop s = do
+--           utc' <- liftIO getCurrentTime
+--           if diffUTCTime utc' utc > (cutoff / 1000000000)
+--             then return s
+--             else case s of
+--               Return r -> Return (Return r)
+--               Effect m -> Effect (liftM loop m)
+--               Step f   -> Step (fmap loop f)
+--     loop str
+--   where
+--   cutoff = fromInteger (truncate (1000000000 * seconds))
+-- {-#INLINABLE period #-}
+--
+--
+-- {-| Divide a succession of phases according to a specified time interval. If time runs out
+--     while an action is proceeding, it is allowed to run to completion. The clock is only then
+--     restarted.
+-- -}
+-- periods :: (MonadIO m, Functor f) => Double -> Stream f m r -> Stream (Stream f m) m r
+-- periods seconds s = do
+--   utc <- liftIO getCurrentTime
+--   loop (addUTCTime cutoff utc) s
+--
+--   where
+--   cutoff = fromInteger (truncate (1000000000 * seconds)) / 1000000000
+--   loop final stream = do
+--     utc <- liftIO getCurrentTime
+--     if utc > final
+--       then loop (addUTCTime cutoff utc) stream
+--       else case stream of
+--         Return r  -> Return r
+--         Effect m  -> Effect $ liftM (loop final) m
+--         Step fstr -> Step $ fmap (periods seconds) (cutoff_ final (Step fstr))
+--
+--         -- do
+--         --   let sloop s = do
+--         --         utc' <- liftIO getCurrentTime
+--         --         if final < utc'
+--         --           then return s
+--         --           else case s of
+--         --             Return r -> Return (Return r)
+--         --             Effect m -> Effect (liftM sloop m)
+--         --             Step f   -> Step (fmap sloop f)
+--         --   Step (Step (fmap (fmap (periods seconds) . sloop) fstr))
+--           -- str <- m
+--           -- utc' <- liftIO getCurrentTime
+--           -- if diffUTCTime utc' utc > (cutoff / 1000000000)
+--           --   then return (loop utc' str)
+--           --   else return (loop utc str)
+--         -- Step fs   -> do
+--         --   let check str = do
+--         --         utc' <- liftIO getCurrentTime
+--         --         loop utc' str
+--         --
+-- {-# INLINABLE periods #-}
+--
+-- cutoff_ final str = do
+--     let loop s = do
+--           utc' <- liftIO getCurrentTime
+--           if utc' > final
+--             then Return s
+--             else case s of
+--               Return r -> Return (Return r)
+--               Effect m -> Effect (liftM loop m)
+--               Step f   -> Step (fmap loop f)
+--     loop str
