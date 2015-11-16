@@ -1489,17 +1489,6 @@ hello
 goodbye<Enter>
 goodbye
 
-    If the intended \"coalgebra\" is complicated it might be pleasant to 
-    write it with the state monad:
-
-> \state seed -> S.unfoldr  (runExceptT  . runStateT state) seed :: Monad m => StateT s (ExceptT r m) a -> s -> P.Producer a m r
-
->>> let state = do {n <- get ; if n >= 3 then lift (throwE "Got to three"); else put (n+1); return n}
->>> S.print $ S.unfoldr (runExceptT  . runStateT state) 0 
-0
-1
-2
-"Got to three"
 -}
 unfoldr :: Monad m 
         => (s -> m (Either r (a, s))) -> s -> Stream (Of a) m r
@@ -1522,12 +1511,6 @@ hello
 
 >>> S.sum $ do {yield 1; yield 2}
 3
-
->>> S.sum $ do {yield 1; lift $ putStrLn "/* 1 was yielded */"; yield 2; lift $ putStrLn "/* 2 was yielded */"}
-/* 1 was yielded */
-/* 2 was yielded */
-3
-
 
 >>> let prompt :: IO Int; prompt = putStrLn "Enter a number:" >> readLn 
 >>> S.sum $ do {lift prompt >>= yield ; lift prompt >>= yield ; lift prompt >>= yield}
