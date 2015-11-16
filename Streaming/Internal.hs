@@ -32,8 +32,6 @@ module Streaming.Internal (
     , mapsM_
     , run
     , distribute
-    , separate
-    , unseparate
     , groups
 --    , groupInL
     
@@ -44,10 +42,14 @@ module Streaming.Internal (
     -- , period
     -- , periods
     
-    -- * Zipping streams
+    -- * Zipping and unzipping streams
     , zipsWith
     , zips
+    , unzips
     , interleaves
+    , separate
+    , unseparate
+
     
     -- * Assorted Data.Functor.x help
     
@@ -758,7 +760,17 @@ unseparate str = destroyExposed
   (join . maps InR) 
   return 
 {-#INLINABLE unseparate #-}
-  
+
+
+unzips :: (Monad m, Functor f, Functor g) => 
+   Stream (Compose f g) m r ->  Stream f (Stream g m) r 
+unzips str = destroyExposed
+  str 
+  (\(Compose fgstr) -> Step (fmap (Effect . yields) fgstr))
+  (Effect . lift) 
+  return 
+{-#INLINABLE unzips #-}
+
 {-| Group layers in an alternating stream into adjoining sub-streams
     of one type or another. 
 =

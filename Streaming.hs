@@ -20,17 +20,19 @@ module Streaming
    maps,
    mapsM,
    distribute,
-   separate,
-   unseparate, 
    groups,
    
    -- * Inspecting a stream
    inspect,
    
-   -- * Zipping streams
-   zips,
+   
+   -- * Zipping and unzipping streams
    zipsWith,
+   zips,
+   unzips,
    interleaves,
+   separate,
+   unseparate,
    
    -- * Eliminating a 'Stream'
    iterTM,
