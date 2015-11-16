@@ -1002,11 +1002,15 @@ mapM f = loop where
 
 {-| Reduce a stream to its return value with a monadic action.
 
->>>  mapM_ Prelude.print $ each [1..3] >> return True
+>>> rest <- S.mapM_ Prelude.print $ S.splitAt 5 $ each [1..10] 
 1
 2
 3
-True
+4
+5
+>>> S.sum rest
+40 :> ()
+
 
 -}
 mapM_ :: Monad m => (a -> m b) -> Stream (Of a) m r -> m r
@@ -1622,11 +1626,17 @@ stdinLn = fromHandle IO.stdin
 
 {-| Read values from 'IO.stdin', ignoring failed parses
 
->>>  S.sum $ S.take 2 S.readLn :: IO Int
-3<Enter>
-#$%^&\^?<Enter>
-1000<Enter>
-1003
+>>> S.sum_ $ S.take 2 S.readLn :: IO Int
+10<Enter>
+12<Enter>
+22
+
+> S.sum $ S.take 2 S.readLn :: IO (Of Int ())
+10<Enter>
+1@#$%^&*(<Enter>
+12<Enter>
+22 :> ()
+
 -}
 
 readLn :: (MonadIO m, Read a) => Stream (Of a) m ()
@@ -1667,6 +1677,14 @@ toHandle handle = loop where
 {-# INLINABLE toHandle #-} 
 
 {-| Print the elements of a stream as they arise.
+
+>>> S.print $ S.take 2 S.stdinLn 
+hello
+"hello"
+world
+"world"
+>>> 
+
 -}
 print :: (MonadIO m, Show a) => Stream (Of a) m r -> m r
 print = loop where
@@ -1677,10 +1695,6 @@ print = loop where
       liftIO (Prelude.print a)
       loop rest
 
--- -- | Evaluate all values flowing downstream to WHNF
--- seq :: Monad m => Stream (Of a) m r -> Stream (Of a) m r
--- seq str = for str $ \a -> yield $! a
--- {-# INLINABLE seq #-}
 
 {-| Write 'String's to 'IO.stdout' using 'putStrLn'; terminates on a broken output pipe
     (compare 'Pipes.Prelude.stdoutLn').
@@ -1689,6 +1703,7 @@ print = loop where
 1
 2
 3
+
 -}
 stdoutLn :: MonadIO m => Stream (Of String) m () -> m ()
 stdoutLn = loop
@@ -1715,12 +1730,13 @@ stdoutLn = loop
     This does not handle a broken output pipe, but has a polymorphic return
     value, which makes this possible:
 
->>> rest <- stdoutLn' $ S.show $ S.splitAt 3 (each [1..5])
+>>> rest <- S.stdoutLn' $ S.show $ S.splitAt 3 (each [1..5])
 1
 2
 3
->>> S.sum rest  
-9
+>>> S.print rest
+4
+5
 
 -}
 
