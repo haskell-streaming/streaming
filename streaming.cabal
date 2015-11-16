@@ -84,7 +84,8 @@ library
                      , bytestring
                      , time
                      , resourcet
-                     , ghc-prim
+                     , exceptions
+                     
   default-language:  Haskell2010
   
 

@@ -86,6 +86,8 @@ import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime, addUTCTime
 
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
+import Control.Monad.Catch (MonadCatch (..))
+
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
@@ -225,6 +227,18 @@ instance (MonadBase b m, Functor f) => MonadBase b (Stream f m) where
 
 instance (MonadThrow m, Functor f) => MonadThrow (Stream f m) where
   throwM = lift . throwM 
+
+
+instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
+  catch str f = go str
+    where
+    go p = case p of
+      Step f      -> Step (fmap go f)
+      Return  r   -> Return r
+      Effect  m   -> Effect (catch (do
+          p' <- m
+          return (go p'))  
+       (\e -> return (f e)) )
 
 instance (MonadResource m, Functor f) => MonadResource (Stream f m) where
   liftResourceT = lift . liftResourceT
