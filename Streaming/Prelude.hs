@@ -438,22 +438,6 @@ chain f = loop where
 1
 2
 
-    @concat@ is not to be confused with the functor-general 
-
-> concats :: (Monad m, Functor f) => Stream (Stream f m) m r -> Stream f m r -- specializing
-
->>> S.stdoutLn $ concats $ maps (<* yield "--\n--") $ chunksOf 2 $ S.show (each [1..5])
-1
-2
---
---
-3
-4
---
---
-5
---
---
 -}
 
 concat :: (Monad m, Foldable.Foldable f) => Stream (Of (f a)) m r -> Stream (Of a) m r
