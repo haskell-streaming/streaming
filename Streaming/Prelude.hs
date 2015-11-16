@@ -83,7 +83,6 @@ module Streaming.Prelude (
     , chain
     , maps
     , sequence
-    , mapFoldable
     , filter
     , filterM
     , for
@@ -969,22 +968,6 @@ map f = maps (\(x :> rest) -> f x :> rest)
   --   Step (a :> as) -> Step (f a :> loop as)
 {-# INLINABLE map #-}
 
--- ---------------
--- mapFoldable
--- ---------------
-
-{-| For each element of a stream, stream a foldable container of elements instead; compare
-    'Pipes.Prelude.mapFoldable'.
-
-> mapFoldable f str = for str (\a -> each (f a))
-
->>> S.print $ S.mapFoldable show $ yield 12
-'1'
-'2'
-
--}
-mapFoldable :: (Monad m, Foldable.Foldable t) => (a -> t b) -> Stream (Of a) m r -> Stream (Of b) m r
-mapFoldable f str = for str (\a -> each (f a)) -- as in pipes
 
 {-| Replace each element of a stream with the result of a monadic action
 
