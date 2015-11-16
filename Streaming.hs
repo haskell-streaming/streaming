@@ -45,9 +45,9 @@ module Streaming
    chunksOf,
    concats,
    intercalates,
-   period,
-   periods,
-   
+   -- period,
+   -- periods,
+
    -- * Base functor for streams of individual items
    Of (..),
    lazily,

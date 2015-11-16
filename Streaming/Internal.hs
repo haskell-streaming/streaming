@@ -41,8 +41,8 @@ module Streaming.Internal (
     , chunksOf 
     , splitsAt
     , takes
-    , period
-    , periods
+    -- , period
+    -- , periods
     
     -- * Zipping streams
     , zipsWith
@@ -105,7 +105,7 @@ import Control.Monad.Trans.Resource
     \- or, in the producer case, 'Streaming.Prelude.next'
     The constructors are exported by the 'Internal' module.
 -}
-data Stream f m r = Step (f (Stream f m r))
+data Stream f m r = Step !(f (Stream f m r))
                   | Effect (m (Stream f m r))
                   | Return r
 #if __GLASGOW_HASKELL__ >= 710

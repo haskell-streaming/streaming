@@ -170,11 +170,12 @@ module Streaming.Prelude (
     -- , minimum
     -- , null
 
-    -- * Zips
+    -- * Zips and unzips
     , zip
     , zipWith
     , zip3
     , zipWith3
+    , unzip
     
     -- * Pair manipulation
     , lazily
@@ -207,7 +208,7 @@ import Text.Read (readMaybe)
 import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat, sum, product
                       , iterate, repeat, cycle, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
-                      , print, zipWith, zip, zipWith3, zip3, seq, show, read
+                      , print, zipWith, zip, zipWith3, zip3, unzip, seq, show, read
                       , readLn, sequence, concat, span, break, readFile, writeFile
                       , minimum, maximum, elem)
 
@@ -603,7 +604,7 @@ dropWhile pred = loop where
 400
 -}
 each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
-each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
+each = Foldable.foldr (\a p -> (Step (a :> p))) (Return ())
 {-# INLINABLE each #-}
 
 
@@ -791,13 +792,12 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 -}
 
 fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
-fold step begin done = fold_loop SPEC begin
+fold step begin done str = fold_loop str begin
   where
-    {-#INLINABLE fold_loop #-}
-    fold_loop !_ x stream = case stream of 
+    fold_loop stream x = case stream of 
       Return r         -> return (done x :> r)
-      Effect m         -> m >>= fold_loop SPEC x
-      Step (a :> rest) -> fold_loop SPEC (step x a) rest
+      Effect m         -> m >>= \str' -> fold_loop str' x
+      Step (a :> rest) -> fold_loop rest $! step x a
 {-# INLINABLE fold #-}
 
 
@@ -1875,14 +1875,30 @@ duplicate = loop where
 loop str = do 
   e <- lift (lift (next str))
   case e of
-    Left r -> return r
-    Right (a, rest) -> do
-      yield a 
-      mwrap $ do
-        yield a
-        return (loop rest)
+    Left r          -> Return r
+    Right (a, rest) -> Step (a :> Effect (Step (a :> Return (loop rest))))
 {-#INLINABLE duplicate#-}
 
+{-| The type
+
+> Data.List.unzip     :: [(a,b)] -> ([a],[b])
+
+   might lead us to expect 
+
+> Streaming.unzip :: Stream (Of (a,b)) m r -> Stream (Of a) m (Stream (Of b) m r)
+ 
+   which would not stream. 
+
+-}
+unzip :: Monad m =>  Stream (Of (a,b)) m r -> Stream (Of a) (Stream (Of b) m) r
+unzip = loop where
+ loop str = do 
+  e <- lift (lift (next str))
+  case e of
+    Left r              -> Return r
+    Right ((a,b), rest) -> Step (a :> Effect (Step (b :> Return (loop rest))))
+{-#INLINABLE unzip #-}
+    
 
 -- "fold/map" forall step begin done f str .
 -- fold step begin done (map f str) = fold (\x a -> step x $! f a) begin done str;
