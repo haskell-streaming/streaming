@@ -62,6 +62,7 @@ module Streaming.Prelude (
     , replicateM
     , enumFrom
     , enumFromThen
+    , seconds
     
     -- * Consuming streams of elements
     -- $consumers
@@ -1764,16 +1765,74 @@ stdoutLn' = loop where
     Step (s :> rest) -> liftIO (putStrLn s) >> loop rest
 {-# INLINE stdoutLn' #-}
 
+{-| Read a series of strings as lines to a file. The handle is crudely 
+    managed with 'ResourceT':
+
+>>> runResourceT $ S.writeFile "lines.txt" $ S.take 2 S.stdinLn
+hello<Enter>
+world<Enter>
+>>> runResourceT $ S.print $ S.readFile "lines.txt" 
+"hello"
+"world"
+
+-}
 
 readFile :: MonadResource m => FilePath -> Stream (Of String) m ()
 readFile f = bracketStream (IO.openFile f IO.ReadMode) (IO.hClose) fromHandle
 
+{-| Write a series of strings as lines to a file. The handle is crudely 
+    managed with 'ResourceT':
+
+>>> runResourceT $ S.writeFile "lines.txt" $ S.take 2 S.stdinLn
+hello<Enter>
+world<Enter>
+>>> runResourceT $ S.print $ S.readFile "lines.txt" 
+"hello"
+"world"
+
+-}
 writeFile :: MonadResource m => FilePath -> Stream (Of String) m r -> m r
 writeFile f str = do 
   (key, handle) <- allocate (IO.openFile f IO.WriteMode) (IO.hClose) 
   r <- toHandle handle str
   release key
   return r
+
+{-| Streams the number of seconds from the first start of the simple timer. 
+    The first time-difference yielded will minimally be the difference 
+    required to do 'getCurrentTime' twice. More control would be achieved
+    for example with 'S.repeatM (liftIO getCurrentTime)'
+  
+    Thus, to pair user input with times from the beginning of the whole action, 
+    we might write something like:
+
+>>> S.toList $ S.take 5 $ S.zip S.seconds S.stdinLn 
+a
+b
+c
+d
+e
+[(1.93e-4,"a"),(0.806553,"b"),(1.508497,"c"),(2.438644,"d"),(3.023582,"e")] :> ()
+
+   To restrict user input to some number of seconds, we might write:
+  
+>>> S.toList $ S.map snd $ S.zip (S.takeWhile (< 5) S.seconds) S.stdinLn  
+one
+two
+three
+four
+five
+["one","two","three","four","five"] :> ()
+  
+  -}
+  
+seconds :: MonadIO m => Stream (Of Double) m r
+seconds = do
+  utc <- liftIO getCurrentTime
+  map ((/1000000000) . nice utc) (repeatM (liftIO getCurrentTime))
+ where
+   nice u u' = fromIntegral $ truncate (1000000000 * diffUTCTime u' u)
+
 -- -- * Producers
 -- -- $producers
 --   stdinLn  -- 
@@ -1898,7 +1957,7 @@ unzip = loop where
     Left r              -> Return r
     Right ((a,b), rest) -> Step (a :> Effect (Step (b :> Return (loop rest))))
 {-#INLINABLE unzip #-}
-    
+
 
 -- "fold/map" forall step begin done f str .
 -- fold step begin done (map f str) = fold (\x a -> step x $! f a) begin done str;
