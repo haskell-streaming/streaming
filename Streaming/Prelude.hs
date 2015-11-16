@@ -480,8 +480,7 @@ cycle str = loop where loop = str >> loop
 {-#INLINABLE cycle #-}
 
 
-{-| Effect each element by the supplied number of seconds.
-mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
+{-| Delay each element by the supplied number of seconds.
 
 -}
 delay :: MonadIO m => Double -> Stream (Of a) m r -> Stream (Of a) m r
@@ -547,10 +546,14 @@ drop = loop where
 
 {- | Ignore elements of a stream until a test succeeds.
 
->>> IO.withFile "distribute.hs" IO.ReadMode $ S.stdoutLn . S.take 2 . S.dropWhile (isPrefixOf "import") . S.fromHandle
-main :: IO ()
-main = do
-
+> S.print $ S.dropWhile ((< 5) . length) S.stdinLn 
+one
+two
+hello
+"hello"
+world
+"world"
+^CInterrupted.
 
 -}
 dropWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
@@ -1188,7 +1191,15 @@ reread step s = loop where
 
 {-| Strict left scan, streaming, e.g. successive partial results.
 
-> Control.Foldl.purely scan :: Monad m => Fold a b -> Stream (Of a) m r -> Stream (Of b) m r
+
+>>> S.print $ S.scan (++) "" id $ each $ words "a b c d"
+""
+"a"
+"ab"
+"abc"
+"abcd"
+
+    'scan' is fitted for use with 'Control.Foldl'
 
 >>> S.print $ L.purely S.scan L.list $ each [3..5]
 []
@@ -1196,15 +1207,6 @@ reread step s = loop where
 [3,4]
 [3,4,5]
 
-  A simple way of including the scanned item with the accumulator is to use
-  'Control.Foldl.last'. See also 'Streaming.Prelude.scanned'
-
->>> let a >< b = (,) <$> a <*> b
->>> S.print $ L.purely S.scan (L.last >< L.sum) $ S.each [1..3]
-(Nothing,0)
-(Just 1,1)
-(Just 2,3)
-(Just 3,6)
 
 -}
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
