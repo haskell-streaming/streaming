@@ -397,15 +397,15 @@ breaks thus  = loop  where
 {-#INLINABLE breaks #-}
           
 
-{-| Apply an action to all values flowing downstream
+{-| Apply an action to all values, re-yielding each
 
-
->>> S.product (S.chain Prelude.print (S.each [2..4])) >>= Prelude.print
+>>> S.product $ S.chain Prelude.print $ S.each [1..5]
+1
 2
 3
-4f
-24 :> ()
-
+4
+5
+120 :> ()
 -}
 
 chain :: Monad m => (a -> m ()) -> Stream (Of a) m r -> Stream (Of a) m r
@@ -493,18 +493,13 @@ delay seconds = mapM go where
 -- ---------------
 
 {- | Reduce a stream, performing its actions but ignoring its elements. 
-     This might just be called @effects@ or @runEffects@.
+    
+>>> rest <- S.effects $ S.splitAt 2 $ each [1..5]
+>>> S.print rest
+3
+4
+5
 
->>> let effect = lift (putStrLn "Effect!")
->>> let stream = do {yield 1; effect; yield 2; effect; return (2^100)} 
-
->>> S.effects stream
-Effect!
-Effect!
-1267650600228229401496703205376
-
->>> S.effects $ S.takeWhile (<2) stream
-Effect!
 
 -}
 effects :: Monad m => Stream (Of a) m r -> m r
@@ -519,16 +514,15 @@ effects = loop where
    the return value. This is usually used at the type
 
 > drained :: Monad m => Stream (Of a) m (Stream (Of b) m r) -> Stream (Of a) m r
-
 > drained = join . fmap (lift . effects)
 
->>> let take' n = S.drained . S.splitAt n
->>> S.print $ concats $ maps (take' 1) $ S.group $ S.each "wwwwarrrrr"
-'w'
-'a'
-'r'
+>>> rest <- S.print $ S.drained $ S.splitAt 2 $ S.splitAt 5 $ each [1..7]
+1
+2
+>>> S.print rest
+6
+7
 
-    
 -}
 drained :: (Monad m, Monad (t m), Functor (t m), MonadTrans t) => t m (Stream (Of a) m r) -> t m r
 drained = join . fmap (lift . effects)
@@ -960,7 +954,12 @@ length = fold (\n _ -> n + 1) 0 id
 -- map
 -- ---------------
 
--- | Standard map on the elements of a stream.
+{-| Standard map on the elements of a stream.
+
+>>> S.stdoutLn $ S.map reverse $ each (words "alpha beta")
+ahpla
+ateb
+-}
 map :: Monad m => (a -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 map f = maps (\(x :> rest) -> f x :> rest)
   -- loop where
@@ -987,7 +986,16 @@ map f = maps (\(x :> rest) -> f x :> rest)
 mapFoldable :: (Monad m, Foldable.Foldable t) => (a -> t b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapFoldable f str = for str (\a -> each (f a)) -- as in pipes
 
--- | Replace each element of a stream with the result of a monadic action
+{-| Replace each element of a stream with the result of a monadic action
+
+>>> S.print $ S.mapM readIORef $ S.chain (\ior -> modifyIORef ior (*100)) $ S.mapM newIORef $ each [1..6]
+100
+200
+300
+400
+500
+600
+-}
 mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapM f = loop where
   loop str = case str of 
@@ -1002,15 +1010,18 @@ mapM f = loop where
 
 {-| Reduce a stream to its return value with a monadic action.
 
->>> rest <- S.mapM_ Prelude.print $ S.splitAt 5 $ each [1..10] 
+>>> S.mapM_ Prelude.print $ each [1..5]
 1
 2
 3
 4
 5
+>>> rest <- S.mapM_ Prelude.print $ S.splitAt 3 $ each [1..10]
+1
+2
+3
 >>> S.sum rest
-40 :> ()
-
+49 :> ()
 
 -}
 mapM_ :: Monad m => (a -> m b) -> Stream (Of a) m r -> m r
@@ -1649,10 +1660,10 @@ readLn = for stdinLn $ \str -> case readMaybe str of
 
     Terminates on end of input
 
->>> withFile "distribute.hs" ReadMode $ stdoutLn . S.take 3 . fromHandle
-import Streaming
-import qualified Streaming.Prelude as S
-import Control.Monad.Trans.State.Strict
+>>> IO.withFile "/usr/share/dict/words" IO.ReadMode $ S.stdoutLn . S.take 3 . S.drop 50000 .  S.fromHandle
+deflagrator
+deflate
+deflation
 
 -}
 fromHandle :: MonadIO m => IO.Handle -> Stream (Of String) m ()
@@ -1666,6 +1677,13 @@ fromHandle h = go
             go
 {-# INLINABLE fromHandle #-}     
 
+{-| Write a succession of strings to a handle as separate lines.
+
+>>> S.toHandle IO.stdout $ each $ words "one two three"
+one
+two
+three
+-}
 toHandle :: MonadIO m => IO.Handle -> Stream (Of String) m r -> m r
 toHandle handle = loop where
   loop str = case str of
@@ -1697,13 +1715,15 @@ print = loop where
 
 
 {-| Write 'String's to 'IO.stdout' using 'putStrLn'; terminates on a broken output pipe
-    (compare 'Pipes.Prelude.stdoutLn').
+    (This operation is modelled on 'Pipes.Prelude.stdoutLn').
 
->>> S.stdoutLn $ S.show (S.each [1..3])
-1
-2
-3
-
+>>> rest <- S.stdoutLn' $ S.splitAt 2 $ S.each $ words "one two three four"
+one
+two
+>>> S.print rest
+"three"
+"four"
+      
 -}
 stdoutLn :: MonadIO m => Stream (Of String) m () -> m ()
 stdoutLn = loop
