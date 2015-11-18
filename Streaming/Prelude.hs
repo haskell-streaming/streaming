@@ -12,6 +12,7 @@
     For the examples below, one sometimes needs
 
 > import Streaming.Prelude (each, yield, stdoutLn, stdinLn)
+> import Data.Function ((&)) 
 
    Other libraries that come up in passing are
 
@@ -316,16 +317,15 @@ snd' (a :> b) = b
 mapOf :: (a -> b) -> Of a r -> Of b r
 mapOf f (a:> b) = (f a :> b)
 
-{-| Break a sequence when a element falls under a predicate, keeping the rest of
-    the stream as the return value.
+{-| Break a sequence upon meeting element falls under a predicate, 
+    keeping it and the rest of the stream as the return value.
 
->>> rest <- S.print $ S.break even $ each [1,1,2,3]
+>>> rest <- each [1,1,2,3] & S.break even & S.print 
 1
 1
 >>> S.print rest
 2
 3
-
 
 -}
 
@@ -345,12 +345,18 @@ break pred = loop where
    and the element that breaks it will be included with the stream returned.
    This function is easiest to use with 'Control.Foldl.purely'
 
->>> rest <- S.print $ L.purely S.breakWhen L.sum even $ S.each [1,2,3,4]
+>>>  rest <- S.print $ L.purely S.breakWhen L.sum (>10) $ S.each [1..10]
 1
 2
->>> S.print rest
 3
 4
+>>> S.print rest
+5
+6
+7
+8
+9
+10
 
 -}
 breakWhen :: Monad m => (x -> a -> x) -> x -> (x -> b) -> (b -> Bool) -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
@@ -1192,21 +1198,20 @@ reread step s = loop where
 {-| Strict left scan, streaming, e.g. successive partial results.
 
 
->>> S.print $ S.scan (++) "" id $ each $ words "a b c d"
+>>> S.print $ S.scan (++) "" id $ each (words "a b c d")
 ""
 "a"
 "ab"
 "abc"
 "abcd"
 
-    'scan' is fitted for use with 'Control.Foldl'
+    'scan' is fitted for use with @Control.Foldl@, thus:
 
 >>> S.print $ L.purely S.scan L.list $ each [3..5]
 []
 [3]
 [3,4]
 [3,4,5]
-
 
 -}
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
@@ -1219,11 +1224,11 @@ scan step begin done = loop begin
         Step (a :> rest) -> do
           let !x' = step x a
           loop x' rest
-{-# INLINABLE[0] scan #-}
+{-# INLINABLE scan #-}
 
-{-| Strict, monadic left scan
-
-> Control.Foldl.impurely scanM :: Monad m => FoldM a m b -> Stream (Of a) m r -> Stream (Of b) m r
+{-| Strict left scan, accepting a monadic function. It can be used with
+    'FoldM's from @Control.Foldl@ using 'impurely'. Here we yield
+    a succession of vectors each recording 
 
 >>> let v =  L.impurely scanM L.vector $ each [1..4::Int] :: Stream (Of (U.Vector Int)) IO ()
 >>> S.print v
@@ -1352,10 +1357,7 @@ span pred = loop where
 {-| Split a stream of elements wherever a given element arises.
     The action is like that of 'Prelude.words'. 
 
->>> S.stdoutLn $ mapsM S.toList $ split ' ' "hello world  " 
-hello
-world
->>> Prelude.mapM_ Prelude.putStrLn (Prelude.words "hello world  ")
+>>> S.stdoutLn $ mapsM S.toList $ S.split ' ' $ each "hello world  "
 hello
 world
 
@@ -1397,9 +1399,15 @@ splitAt = splitsAt
     just a number of items from a stream of elements, but a number 
     of substreams and the like.
 
->>> S.print $ mapsM S.sum $ S.take 2 $ chunksOf 3 $ each [1..]
-6   -- sum of first group of 3
-15  -- sum of second group of 3
+>>> S.toList $ S.take 3 $ each "pennsylvania"
+"pen" :> ()
+
+>>> total <- S.sum_ $ S.take 3 S.readLn :: IO Int
+1<Enter>
+10<Enter>
+100<Enter>
+>>> print total
+111
 
 -}
 
