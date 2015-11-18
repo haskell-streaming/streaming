@@ -11,7 +11,7 @@ module Streaming.Internal (
     , replicates
     , repeats
     , repeatsM
-    , mwrap
+    , effect
     , wrap
     , yields
     
@@ -21,6 +21,7 @@ module Streaming.Internal (
     , iterT 
     , iterTM 
     , destroy 
+    , streamFold
     
     -- * Inspecting a stream wrap by wrap
     , inspect 
@@ -223,7 +224,7 @@ instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   {-# INLINE liftIO #-}
   
 instance (MonadBase b m, Functor f) => MonadBase b (Stream f m) where
-  liftBase  = mwrap . fmap return . liftBase
+  liftBase  = effect . fmap return . liftBase
 
 instance (MonadThrow m, Functor f) => MonadThrow (Stream f m) where
   throwM = lift . throwM 
@@ -280,36 +281,36 @@ destroy stream0 construct effect done = loop (unexposed stream0) where
 {-# INLINABLE destroy #-}
 
 
-{-| 'destroyWith' reorders the arguments of 'destroy' to be more akin
+{-| 'streamFold' reorders the arguments of 'destroy' to be more akin
     to @foldr@  It is more convenient to query in ghci to figure out
     what kind of \'algebra\' you need to write.
 
->>> :t destroyWith join return
+>>> :t streamFold return join 
 (Monad m, Functor f) => 
      (f (m a) -> m a) -> Stream f m a -> m a        -- iterT
->>> :t destroyWith (join . lift) return
+>>> :t streamFold return (join . lift)
 (Monad m, Monad (t m), Functor f, MonadTrans t) =>
      (f (t m a) -> t m a) -> Stream f m a -> t m a  -- iterTM
->>> :t destroyWith effect return
+>>> :t streamFold return effect 
 (Monad m, Functor f, Functor f1) =>
      (f (Stream f1 m r) -> Stream f1 m r) -> Stream f m r -> Stream f1 m r
->>> :t destroyWith effect return (wrap . lazily)
+>>> :t streamFold effect return (wrap . lazily)
 Monad m => 
      Stream (Of a) m r -> Stream ((,) a) m r
->>> :t destroyWith effect return (wrap . strictly)
+>>> :t streamFold effect return (wrap . strictly)
 Monad m => 
      Stream ((,) a) m r -> Stream (Of a) m r
->>> :t destroyWith Data.ByteString.Streaming.effect return  
+>>> :t streamFold Data.ByteString.Streaming.effect return  
 (Monad m, Functor f) =>
      (f (ByteString m r) -> ByteString m r) -> Stream f m r -> ByteString m r
->>> :t destroyWith Data.ByteString.Streaming.effect return (\(a:>b) -> consChunk a b) 
+>>> :t streamFold Data.ByteString.Streaming.effect return (\(a:>b) -> consChunk a b) 
 Monad m => 
      Stream (Of B.ByteString) m r -> ByteString m r -- fromChunks
 -}
-destroyWith
+streamFold
   :: (Functor f, Monad m) =>
-     (m b -> b) -> (r -> b) -> (f b -> b) -> Stream f m r -> b
-destroyWith effect done construct stream  = destroy stream construct effect done
+     (r -> b) -> (m b -> b) ->  (f b -> b) -> Stream f m r -> b
+streamFold done effect construct stream  = destroy stream construct effect done
 
 -- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
 construct
@@ -643,8 +644,8 @@ unexposed = Effect . loop where
 
 
 
-mwrap :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
-mwrap = Effect
+effect :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
+effect = Effect
 
 wrap :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
 wrap = Step
@@ -762,8 +763,8 @@ hoist S.effects $ separate odd_even :: Monad n => Stream (Of Int) n ()
 separate :: (Monad m, Functor f, Functor g) => Stream (Sum f g) m r -> Stream f (Stream g m) r
 separate str = destroyExposed 
   str 
-  (\x -> case x of InL fss -> wrap fss; InR gss -> mwrap (yields gss))
-  (mwrap . lift) 
+  (\x -> case x of InL fss -> wrap fss; InR gss -> effect (yields gss))
+  (effect . lift) 
   return 
 {-#INLINABLE separate #-}
 

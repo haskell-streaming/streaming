@@ -12,7 +12,7 @@ module Streaming
    replicates,
    repeats,
    repeatsM,
-   mwrap,
+   effect,
    wrap,
    
    -- * Transforming streams
