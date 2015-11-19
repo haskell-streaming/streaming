@@ -1276,6 +1276,44 @@ scanned step begin done = loop Nothing' begin
 {-# INLINABLE scanned #-}
 
 
+{-| Streams the number of seconds from the beginning of action
+  
+    Thus, to mark times of user input we might write something like:
+
+>>> S.toList $ S.take 3 $ S.zip S.seconds S.stdinLn 
+a
+b
+c
+[(0.0,"a"),(1.088711,"b"),(3.7289649999999996,"c")] :> ()
+  
+   To restrict user input to some number of seconds, we might write:
+  
+>>> S.toList $ S.zipWith (flip const) (S.takeWhile (< 5) S.seconds) S.stdinLn
+one
+two
+three
+four
+five
+["one","two","three","four","five"] :> ()
+
+  -}
+  
+seconds :: Stream (Of Double) IO r
+seconds = do 
+    e <- lift $ next preseconds
+    case e of
+      Left r -> return r
+      Right (t, rest) -> do
+        yield 0
+        map (subtract t) rest
+ where      
+  preseconds :: Stream (Of Double) IO r
+  preseconds = do
+    utc <- liftIO getCurrentTime
+    map ((/1000000000) . nice utc) (repeatM getCurrentTime)
+   where
+     nice u u' = fromIntegral $ truncate (1000000000 * diffUTCTime u' u)
+
 -- ---------------
 -- sequence
 -- ---------------
@@ -1417,24 +1455,6 @@ takeWhile pred = loop where
     Effect m              -> Effect (liftM loop m)
     Return r              -> Return ()
 {-# INLINE takeWhile #-}
-
-{- Break a stream after the designated number of seconds.
-
-
->>> rest <- S.print $ S.timed 1 $ S.delay 0.3 $ S.each [1..]
-1
-2
-3
->>> S.print $ S.take 3 rest
-4
-5
-6
-
-
-
-
--}
-
 
 
 {-| Convert an effectful 'Stream (Of a)' into a list of @as@
@@ -1777,44 +1797,6 @@ writeFile f str = do
   r <- toHandle handle str
   release key
   return r
-
-{-| Streams the number of seconds from the beginning of action
-  
-    Thus, to mark times of user input we might write something like:
-
->>> S.toList $ S.take 3 $ S.zip S.seconds S.stdinLn 
-a
-b
-c
-[(0.0,"a"),(1.088711,"b"),(3.7289649999999996,"c")] :> ()
-  
-   To restrict user input to some number of seconds, we might write:
-  
->>> S.toList $ S.zipWith (flip const) (S.takeWhile (< 5) S.seconds) S.stdinLn
-one
-two
-three
-four
-five
-["one","two","three","four","five"] :> ()
-  
-  -}
-  
-seconds :: Stream (Of Double) IO r
-seconds = do 
-    e <- lift $ next preseconds
-    case e of
-      Left r -> return r
-      Right (t, rest) -> do
-        yield 0
-        map (subtract t) rest
- where      
-  preseconds :: Stream (Of Double) IO r
-  preseconds = do
-    utc <- liftIO getCurrentTime
-    map ((/1000000000) . nice utc) (repeatM getCurrentTime)
-   where
-     nice u u' = fromIntegral $ truncate (1000000000 * diffUTCTime u' u)
 
 -- -- * Producers
 -- -- $producers
