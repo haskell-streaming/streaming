@@ -38,6 +38,7 @@ module Streaming
    iterTM,
    iterT,
    destroy,
+   streamFold, 
    mapsM_,
    run,
 

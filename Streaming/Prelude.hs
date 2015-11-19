@@ -578,17 +578,11 @@ dropWhile pred = loop where
 
 {- | Stream the elements of a foldable container.
 
->>> S.print $ S.map (*100) $ each [1..3] 
+>>> each [1..3] & S.map (*100) & S.print
 100
 200
 300
 
->>> S.print $ S.map (*100) $ each [1..3] >> lift readLn >>= yield
-100
-200
-300
-4<Enter>
-400
 -}
 each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
 each = Foldable.foldr (\a p -> (Step (a :> p))) (Return ())
@@ -1635,11 +1629,13 @@ stdinLn = fromHandle IO.stdin
 12<Enter>
 22
 
-> S.sum $ S.take 2 S.readLn :: IO (Of Int ())
-10<Enter>
-1@#$%^&*(<Enter>
-12<Enter>
-22 :> ()
+>>> S.toList $ S.take 3 (S.readLn :: Stream (Of Int) IO ())
+1<Enter>
+2<Enter>
+1@#$%^&*\<Enter>
+3<Enter>
+[1,2,3] :> ()
+
 
 -}
 
@@ -1648,6 +1644,7 @@ readLn = for stdinLn $ \str -> case readMaybe str of
   Nothing -> return ()
   Just n  -> yield n
 {-# INLINABLE readLn #-}
+
 
 {-| Read 'String's from a 'IO.Handle' using 'IO.hGetLine'
 
@@ -1710,13 +1707,10 @@ print = loop where
 {-| Write 'String's to 'IO.stdout' using 'putStrLn'; terminates on a broken output pipe
     (This operation is modelled on 'Pipes.Prelude.stdoutLn').
 
->>> rest <- S.stdoutLn' $ S.splitAt 2 $ S.each $ words "one two three four"
+>>> S.stdoutLn $ S.take 3 $ S.each $ words "one two three four five"
 one
 two
->>> S.print rest
-"three"
-"four"
-      
+three
 -}
 stdoutLn :: MonadIO m => Stream (Of String) m () -> m ()
 stdoutLn = loop
