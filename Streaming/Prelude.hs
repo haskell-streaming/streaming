@@ -608,18 +608,11 @@ elem_ a = fold_ op False id where
 -- ------
 
 {-| An infinite stream of enumerable values, starting from a given value.
-   @Streaming.Prelude.enumFrom@ is more desirable that @each [x..]@ for 
-   the infinite case, because it has a polymorphic return type.
-   
->>> S.print $ S.take 3 $ S.enumFrom 'a'
-'a'
-'b'
-'c'
-
+    It is the same as `S.iterate succ`. 
    Because their return type is polymorphic, @enumFrom@ and @enumFromThen@
-   are useful for example with @zip@
+   (and @iterate@ are useful for example with @zip@
    and @zipWith@, which require the same return type in the zipped streams. 
-   With @each [1..]@ the following would be impossible.
+   With @each [1..]@ the following bit of connect-and-resume would be impossible:
 
 >>> rest <- S.print $  S.zip (S.enumFrom 'a') $ S.splitAt 3 $ S.enumFrom 1
 ('a',1)
@@ -629,9 +622,6 @@ elem_ a = fold_ op False id where
 4
 5
 6
-
-   Where a final element is specified, as in @each [1..10]@ a special combinator
-   is unneeded, since the return type would be @()@ anyway.
 
 -}
 enumFrom :: (Monad m, Enum n) => n -> Stream (Of n) m r
