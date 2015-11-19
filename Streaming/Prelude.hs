@@ -1788,25 +1788,19 @@ writeFile f str = do
   release key
   return r
 
-{-| Streams the number of seconds from the first start of the simple timer. 
-    The first time-difference yielded will minimally be the difference 
-    required to do 'getCurrentTime' twice. More control would be achieved
-    for example with 'S.repeatM (liftIO getCurrentTime)'
+{-| Streams the number of seconds from the beginning of action
   
-    Thus, to pair user input with times from the beginning of the whole action, 
-    we might write something like:
+    Thus, to mark times of user input we might write something like:
 
->>> S.toList $ S.take 5 $ S.zip S.seconds S.stdinLn 
+>>> S.toList $ S.take 3 $ S.zip S.seconds S.stdinLn 
 a
 b
 c
-d
-e
-[(1.93e-4,"a"),(0.806553,"b"),(1.508497,"c"),(2.438644,"d"),(3.023582,"e")] :> ()
-
+[(0.0,"a"),(1.088711,"b"),(3.7289649999999996,"c")] :> ()
+  
    To restrict user input to some number of seconds, we might write:
   
->>> S.toList $ S.map snd $ S.zip (S.takeWhile (< 5) S.seconds) S.stdinLn  
+>>> S.toList $ S.zipWith (flip const) (S.takeWhile (< 5) S.seconds) S.stdinLn
 one
 two
 three
@@ -1816,12 +1810,21 @@ five
   
   -}
   
-seconds :: MonadIO m => Stream (Of Double) m r
-seconds = do
-  utc <- liftIO getCurrentTime
-  map ((/1000000000) . nice utc) (repeatM (liftIO getCurrentTime))
- where
-   nice u u' = fromIntegral $ truncate (1000000000 * diffUTCTime u' u)
+seconds :: Stream (Of Double) IO r
+seconds = do 
+    e <- lift $ next preseconds
+    case e of
+      Left r -> return r
+      Right (t, rest) -> do
+        yield 0
+        map (subtract t) rest
+ where      
+  preseconds :: Stream (Of Double) IO r
+  preseconds = do
+    utc <- liftIO getCurrentTime
+    map ((/1000000000) . nice utc) (repeatM getCurrentTime)
+   where
+     nice u u' = fromIntegral $ truncate (1000000000 * diffUTCTime u' u)
 
 -- -- * Producers
 -- -- $producers
