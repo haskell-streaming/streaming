@@ -1523,16 +1523,16 @@ hello
 
 >>> S.sum $ do {yield 1; yield 2}
 3
-
+    
 >>> let prompt :: IO Int; prompt = putStrLn "Enter a number:" >> readLn 
->>> S.sum $ do {lift prompt >>= yield ; lift prompt >>= yield ; lift prompt >>= yield}
+>>> S.toList $ do {lift prompt >>= yield ; lift prompt >>= yield ; lift prompt >>= yield}
 Enter a number:
-3<Enter>
+12
 Enter a number:
-20<Enter>
+32
 Enter a number:
-100<Enter>
-123
+15
+[12,32,15] :> ()
 
 -}
 
