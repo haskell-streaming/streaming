@@ -320,7 +320,7 @@ mapOf f (a:> b) = (f a :> b)
 {-| Break a sequence upon meeting element falls under a predicate, 
     keeping it and the rest of the stream as the return value.
 
->>> rest <- each [1,1,2,3] & S.break even & S.print 
+>>> rest <- S.print $ S.break even $ each [1,1,2,3] 
 1
 1
 >>> S.print rest
@@ -342,10 +342,10 @@ break pred = loop where
 
 {-| Yield elements, using a fold to maintain state, until the accumulated 
    value satifies the supplied predicate. The fold will then be short-circuited 
-   and the element that breaks it will be included with the stream returned.
+   and the element that breaks it will be put after the break.
    This function is easiest to use with 'Control.Foldl.purely'
 
->>>  rest <- S.print $ L.purely S.breakWhen L.sum (>10) $ S.each [1..10]
+>>>  rest <- each [1..10] & L.purely S.breakWhen L.sum (>10) & S.print 
 1
 2
 3
@@ -377,30 +377,30 @@ breakWhen step begin done pred = loop0 begin
             loop a' (step x a') rest
 {-# INLINABLE breakWhen #-}
 
-{- Break during periods where the predicate is not satisfied, grouping the periods when it is. 
-
->>> S.print $ mapsM S.toList $ S.breaks not $ S.each [False,True,True,False,True,True,False]
-[True,True]
-[True,True]
->>> S.print $ mapsM S.toList $ S.breaks id $ S.each [False,True,True,False,True,True,False]
-[False]
-[False]
-[False]
--}
-breaks
-  :: Monad m =>
-     (a -> Bool) -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
-breaks thus  = loop  where
-  loop stream = Effect $ do
-    e <- next stream
-    return $ case e of
-      Left   r      -> Return r
-      Right (a, p') -> 
-       if not (thus a)
-          then Step $ fmap loop (yield a >> break thus p')
-          else loop p'
-{-#INLINABLE breaks #-}
-          
+-- -- Break during periods where the predicate is not satisfied, grouping the periods when it is.
+--
+-- >>> S.print $ mapsM S.toList $ S.breaks not $ S.each [False,True,True,False,True,True,False]
+-- [True,True]
+-- [True,True]
+-- >>> S.print $ mapsM S.toList $ S.breaks id $ S.each [False,True,True,False,True,True,False]
+-- [False]
+-- [False]
+-- [False]
+--
+-- -}
+-- breaks
+--   :: Monad m =>
+--      (a -> Bool) -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
+-- breaks thus  = loop  where
+--   loop stream = Effect $ do
+--     e <- next stream
+--     return $ case e of
+--       Left   r      -> Return r
+--       Right (a, p') ->
+--        if not (thus a)
+--           then Step $ fmap loop (yield a >> break thus p')
+--           else loop p'
+-- {-#INLINABLE breaks #-}
 
 {-| Apply an action to all values, re-yielding each
 
@@ -433,13 +433,16 @@ chain f = loop where
 'y'
 'z'
 
-    Note that it also has the effect of 'Data.Maybe.catMaybes' and 'Data.Either.rights'
-
+    Note that it also has the effect of 'Data.Maybe.catMaybes', 'Data.Either.rights'
+    'map snd' and such-like operations.
 
 >>> S.print $ S.concat $ S.each [Just 1, Nothing, Just 2]
 1
 2
 >>> S.print $  S.concat $ S.each [Right 1, Left "Error!", Right 2]
+1
+2
+>>> S.print $ S.concat $ S.each [('A',1), ('B',2)]
 1
 2
 
@@ -470,7 +473,7 @@ cons a str = Step (a :> str)
 
 > cycle = forever
 
->>> rest <- S.print $ S.splitAt 3 $ S.cycle (yield True >> yield False)
+>>> rest <- S.print $ S.splitAt 3 $ S.cycle (yield 0 >> yield 1)
 True
 False
 True
@@ -942,9 +945,8 @@ groupBy equals = loop  where
 >>> S.toList $ concats $ maps (S.drained . S.splitAt 1) $ S.group $ each "baaaaaaad"
 "bad" :> ()
 
-
 -}
-group :: (Monad m, Eq a)  => Stream (Of a) m r -> Stream (Stream (Of a) m) m r                
+group :: (Monad m, Eq a) => Stream (Of a) m r -> Stream (Stream (Of a) m) m r                
 group = groupBy (==)
 
 
@@ -952,7 +954,11 @@ group = groupBy (==)
 -- iterate
 -- ---------------
 
--- | Iterate a pure function from a seed value, streaming the results forever
+{-| Iterate a pure function from a seed value, streaming the results forever
+    
+
+
+-}
 iterate :: (a -> a) -> a -> Stream (Of a) m r
 iterate f = loop where
   loop a' = Step (a' :> loop (f a'))
