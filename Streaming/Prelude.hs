@@ -109,7 +109,7 @@ module Streaming.Prelude (
     , uncons
     , splitAt
     , split
-    , breaks
+--    , breaks
     , break
     , breakWhen
     , span
@@ -421,7 +421,7 @@ chain f = loop where
     Step (a :> rest) -> Effect $ do
       f a
       return (Step (a :> loop rest))
-{-# INLINE chain #-}
+{-# INLINABLE chain #-}
 
 {-| Make a stream of traversable containers into a stream of their separate elements.
     This is just 
@@ -489,12 +489,23 @@ cycle str = loop where loop = str >> loop
 {-#INLINABLE cycle #-}
 
 
-{-| Delay each element by the supplied number of seconds.
+{-| A
+
 
 -}
 delay :: MonadIO m => Double -> Stream (Of a) m r -> Stream (Of a) m r
-delay seconds = mapM go where
-  go a = liftIO (threadDelay (truncate (seconds * 1000000))) >> return a
+delay seconds = loop where
+  pico = truncate (seconds * 1000000)
+  loop str = do 
+    e <- lift $ next str
+    case e of
+      Left r -> Return r
+      Right (a,rest) -> do
+        yield a
+        liftIO $ threadDelay pico
+        loop rest
+{-#INLINABLE delay #-}
+
 -- ---------------
 -- effects
 -- ---------------
@@ -1080,23 +1091,32 @@ mconcat :: (Monad m, Monoid w) => Stream (Of w) m r -> m (Of w r)
 mconcat = fold mappend mempty id
 {-#INLINE mconcat #-}
 
+data Maybe_ a = Just_ !a | Nothing_
 mconcat_ :: (Monad m, Monoid w) => Stream (Of w) m r -> m w
 mconcat_ = fold_ mappend mempty id
 
 minimum :: (Monad m, Ord a) => Stream (Of a) m r -> m (Of (Maybe a) r)
-minimum = fold (\m a -> case m of Nothing -> Just a ; Just a' -> Just (min a a')) Nothing id
+minimum = fold (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (min a a')) 
+               Nothing_
+               (\m -> case m of Nothing_ -> Nothing; Just_ r -> Just r)
 {-#INLINE minimum #-}
 
 minimum_ :: (Monad m, Ord a) => Stream (Of a) m r -> m (Maybe a) 
-minimum_ = fold_ (\m a -> case m of Nothing -> Just a ; Just a' -> Just (min a a')) Nothing id
+minimum_ = fold_ (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (min a a')) 
+                 Nothing_
+                 (\m -> case m of Nothing_ -> Nothing; Just_ r -> Just r)
 {-#INLINE minimum_ #-}
 
 maximum :: (Monad m, Ord a) => Stream (Of a) m r -> m (Of (Maybe a) r)
-maximum = fold (\m a -> case m of Nothing -> Just a ; Just a' -> Just (max a a')) Nothing id
+maximum = fold (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (max a a')) 
+               Nothing_
+               (\m -> case m of Nothing_ -> Nothing; Just_ r -> Just r)
 {-#INLINE maximum #-}
 
 maximum_ :: (Monad m, Ord a) => Stream (Of a) m r -> m (Maybe a)
-maximum_ = fold_ (\m a -> case m of Nothing -> Just a ; Just a' -> Just (max a a')) Nothing id
+maximum_ = fold_ (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (max a a')) 
+                 Nothing_
+                 (\m -> case m of Nothing_ -> Nothing; Just_ r -> Just r)
 {-#INLINE maximum_ #-}
 
 {-| The standard way of inspecting the first item in a stream of elements, if the
@@ -1970,11 +1990,10 @@ duplicate
   :: Monad m =>
      Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
 duplicate = loop where
-loop str = do 
-  e <- lift (lift (next str))
-  case e of
-    Left r          -> Return r
-    Right (a, rest) -> Step (a :> Effect (Step (a :> Return (loop rest))))
+  loop str = case str of
+    Return r         -> Return r
+    Effect m         -> Effect (liftM loop (lift m))
+    Step (a :> rest) -> Step (a :> Effect (Step (a :> Return (loop rest))))
 {-#INLINABLE duplicate#-}
 
 {-| The type
