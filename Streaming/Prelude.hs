@@ -115,7 +115,7 @@ module Streaming.Prelude (
     , span
     , group
     , groupBy
-    , groupedBy
+ --   , groupedBy
  --   , split
  
 
@@ -519,7 +519,9 @@ effects = loop where
 
 > drained :: Monad m => Stream (Of a) m (Stream (Of b) m r) -> Stream (Of a) m r
 > drained = join . fmap (lift . effects)
-
+ 
+   Here we split a stream twice and throw out the middle segment:
+ 
 >>> rest <- S.print $ S.drained $ S.splitAt 2 $ S.splitAt 5 $ each [1..7]
 1
 2
@@ -535,8 +537,26 @@ drained = join . fmap (lift . effects)
 -- ---------------
 -- drop
 -- ---------------
+{-|  Ignore the first n elements of a stream, but carry out the actions
 
--- | Ignore the first n elements of a stream, but carry out the actions
+>>> S.toList $ S.drop 2 $  S.replicateM 5 getLine 
+a<Enter>
+b<Enter>
+c<Enter>
+d<Enter>
+e<Enter>
+["c","d","e"] :> ()
+
+     Because it retains the final return value, @drop n@  is a suitable argument 
+     for @maps@:
+
+>>> S.toList $ concats $ maps (S.drop 4) $ chunksOf 5 $ each [1..20]
+[5,10,15,20] :> ()
+
+     
+
+  -}
+
 drop :: (Monad m) => Int -> Stream (Of a) m r -> Stream (Of a) m r
 drop = loop where
   loop 0 stream = stream
@@ -550,16 +570,17 @@ drop = loop where
 -- dropWhile
 -- ---------------
 
-{- | Ignore elements of a stream until a test succeeds.
+{- | Ignore elements of a stream until a test succeeds, retaining the rest.
 
-> S.print $ S.dropWhile ((< 5) . length) S.stdinLn 
-one
-two
-hello
-"hello"
-world
-"world"
+>>> S.print $ S.dropWhile ((< 5) . length) S.stdinLn 
+one<Enter>
+two<Enter>
+three<Enter>
+"three"
+four<Enter>
+"four"
 ^CInterrupted.
+
 
 -}
 dropWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
@@ -576,18 +597,29 @@ dropWhile pred = loop where
 -- each 
 -- ---------------
 
-{- | Stream the elements of a foldable container.
+{- | Stream the elements of a pure, foldable container.
 
->>> each [1..3] & S.map (*100) & S.print
-100
-200
-300
+>>> each [1..3] & S.print
+1
+2
+3
+>>> S.replicateM 5 getLine & chunksOf 3 & mapsM S.toList & S.print
+s
+t
+u
+["s","t","u"]
+v
+w
+["v","w"]
 
 -}
 each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
 each = Foldable.foldr (\a p -> (Step (a :> p))) (Return ())
 {-# INLINABLE each #-}
 
+{-| Exhaust a stream remembering only whether @a@ was an element.
+
+-}
 
 elem :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m (Of Bool r)
 elem a = fold op False id where
@@ -850,33 +882,42 @@ for str0 act = loop str0 where
       loop rest
 {-# INLINABLE for #-}
 
-{-| Group layers of any functor by comparisons on a preliminary annotation 
+-- -| Group layers of any functor by comparisons on a preliminary annotation 
 
--}
-groupedBy
-  :: (Monad m, Functor f) =>
-     (a -> a -> Bool)
-     -> Stream (Compose (Of a) f) m r
-     -> Stream (Stream (Compose (Of a) f) m) m r
-groupedBy equals = loop  where
-  loop stream = Effect $ do
-        e <- inspect stream
-        return $ case e of
-            Left   r      -> Return r
-            Right s@(Compose (a :> p')) -> Step $
-                fmap loop (Step $ Compose (a :> fmap (span' (equals a)) p'))
-  span' :: (Monad m, Functor f) => (a -> Bool) -> Stream (Compose (Of a) f) m r
-        -> Stream (Compose (Of a) f) m (Stream (Compose (Of a) f) m r)
-  span' pred = loop where
-    loop str = case str of
-      Return r         -> Return (Return r)
-      Effect m          -> Effect $ liftM loop m
-      Step s@(Compose (a :> rest)) -> case pred a  of
-        True  -> Step (Compose (a :> fmap loop rest))
-        False -> Return (Step s)
-{-# INLINABLE groupedBy #-}   
+-- groupedBy
+--   :: (Monad m, Functor f) =>
+--      (a -> a -> Bool)
+--      -> Stream (Compose (Of a) f) m r
+--      -> Stream (Stream (Compose (Of a) f) m) m r
+-- groupedBy equals = loop  where
+--   loop stream = Effect $ do
+--         e <- inspect stream
+--         return $ case e of
+--             Left   r      -> Return r
+--             Right s@(Compose (a :> p')) -> Step $
+--                 fmap loop (Step $ Compose (a :> fmap (span' (equals a)) p'))
+--   span' :: (Monad m, Functor f) => (a -> Bool) -> Stream (Compose (Of a) f) m r
+--         -> Stream (Compose (Of a) f) m (Stream (Compose (Of a) f) m r)
+--   span' pred = loop where
+--     loop str = case str of
+--       Return r         -> Return (Return r)
+--       Effect m          -> Effect $ liftM loop m
+--       Step s@(Compose (a :> rest)) -> case pred a  of
+--         True  -> Step (Compose (a :> fmap loop rest))
+--         False -> Return (Step s)
+-- {-# INLINABLE groupedBy #-}
 
-{-| Group elements of a stream by comparisons on a preliminary annotation 
+{-| Group elements of a stream in accordance with the supplied comparison. 
+
+
+>>> S.print $ mapsM S.toList $ S.groupBy (>=) $ each [1,2,3,1,2,3,4,3,2,4,5,6,7,6,5]
+[1]
+[2]
+[3,1,2,3]
+[4,3,2,4]
+[5]
+[6]
+[7,6,5]
 
 -}
 groupBy :: Monad m  
@@ -892,6 +933,17 @@ groupBy equals = loop  where
                 fmap loop (yield a >> span (equals a) p')
 {-# INLINABLE groupBy #-}               
 
+
+{-| Group successive equal items together
+
+>>> S.toList $ mapsM S.toList $ S.group $ each "baaaaad"
+["b","aaaaa","d"] :> ()
+
+>>> S.toList $ concats $ maps (S.drained . S.splitAt 1) $ S.group $ each "baaaaaaad"
+"bad" :> ()
+
+
+-}
 group :: (Monad m, Eq a)  => Stream (Of a) m r -> Stream (Stream (Of a) m) m r                
 group = groupBy (==)
 
@@ -1010,14 +1062,20 @@ mapM_ f = loop where
       loop as 
 {-# INLINABLE mapM_ #-}
 
+{-| Fold streamed items into their monoidal sum
 
+>>> S.mconcat $ S.take 2 $ S.map (Data.Monoid.Last . Just) (S.stdinLn)
+first<Enter>
+last<Enter>
+Last {getLast = Just "last"} :> ()
+
+ -}
 mconcat :: (Monad m, Monoid w) => Stream (Of w) m r -> m (Of w r)
 mconcat = fold mappend mempty id
 {-#INLINE mconcat #-}
 
 mconcat_ :: (Monad m, Monoid w) => Stream (Of w) m r -> m w
 mconcat_ = fold_ mappend mempty id
-
 
 minimum :: (Monad m, Ord a) => Stream (Of a) m r -> m (Of (Maybe a) r)
 minimum = fold (\m a -> case m of Nothing -> Just a ; Just a' -> Just (min a a')) Nothing id
@@ -1099,7 +1157,16 @@ product = fold (*) 1 id
 -- read
 -- ---------------
 
--- | Make a stream of strings into a stream of parsed values, skipping bad cases
+{- | Make a stream of strings into a stream of parsed values, skipping bad cases
+
+>>> S.sum_ $ S.read $ S.takeWhile (/= "total") S.stdinLn :: IO Int
+1000<Enter>
+2000<Enter>
+total<Enter>
+3000
+
+
+-}
 read :: (Monad m, Read a) => Stream (Of String) m r -> Stream (Of a) m r
 read stream = for stream $ \str -> case readMaybe str of 
   Nothing -> return ()
@@ -1124,10 +1191,10 @@ repeat a = loop where loop = Step (a :> loop)
 
 {-| Repeat a monadic action /ad inf./, streaming its results.
 
->>>  S.toListM $ S.take 2 (repeatM getLine)
-hello<Enter>
-world<Enter>
-["hello","world"]
+>>>  S.toList $ S.take 2 $ repeatM getLine
+one<Enter>
+two<Enter>
+["one","two"]
 -}
 
 repeatM :: Monad m => m a -> Stream (Of a) m r
@@ -1524,15 +1591,16 @@ hello
 >>> S.sum $ do {yield 1; yield 2}
 3
     
->>> let prompt :: IO Int; prompt = putStrLn "Enter a number:" >> readLn 
->>> S.toList $ do {lift prompt >>= yield ; lift prompt >>= yield ; lift prompt >>= yield}
+>>> let prompt = putStrLn "Enter a number:" 
+>>> let number = lift (prompt >> readLn) >>= yield :: Stream (Of Int) IO ()
+>>> S.toList $ do {number; number; number}
 Enter a number:
-12
+1
 Enter a number:
-32
+2
 Enter a number:
-15
-[12,32,15] :> ()
+3
+[1,2,3] :> ()
 
 -}
 
