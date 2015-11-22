@@ -189,7 +189,7 @@ instance (Functor f, Monad m) => Applicative (Stream f m) where
   pure = Return
   {-# INLINE pure #-}
   streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)}   
-  {-# INLINABLE (<*>) #-}    
+  {-# INLINE (<*>) #-}    
   -- stra0 *> strb = loop stra0 where
   --   loop stra = case stra of
   --     Return _ -> strb
@@ -229,9 +229,12 @@ instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   
 instance (MonadBase b m, Functor f) => MonadBase b (Stream f m) where
   liftBase  = effect . fmap return . liftBase
-
+  {-#INLINE liftBase #-}
+  
 instance (MonadThrow m, Functor f) => MonadThrow (Stream f m) where
   throwM = lift . throwM 
+  {-#INLINE throwM #-}
+  
 
 
 instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
@@ -244,10 +247,12 @@ instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
           p' <- m
           return (go p'))  
        (\e -> return (f e)) )
-
+  {-#INLINABLE catch #-}
+       
 instance (MonadResource m, Functor f) => MonadResource (Stream f m) where
   liftResourceT = lift . liftResourceT
-
+  {-#INLINE liftResourceT #-}
+  
 bracketStream :: (Functor f, MonadResource m) =>
        IO a -> (a -> IO ()) -> (a -> Stream f m b) -> Stream f m b
 bracketStream alloc free inside = do
@@ -259,7 +264,8 @@ bracketStream alloc free inside = do
         Return r -> Effect (release key >> return (Return r))
         Effect m -> Effect (liftM loop m)
         Step f   -> Step (fmap loop f)
-
+{-#INLINABLE bracketStream #-}
+        
 {-| Map a stream directly to its church encoding; compare @Data.List.foldr@
     It permits distinctions that should be hidden, as can be seen from
     e.g. 
@@ -315,6 +321,7 @@ streamFold
   :: (Functor f, Monad m) =>
      (r -> b) -> (m b -> b) ->  (f b -> b) -> Stream f m r -> b
 streamFold done effect construct stream  = destroy stream construct effect done
+{-#INLINE streamFold #-}
 
 -- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
 construct
@@ -438,8 +445,8 @@ run = loop where
 {-| Map each layer to an effect in the base monad, and run them all.
 -}
 mapsM_ :: (Functor f, Monad m) => (forall x . f x -> m x) -> Stream f m r -> m r
-mapsM_ f str = run (maps f str)
-{-# INLINABLE mapsM_ #-}
+mapsM_ f = run . maps f 
+{-# INLINE mapsM_ #-}
 
 
 {-| Interpolate a layer at each segment. This specializes to e.g.
@@ -650,9 +657,11 @@ unexposed = Effect . loop where
 
 effect :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
 effect = Effect
+{-#INLINE effect #-}
 
 wrap :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
 wrap = Step
+{-#INLINE wrap #-}
 
 
 {-| Lift for items in the base functor. Makes a singleton or
@@ -664,6 +673,7 @@ wrap = Step
 
 yields ::  (Monad m, Functor f) => f r -> Stream f m r
 yields fr = Step (fmap Return fr)
+{-#INLINE yields #-}
 
 
 zipsWith :: (Monad m, Functor h) 
