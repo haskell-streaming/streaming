@@ -148,6 +148,8 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
       Step f   -> Step (fmap loop f)    
   {-# INLINABLE (>>) #-}
   (>>=) = _bind
+  {-#INLINE (>>=) #-}
+  
   -- stream >>= f = 
   --   loop stream where
   --   loop stream0 = case stream0 of
@@ -157,7 +159,8 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
   -- {-# INLINABLE (>>=) #-}                         
 
   fail = lift . fail
-
+  {-#INLINE fail #-}
+  
 
 _bind
     :: (Functor f, Monad m)
@@ -169,7 +172,8 @@ _bind p0 f = go p0 where
       Step fstr  -> Step (fmap go fstr)
       Effect m   -> Effect (m >>= \s -> return (go s))
       Return r  -> f r
-
+{-#INLINABLE[0] _bind #-}
+      
 {-# RULES
     "_bind (Step    fstr) f" forall  fstr f .
         _bind (Step fstr) f = Step (fmap (\p -> _bind p f) fstr);
