@@ -88,6 +88,7 @@ module Streaming.Prelude (
     , filterM
     , for
     , delay
+    , intersperse
     , take
     , takeWhile
 --    , takeWhile'
@@ -211,7 +212,7 @@ import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat,
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
                       , print, zipWith, zip, zipWith3, zip3, unzip, seq, show, read
                       , readLn, sequence, concat, span, break, readFile, writeFile
-                      , minimum, maximum, elem)
+                      , minimum, maximum, elem, intersperse)
 
 import qualified GHC.IO.Exception as G
 import qualified System.IO as IO
@@ -959,7 +960,23 @@ groupBy equals = loop  where
 -}
 group :: (Monad m, Eq a) => Stream (Of a) m r -> Stream (Stream (Of a) m) m r                
 group = groupBy (==)
+{-#INLINE group #-}
 
+
+intersperse :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
+intersperse x str = case str of
+    Return r -> Return r
+    Effect m -> Effect (liftM (intersperse x) m)
+    Step (a :> rest) -> loop a rest
+  where
+  loop !a str = case str of
+    Return r -> Step (a :> Return r)
+    Effect m -> Effect (liftM (loop a) m)
+    Step (b :> rest) -> Step (a :> Step (x :> loop b rest))
+{-#INLINABLE intersperse #-}
+    
+    
+  
 
 -- ---------------
 -- iterate
@@ -1294,13 +1311,13 @@ reread step s = loop where
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 scan step begin done = loop begin
   where
-    loop !x stream = Step $ 
-      done x :>  case stream of 
+    loop !x stream = case stream of 
         Return r -> Return r
         Effect m  -> Effect $ liftM (loop x) m
-        Step (a :> rest) -> do
-          let !x' = step x a
-          loop x' rest
+        Step (a :> rest) -> Step (
+          done x :>  do
+            let !x' = step x a
+            loop x' rest)
 {-# INLINABLE scan #-}
 
 {-| Strict left scan, accepting a monadic function. It can be used with
@@ -1326,10 +1343,14 @@ scanM step begin done str = do
       yield b
       case stream of 
         Return r -> Return r
-        Effect m  -> Effect $ liftM (loop x) m
-        Step (a :> rest) -> do
-          x' <- lift $ step x a
-          loop x' rest
+        Effect m  -> Effect (do 
+          stream' <- m
+          return (loop x stream')
+          )
+        Step (a :> rest) -> Effect (do
+          x' <- step x a
+          return (loop x' rest)
+          )
 {-# INLINABLE scanM #-}
 
 {- Label each element in a stream with a value accumulated according to a fold.
@@ -1481,14 +1502,13 @@ world
 split :: (Eq a, Monad m) =>
       a -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
 split t  = loop  where
-  loop stream = do
-    e <- lift $ next stream
-    case e of
-        Left   r      ->  Return r
-        Right (a, p') -> 
+  loop stream = case stream of 
+    Return r -> Return r
+    Effect m -> Effect (liftM loop m)
+    Step (a :> rest) -> 
          if a /= t
-            then Step $ fmap loop (yield a >> break (== t) p')
-            else loop p'
+            then Step (fmap loop (yield a >> break (== t) rest))
+            else loop rest
 {-#INLINABLE split #-}
 
 {-| Split a succession of layers after some number, returning a streaming or
@@ -1503,7 +1523,7 @@ splitAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m
 splitAt = splitsAt
 {-# INLINE splitAt #-}
 
-          
+
 -- ---------------
 -- take
 -- ---------------
@@ -1598,11 +1618,11 @@ goodbye
 unfoldr :: Monad m 
         => (s -> m (Either r (a, s))) -> s -> Stream (Of a) m r
 unfoldr step = loop where
-  loop s0 = Effect $ do 
+  loop s0 = Effect (do 
     e <- step s0
     case e of
       Left r      -> return (Return r)
-      Right (a,s) -> return (Step (a :> loop s))
+      Right (a,s) -> return (Step (a :> loop s)))
 {-# INLINABLE unfoldr #-}
 
 -- ---------------------------------------
@@ -2004,16 +2024,15 @@ duplicate = loop where
 
 > Streaming.unzip :: Stream (Of (a,b)) m r -> Stream (Of a) m (Stream (Of b) m r)
  
-   which would not stream. 
+   which would not stream. Of course, neither does 'Data.List.unzip'
 
 -}
 unzip :: Monad m =>  Stream (Of (a,b)) m r -> Stream (Of a) (Stream (Of b) m) r
 unzip = loop where
- loop str = do 
-  e <- lift (lift (next str))
-  case e of
-    Left r              -> Return r
-    Right ((a,b), rest) -> Step (a :> Effect (Step (b :> Return (loop rest))))
+ loop str = case str of 
+   Return r -> Return r
+   Effect m -> Effect (liftM loop (lift m))
+   Step ((a,b):> rest) -> Step (a :> Effect (Step (b :> Return (loop rest))))
 {-#INLINABLE unzip #-}
 
 
