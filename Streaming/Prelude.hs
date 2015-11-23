@@ -823,7 +823,16 @@ filterM pred = loop where
 (10,10,[10])
 -}
 
-{-| Strict fold of a 'Stream' of elements
+{-| Strict fold of a 'Stream' of elements, preserving only the result of the fold, not
+    the return value of the stream.  The third parameter will often be 'id' where a fold
+    is written by hand:
+
+>>> S.fold_ (+) 0 id $ each [1..10]
+55 
+    
+    It can be used to replace a standard Haskell type with one more suited to 
+    writing a strict accumulation function. It is also crucial to the 
+    Applicative instance for @Control.Foldl.Fold@
 
 > Control.Foldl.purely fold :: Monad m => Fold a b -> Stream (Of a) m () -> m b
 -}
@@ -832,23 +841,35 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 {-#INLINE fold_ #-}
 
 {-| Strict fold of a 'Stream' of elements that preserves the return value. 
+    The third parameter will often be 'id' where a fold is written by hand:
 
-    The type provides for interoperation with the foldl library; the extra function
-    parameter 
+>>> S.fold (+) 0 id $ each [1..10]
+55 :> ()
 
-> Control.Foldl.purely fold :: Monad m => Fold a b -> Stream (Of a) m r -> m (Of b r)
+>>> S.fold (*) 1 id $ S.fold (+) 0 id $ S.duplicate $ each [1..10]
+3628800 :> (55 :> ())
+
+>>> S.fold (*) 1 id $ S.fold_ (+) 0 id $ S.duplicate $ each [1..10]
+3628800 :> 55 
+
+    It can be used to replace a standard Haskell type with one more suited to 
+    writing a strict accumulation function. It is also crucial to the 
+    Applicative instance for @Control.Foldl.Fold@  We can apply such a fold
+    @purely@
+
+> Control.Foldl.purely S.fold :: Monad m => Fold a b -> Stream (Of a) m r -> m (Of b r)
 
     Thus, specializing a bit:
 
-> L.purely fold L.sum :: Stream (Of Int) Int r -> m (Of Int r)
-> maps (L.purely fold L.sum) :: Stream (Stream (Of Int)) IO r -> Stream (Of Int) IO r
+> L.purely S.fold L.sum :: Stream (Of Int) Int r -> m (Of Int r)
+> maps (L.purely S.fold L.sum) :: Stream (Stream (Of Int)) IO r -> Stream (Of Int) IO r
 
+>>> S.print $ mapsM (L.purely S.fold (liftA3 (,,) L.list L.product L.sum)) $ chunksOf 3 $ each [1..10]
+([1,2,3],6,6)
+([4,5,6],120,15)
+([7,8,9],504,24)
+([10],10,10)
 
->>> S.print $ mapsM (L.purely S.fold (liftA2 (,) L.list L.sum)) $ chunksOf 3 $ each [1..10]
-([1,2,3],6)
-([4,5,6],15)
-([7,8,9],24)
-([10],10)
 -}
 
 fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
