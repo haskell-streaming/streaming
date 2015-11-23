@@ -833,21 +833,8 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 
 {-| Strict fold of a 'Stream' of elements that preserves the return value. 
 
->>> S.sum $ each [1..10]
-55 :> ()
-
->>> (n :> rest)  <- S.sum $ S.splitAt 3 (each [1..10])
->>> print n
-6
->>> (m :> rest') <- S.sum $ S.splitAt 3 rest
->>> print m
-15
->>> S.print rest'
-7
-8
-9
-
-    The type provides for interoperation with the foldl library.
+    The type provides for interoperation with the foldl library; the extra function
+    parameter 
 
 > Control.Foldl.purely fold :: Monad m => Fold a b -> Stream (Of a) m r -> m (Of b r)
 
@@ -1553,6 +1540,22 @@ sum_ = fold_ (+) 0 id
 {-| Fold a 'Stream' of numbers into their sum with the return value
 
 >  maps' sum' :: Stream (Stream (Of Int)) m r -> Stream (Of Int) m r
+
+
+>>> S.sum $ each [1..10]
+55 :> ()
+
+>>> (n :> rest)  <- S.sum $ S.splitAt 3 $ each [1..10]
+>>> print n
+6
+>>> (m :> rest') <- S.sum $ S.splitAt 3 rest
+>>> print m
+15
+>>> S.print rest'
+7
+8
+9
+
 -}
 sum :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
 sum = fold (+) 0 id
