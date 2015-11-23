@@ -85,6 +85,7 @@ library
                      , time
                      , resourcet
                      , exceptions
+                     , containers
                      
   default-language:  Haskell2010
   

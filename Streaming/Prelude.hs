@@ -84,6 +84,7 @@ module Streaming.Prelude (
     , chain
     , maps
     , sequence
+    , nub
     , filter
     , filterM
     , for
@@ -136,10 +137,20 @@ module Streaming.Prelude (
     , fold_
     , foldM
     , foldM_
+    , all
+    , all_
+    , any
+    , any_
     , sum
     , sum_
     , product
     , product_
+    , head
+    , head_
+    , last,
+    , last_
+    , elem
+    , elem_
     , length
     , length_
     , toList
@@ -150,8 +161,6 @@ module Streaming.Prelude (
     , minimum_
     , maximum
     , maximum_
-    , elem
-    , elem_
     , foldrM
     , foldrT
     
@@ -212,7 +221,7 @@ import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat,
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
                       , print, zipWith, zip, zipWith3, zip3, unzip, seq, show, read
                       , readLn, sequence, concat, span, break, readFile, writeFile
-                      , minimum, maximum, elem, intersperse)
+                      , minimum, maximum, elem, intersperse, all, any, head, last)
 
 import qualified GHC.IO.Exception as G
 import qualified System.IO as IO
@@ -225,7 +234,7 @@ import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
 import Data.Functor.Classes
 import Data.Functor.Compose
 import Control.Monad.Trans.Resource
-
+import qualified Data.Set as Set
 
 import GHC.Exts ( SpecConstrAnnotation(..) )
 
@@ -318,6 +327,52 @@ snd' (a :> b) = b
 mapOf :: (a -> b) -> Of a r -> Of b r
 mapOf f (a:> b) = (f a :> b)
 
+
+all :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m (Of Bool r)
+all thus = loop True where
+  loop b str = case str of
+    Return r -> return (b :> r)
+    Effect m -> m >>= loop b
+    Step (a :> rest) -> if thus a
+      then loop True rest
+      else do 
+        r <- effects rest
+        return (False :> r)
+{-#INLINABLE all #-}
+
+all_ :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m Bool
+all_ thus = loop True where
+  loop b str = case str of
+    Return r -> return b
+    Effect m -> m >>= loop b
+    Step (a :> rest) -> if thus a
+      then loop True rest
+      else return False
+{-#INLINABLE all_ #-}
+
+
+any :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m (Of Bool r)
+any thus = loop False where
+  loop b str = case str of
+    Return r -> return (b :> r)
+    Effect m -> m >>= loop b
+    Step (a :> rest) -> if thus a
+      then do 
+        r <- effects rest
+        return (True :> r)
+      else loop False rest
+{-#INLINABLE any #-}
+
+any_ :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m Bool
+any_ thus = loop False where
+  loop b str = case str of
+    Return r -> return b
+    Effect m -> m >>= loop b
+    Step (a :> rest) -> if thus a
+      then return True
+      else loop False rest 
+{-#INLINABLE any_ #-}
+     
 {-| Break a sequence upon meeting element falls under a predicate, 
     keeping it and the rest of the stream as the return value.
 
@@ -963,6 +1018,20 @@ group = groupBy (==)
 {-#INLINE group #-}
 
 
+head :: Monad m => Stream (Of a) m r -> m (Of (Maybe a) r)
+head str = case str of
+  Return r            -> return (Nothing :> r)
+  Effect m            -> m >>= head
+  Step (a :> rest)    -> effects rest >>= \r -> return (Just a :> r)
+{-#INLINABLE head #-}
+  
+head_ :: Monad m => Stream (Of a) m r -> m (Maybe a) 
+head_ str = case str of
+  Return r            -> return Nothing
+  Effect m            -> m >>= head_
+  Step (a :> rest)    -> return (Just a)
+{-#INLINABLE head_ #-}
+  
 intersperse :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
 intersperse x str = case str of
     Return r -> Return r
@@ -1001,6 +1070,29 @@ iterateM f = loop where
 {-# INLINABLE iterateM #-}
 
 
+
+last :: Monad m => Stream (Of a) m r -> m (Of (Maybe a) r)
+last = loop Nothing_ where
+  loop m str = case str of
+    Return r            -> case m of 
+      Nothing_ -> return (Nothing :> r)
+      Just_ a  -> return (Just a :> r)
+    Effect m            -> m >>= last
+    Step (a :> rest)  -> loop (Just_ a) rest
+{-#INLINABLE last #-}
+    
+
+
+last_ :: Monad m => Stream (Of a) m r -> m (Maybe a) 
+last_ = loop Nothing_ where
+  loop m str = case str of
+    Return r            -> case m of 
+      Nothing_ -> return Nothing 
+      Just_ a  -> return (Just a)
+    Effect m            -> m >>= last_
+    Step (a :> rest)  -> loop (Just_ a) rest
+ {-#INLINABLE last_ #-}
+    
 -- ---------------
 -- length
 -- ---------------
@@ -1166,21 +1258,14 @@ next = loop where
 {-# INLINABLE next #-}
 
 
-{-| Inspect the first item in a stream of elements, without a return value. 
-    @uncons@ provides convenient exit into another streaming type:
-
-> IOStreams.unfoldM uncons :: Stream (Of a) IO b -> IO (InputStream a)
-> Conduit.unfoldM uncons   :: Stream (Of a) m r -> Conduit.Source m a
-
--}
-uncons :: Monad m => Stream (Of a) m () -> m (Maybe (a, Stream (Of a) m ()))
-uncons = loop where
-  loop stream = case stream of
-    Return ()        -> return Nothing
-    Effect m          -> m >>= loop
-    Step (a :> rest) -> return (Just (a,rest))
-{-# INLINABLE uncons #-}
-
+nub :: (Monad m, Ord a) => Stream (Of a) m r -> Stream (Of a) m r
+nub = loop Set.empty where
+  loop !set stream = case stream of 
+    Return r         -> Return r
+    Effect m         -> Effect (liftM (loop set) m)
+    Step (a :> rest) -> if Set.member a set 
+      then loop set rest
+      else Step (a :> loop (Set.insert a set) rest)
 
 -- | Fold a 'Stream' of numbers into their product
 product_ :: (Monad m, Num a) => Stream (Of a) m () -> m a
@@ -1590,6 +1675,23 @@ toList_ = fold_ (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 toList :: Monad m => Stream (Of a) m r -> m (Of [a] r)
 toList = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 {-# INLINE toList #-}
+
+
+{-| Inspect the first item in a stream of elements, without a return value. 
+    @uncons@ provides convenient exit into another streaming type:
+
+> IOStreams.unfoldM uncons :: Stream (Of a) IO b -> IO (InputStream a)
+> Conduit.unfoldM uncons   :: Stream (Of a) m r -> Conduit.Source m a
+
+-}
+uncons :: Monad m => Stream (Of a) m () -> m (Maybe (a, Stream (Of a) m ()))
+uncons = loop where
+  loop stream = case stream of
+    Return ()        -> return Nothing
+    Effect m          -> m >>= loop
+    Step (a :> rest) -> return (Just (a,rest))
+{-# INLINABLE uncons #-}
+
 
 {-| Build a @Stream@ by unfolding steps starting from a seed. 
 
