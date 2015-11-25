@@ -1,7 +1,10 @@
-{-| This module is very closely modeled on Pipes.Prelude; it attempts to 
-    simplify and optimize the conception of Producer manipulation contained
-    in Pipes.Group, Pipes.Parse and the like. This is very simple and unmysterious;
-    it is independent of piping and conduiting, and can be used with any 
+{-| This module is very closely modeled on Pipes.Prelude, Pipes.Group and Pipes.Parse. It
+    maybe said to give independent expression to the conception of Producer manipulation 
+    articulated in the latter two modules. Because we dispense with piping and 
+    conduiting, the distinction between all of these modules collapses. 
+    The leading type is chosen to permit an api that is as close as possible to that 
+    of Data.List and the Prelude. Thecan 
+    be used with any 
     rational \"streaming IO\" system. 
 
     Import qualified thus:
@@ -147,7 +150,7 @@ module Streaming.Prelude (
     , product_
     , head
     , head_
-    , last,
+    , last
     , last_
     , elem
     , elem_
@@ -580,7 +583,7 @@ effects :: Monad m => Stream (Of a) m r -> m r
 effects = loop where
   loop stream = case stream of 
     Return r         -> return r
-    Effect m          -> m >>= loop 
+    Effect m         -> m >>= loop 
     Step (_ :> rest) -> loop rest
 {-#INLINABLE effects #-}
   
@@ -864,6 +867,9 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 > L.purely S.fold L.sum :: Stream (Of Int) Int r -> m (Of Int r)
 > maps (L.purely S.fold L.sum) :: Stream (Stream (Of Int)) IO r -> Stream (Of Int) IO r
 
+    Here we use the Applicative instance for @Control.Foldl.Fold@ to 
+    stream three-item segments of a stream together with their sums and products.
+
 >>> S.print $ mapsM (L.purely S.fold (liftA3 (,,) L.list L.product L.sum)) $ chunksOf 3 $ each [1..10]
 ([1,2,3],6,6)
 ([4,5,6],120,15)
@@ -875,7 +881,7 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
 fold step begin done str = fold_loop str begin
   where
-    fold_loop stream x = case stream of 
+    fold_loop stream !x = case stream of 
       Return r         -> return (done x :> r)
       Effect m         -> m >>= \str' -> fold_loop str' x
       Step (a :> rest) -> fold_loop rest $! step x a
@@ -895,6 +901,13 @@ foldM_ step begin done  = liftM (\(a:>rest) -> a) . foldM step begin done
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
 
 > Control.Foldl.impurely foldM' :: Monad m => FoldM a b -> Stream (Of a) m r -> m (b, r)
+
+   Thus to accumulate the elements of a stream as a vector, together with a random
+   element we might write:
+
+>>>  L.impurely S.foldM (liftA2 (,) L.vector L.random) $ each [1..10::Int] :: IO (Of (U.Vector Int,Maybe Int) ())
+([1,2,3,4,5,6,7,8,9,10],Just 9) :> ()
+
 -}
 foldM
     :: Monad m
@@ -1037,7 +1050,7 @@ head_ :: Monad m => Stream (Of a) m r -> m (Maybe a)
 head_ str = case str of
   Return r            -> return Nothing
   Effect m            -> m >>= head_
-  Step (a :> rest)    -> return (Just a)
+  Step (a :> rest)    -> effects rest >> return (Just a)
 {-#INLINABLE head_ #-}
   
 intersperse :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
@@ -1099,7 +1112,7 @@ last_ = loop Nothing_ where
       Just_ a  -> return (Just a)
     Effect m            -> m >>= last_
     Step (a :> rest)  -> loop (Just_ a) rest
- {-#INLINABLE last_ #-}
+{-#INLINABLE last_ #-}
     
 -- ---------------
 -- length
@@ -1404,13 +1417,11 @@ reread step s = loop where
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 scan step begin done = loop begin
   where
-    loop !x stream = case stream of 
-        Return r -> Return r
-        Effect m  -> Effect $ liftM (loop x) m
-        Step (a :> rest) -> Step (
-          done x :>  do
-            let !x' = step x a
-            loop x' rest)
+    loop !x stream = Step $ done x :> 
+        case stream of 
+          Return r -> Return r
+          Effect m  -> Effect $ liftM (loop x) m
+          Step (a :> rest) -> loop (step x a) rest
 {-# INLINABLE scan #-}
 
 {-| Strict left scan, accepting a monadic function. It can be used with
