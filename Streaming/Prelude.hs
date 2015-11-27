@@ -108,6 +108,7 @@ module Streaming.Prelude (
     , show
     , cons
     , duplicate
+    , store
 
     -- * Splitting and inspecting streams of elements
     , next
@@ -131,6 +132,7 @@ module Streaming.Prelude (
     , separate
     , unseparate
     , eitherToSum
+    , sumToEither
     , sumToCompose
     , composeToSum
     
@@ -2125,12 +2127,18 @@ distinguish :: (a -> Bool) -> Of a r -> Sum (Of a) (Of a) r
 distinguish predicate (a :> b) = if predicate a then InR (a :> b) else InL (a :> b)
 {-#INLINE distinguish #-}
 
+sumToEither ::Sum (Of a) (Of b) r ->  Of (Either a b) r 
+sumToEither s = case s of  
+  InL (a :> r) -> Left a :> r  
+  InR (b :> r) -> Right b :> r
+{-#INLINE sumToEither #-}
 
 eitherToSum :: Of (Either a b) r -> Sum (Of a) (Of b) r
 eitherToSum s = case s of  
   Left a :> r  -> InL (a :> r)
   Right b :> r -> InR (b :> r)
 {-#INLINE eitherToSum #-}
+
 composeToSum ::  Compose (Of Bool) f r -> Sum f f r
 composeToSum x = case x of 
   Compose (True :> f) -> InR f
@@ -2143,6 +2151,58 @@ sumToCompose x = case x of
   InL f -> Compose (False :> f)
 {-#INLINE sumToCompose #-}
 
+
+store
+  :: Monad m =>
+     (Stream (Of a) (Stream (Of a) m) r -> t) -> Stream (Of a) m r -> t
+store f x = f (duplicate x)
+{-#INLINE store #-}
+
+{-| Duplicate the content of stream, so that it can be acted on twice in different ways, 
+    but without breaking streaming. Where the action you are contemplating is
+    in each case a simple fold over the elements, or a selection of elements, 
+    then you are just the coupling of the folds
+    is more straightforwardly effected with `Control.Foldl`, e.g.
+
+>>> L.purely S.fold (liftA2 (,) L.sum L.product) $ each [1..10]
+(55,3628800) :> ()
+
+    rather than
+
+>>> S.sum $ S.product $ S.duplicate $ each [1..10]
+55 :> (3628800 :> ())
+
+    A @Control.Foldl@ fold can be altered to act on a selection of elements by 
+    using 'Control.Foldl.handles' on an appropriate lens. Some such 
+    manipulations are simpler and more 'Data.List'-like, using 'duplicate':
+
+>>> L.purely S.fold (liftA2 (,) (L.handles (filtered odd) L.sum) (L.handles (filtered even) L.product)) $ each [1..10]
+(25,3840) :> ()
+
+     becomes
+
+>>> S.sum $ S.filter odd $ S.product $ S.filter even $ S.duplicate $ each [1..10]
+25 :> (3840 :> ())
+
+    or using 'store' 
+
+>>> S.sum $ S.filter odd $ S.store (S.product . S.filter even) $ each [1..10]
+25 :> (3840 :> ())
+
+    But anything that fold of a @Stream (Of a) m r@ into e.g. an @m (Of b r)@
+    that has a constraint on @m@ that is carried over into @Stream f m@ - 
+    e.g. @Monad@, @MonadIO@, @MonadResource@, etc. can be used on the stream.
+    Thus, I can fold over different groupings of the original stream:
+
+>>>  (S.toList . mapsM S.toList . chunksOf 5) $  (S.toList . mapsM S.toList . chunksOf 3) $ S.duplicate $ each [1..10]
+[[1,2,3,4,5],[6,7,8,9,10]] :> ([[1,2,3],[4,5,6],[7,8,9],[10]] :> ())
+
+    The procedure can be iterated as one pleases, as one can see from this (otherwise unadvisable!) example:
+
+>>>  (S.toList . mapsM S.toList . chunksOf 4) $ (S.toList . mapsM S.toList . chunksOf 3) $ S.duplicate $ (S.toList . mapsM S.toList . chunksOf 2) $ S.duplicate $ each [1..12]
+[[1,2,3,4],[5,6,7,8],[9,10,11,12]] :> ([[1,2,3],[4,5,6],[7,8,9],[10,11,12]] :> ([[1,2],[3,4],[5,6],[7,8],[9,10],[11,12]] :> ()))
+
+-}
 duplicate
   :: Monad m =>
      Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
