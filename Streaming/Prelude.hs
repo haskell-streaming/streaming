@@ -1280,7 +1280,18 @@ next = loop where
     Step (a :> rest) -> return (Right (a,rest))
 {-# INLINABLE next #-}
 
+{-| Remove repeated elements from a Stream. 'nub' of course accumulates a 'Data.Set.Set' of
+    elements that have already been seen and should thus be used with care.
+ 
+>>> S.toList_ $ S.nub $ S.take 5 S.readLn :: IO ([Int])
+1<Enter>
+2<Enter>
+3<Enter>
+1<Enter>
+2<Enter>
+[1,2,3]
 
+-}
 nub :: (Monad m, Ord a) => Stream (Of a) m r -> Stream (Of a) m r
 nub = loop Set.empty where
   loop !set stream = case stream of 
@@ -2151,7 +2162,63 @@ sumToCompose x = case x of
   InL f -> Compose (False :> f)
 {-#INLINE sumToCompose #-}
 
+{-| Store the result of any suitable fold over a stream, keeping the stream for
+    further manipulation.
 
+>>> S.print $ S.store S.sum $ S.store S.product $ each [1..4]
+1
+2
+3
+4
+10 :> (24 :> ())
+
+   Here the sum (10) and the product (24) have been \'stored\' for use when 
+   finally we have traversed the stream. Needless to say, folds that you 
+   apply successively with @store@ are performed simultaneously, 
+   as they would be if, say, you linked them with @Control.Fold@:
+
+>>> L.impurely S.foldM (liftA3 (\a b c -> (b,c)) (L.sink print) (L.generalize L.sum) (L.generalize L.product)) $ each [1..4]
+1
+2
+3
+4
+(10,24) :> ()
+
+   This sort of fold fusion will generally be a bit faster, by a constant factor, 
+   than the succession of uses of 'store'. But 'store' is /much/ more powerful 
+   as you can see by reflecting on uses like this:
+
+>>> S.sum $ S.store (S.sum . mapsM S.product . chunksOf 2) $ S.store (S.product . mapsM S.sum . chunksOf 2 )$ each [1..6]
+21 :> (44 :> (231 :> ()))
+
+   which cannot be reproduced with any combination of lenses, @Control.Fold@ folds,
+   or the like. A number of prejudices conspire to make this seem impossible. 
+   (See also the discussion of 'duplicate'.)
+
+   'store' is intended to be used at types like these
+
+> storeM ::  (Monad m => Stream (Of a) m r -> m (Of b r)) 
+>         -> (Monad n => Stream (Of a) n r -> Stream (Of a) n (Of b r))
+> storeM = store
+>
+> storeMIO :: (MonadIO m => Stream (Of a) m r -> m (Of b r)) 
+>          -> ( MonadIO n => Stream (Of a) n r -> Stream (Of a) n (Of b r)
+> storeMIO = store
+
+    And similarly for other constraints that @Stream (Of a)@ inherits, like 'MonadResource'. 
+    Thus I can filter and write to one file, but nub and write to another: 
+
+>>> runResourceT $ (S.writeFile "hello2.txt" . S.nub) $ store (S.writeFile "hello.txt" . S.filter (/= "world")) $ each ["hello", "world", "goodbye", "world"]
+>>> :! cat hello.txt
+hello
+goodbye
+>>> :! cat hello2.txt
+hello
+world
+goodbye
+
+
+-}
 store
   :: Monad m =>
      (Stream (Of a) (Stream (Of a) m) r -> t) -> Stream (Of a) m r -> t
