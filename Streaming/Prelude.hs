@@ -593,7 +593,7 @@ effects = loop where
 > drained :: Monad m => Stream (Of a) m (Stream (Of b) m r) -> Stream (Of a) m r
 > drained = join . fmap (lift . effects)
  
-   Here we split a stream twice and throw out the middle segment:
+   Here we split a stream in two places and throw out the middle segment:
  
 >>> rest <- S.print $ S.drained $ S.splitAt 2 $ S.splitAt 5 $ each [1..7]
 1
