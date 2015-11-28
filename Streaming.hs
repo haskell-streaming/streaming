@@ -7,7 +7,6 @@ module Streaming
    -- * Constructing a 'Stream' on a base functor
    unfold,
    construct,
-   for,
    yields,
    replicates,
    repeats,
@@ -19,6 +18,7 @@ module Streaming
    decompose,
    maps,
    mapsM,
+   mapped, 
    distribute,
    groups,
    

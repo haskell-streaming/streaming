@@ -29,6 +29,7 @@ module Streaming.Internal (
     -- * Transforming streams
     , maps 
     , mapsM 
+    , mapped
     , decompose
     , mapsM_
     , run
@@ -391,6 +392,18 @@ mapsM phi = loop where
     Step f    -> Effect (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsM #-}
 
+{- | Map layers of one functor to another with a transformation involving the base monad
+     @maps@ is more fundamental than @mapped@, which is best understood as a convenience
+     for effecting this frequent composition:
+
+> mapped = mapsM 
+> mapsM phi = decompose . maps (Compose . phi)
+-}
+
+mapped :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
+mapped = mapsM
+{-#INLINE mapped #-}
+
 {-| Resort a succession of layers of the form @m (f x)@. Though @mapsM@ 
     is best understood as:
 
@@ -476,7 +489,7 @@ iterT out stream = destroyExposed stream out join return
 
 > concats stream = destroy stream join (join . lift) return
 
->>> S.print $ concats $ maps (cons 1776) $ chunksOf 2 (each [1..5])
+>>> S.print $ concats $ maps (cons 1776) $ chunksOf 2 $ each [1..5]
 1776
 1
 2

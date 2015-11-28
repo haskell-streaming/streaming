@@ -91,6 +91,7 @@ module Streaming.Prelude (
     , filter
     , filterM
     , for
+    , with
     , delay
     , intersperse
     , take
@@ -1775,6 +1776,31 @@ unfoldr step = loop where
       Right (a,s) -> return (Step (a :> loop s)))
 {-# INLINABLE unfoldr #-}
 
+-- ---------------------------------------
+-- with
+-- ---------------------------------------
+
+{-| Replace each element in a stream of individual Haskell values (a @Stream (Of a) m r@) with an associated 'functorial' step. 
+    
+> for str f  = concats (with str f)  
+> with str f = for str (yields . f)
+> with str f = maps (\(a:>r) -> r <$ f a) str
+
+>>> with (each [1..3]) (yield . show) & intercalates (yield "--") & S.stdoutLn
+1
+--
+2
+--
+3
+ -}
+with :: (Monad m, Functor f) => Stream (Of a) m r -> (a -> f x) -> Stream f m r
+with s f = loop s where
+  loop str = case str of 
+    Return r         -> Return r
+    Effect m         -> Effect (liftM loop m)
+    Step (a :> rest) -> Step (loop rest <$ f a)
+{-#INLINABLE with #-}
+    
 -- ---------------------------------------
 -- yield
 -- ---------------------------------------
