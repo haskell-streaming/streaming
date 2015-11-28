@@ -441,10 +441,10 @@ breakWhen step begin done pred = loop0 begin
 
 -- -- Break during periods where the predicate is not satisfied, grouping the periods when it is.
 --
--- >>> S.print $ mapsM S.toList $ S.breaks not $ S.each [False,True,True,False,True,True,False]
+-- >>> S.print $ mapped S.toList $ S.breaks not $ S.each [False,True,True,False,True,True,False]
 -- [True,True]
 -- [True,True]
--- >>> S.print $ mapsM S.toList $ S.breaks id $ S.each [False,True,True,False,True,True,False]
+-- >>> S.print $ mapped S.toList $ S.breaks id $ S.each [False,True,True,False,True,True,False]
 -- [False]
 -- [False]
 -- [False]
@@ -679,7 +679,7 @@ dropWhile pred = loop where
 1
 2
 3
->>> S.replicateM 5 getLine & chunksOf 3 & mapsM S.toList & S.print
+>>> S.replicateM 5 getLine & chunksOf 3 & mapped S.toList & S.print
 s
 t
 u
@@ -809,20 +809,20 @@ filterM pred = loop where
     All functions marked with an underscore omit 
     (e.g. @fold_@, @sum_@) the stream's return value in a left-strict pair.
     They are good for exiting streaming completely, 
-    but when you are, e.g. @mapsM@-ing over a @Stream (Stream (Of a) m) m r@, 
+    but when you are, e.g. @mapped@-ing over a @Stream (Stream (Of a) m) m r@, 
     which is to be compared with @[[a]]@. Specializing, we have e.g.
 
->  mapsM sum :: (Monad m, Num n) => Stream (Stream (Of Int)) IO () -> Stream (Of n) IO ()
->  mapsM (fold mappend mempty id) :: Stream (Stream (Of Int)) IO () -> Stream (Of Int) IO ()
+>  mapped sum :: (Monad m, Num n) => Stream (Stream (Of Int)) IO () -> Stream (Of n) IO ()
+>  mapped (fold mappend mempty id) :: Stream (Stream (Of Int)) IO () -> Stream (Of Int) IO ()
 
->>> S.print $ mapsM S.sum $ chunksOf 3 $ S.each [1..10]
+>>> S.print $ mapped S.sum $ chunksOf 3 $ S.each [1..10]
 6
 15
 24
 10
 
 >>> let three_folds = L.purely S.fold (liftA3 (,,) L.sum L.product L.list)
->>> S.print $ mapsM three_folds $ chunksOf 3 (each [1..10])
+>>> S.print $ mapped three_folds $ chunksOf 3 (each [1..10])
 (6,6,[1,2,3])
 (15,120,[4,5,6])
 (24,504,[7,8,9])
@@ -873,7 +873,7 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
     Here we use the Applicative instance for @Control.Foldl.Fold@ to 
     stream three-item segments of a stream together with their sums and products.
 
->>> S.print $ mapsM (L.purely S.fold (liftA3 (,,) L.list L.product L.sum)) $ chunksOf 3 $ each [1..10]
+>>> S.print $ mapped (L.purely S.fold (liftA3 (,,) L.list L.product L.sum)) $ chunksOf 3 $ each [1..10]
 ([1,2,3],6,6)
 ([4,5,6],120,15)
 ([7,8,9],504,24)
@@ -1004,7 +1004,7 @@ for str0 act = loop str0 where
 {-| Group elements of a stream in accordance with the supplied comparison. 
 
 
->>> S.print $ mapsM S.toList $ S.groupBy (>=) $ each [1,2,3,1,2,3,4,3,2,4,5,6,7,6,5]
+>>> S.print $ mapped S.toList $ S.groupBy (>=) $ each [1,2,3,1,2,3,4,3,2,4,5,6,7,6,5]
 [1]
 [2]
 [3,1,2,3]
@@ -1030,7 +1030,7 @@ groupBy equals = loop  where
 
 {-| Group successive equal items together
 
->>> S.toList $ mapsM S.toList $ S.group $ each "baaaaad"
+>>> S.toList $ mapped S.toList $ S.group $ each "baaaaad"
 ["b","aaaaa","d"] :> ()
 
 >>> S.toList $ concats $ maps (S.drained . S.splitAt 1) $ S.group $ each "baaaaaaad"
@@ -1133,7 +1133,7 @@ length_ = fold_ (\n _ -> n + 1) 0 id
 
 {-| Run a stream, keeping its length and its return value. 
 
->>> S.print $ mapsM S.length $ chunksOf 3 $ S.each [1..10]
+>>> S.print $ mapped S.length $ chunksOf 3 $ S.each [1..10]
 3
 3
 3
@@ -1627,7 +1627,7 @@ span pred = loop where
 {-| Split a stream of elements wherever a given element arises.
     The action is like that of 'Prelude.words'. 
 
->>> S.stdoutLn $ mapsM S.toList $ S.split ' ' $ each "hello world  "
+>>> S.stdoutLn $ mapped S.toList $ S.split ' ' $ each "hello world  "
 hello
 world
 
@@ -1719,7 +1719,7 @@ toList_ = fold_ (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 
 {-| Convert an effectful 'Stream' into a list alongside the return value
 
->  mapsM toListM :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m 
+>  mapped toListM :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m 
 -}
 toList :: Monad m => Stream (Of a) m r -> m (Of [a] r)
 toList = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
@@ -2226,7 +2226,7 @@ sumToCompose x = case x of
    But 'store' / 'duplicate' is /much/ more powerful, as you can see by reflecting on 
    uses like this:
 
->>> S.sum $ S.store (S.sum . mapsM S.product . chunksOf 2) $ S.store (S.product . mapsM S.sum . chunksOf 2 )$ each [1..6]
+>>> S.sum $ S.store (S.sum . mapped S.product . chunksOf 2) $ S.store (S.product . mapped S.sum . chunksOf 2 )$ each [1..6]
 21 :> (44 :> (231 :> ()))
 
    It will be clear that this cannot be reproduced with any combination of lenses, 
@@ -2316,12 +2316,12 @@ two
     e.g. @Monad@, @MonadIO@, @MonadResource@, etc. can be used on the stream.
     Thus, I can fold over different groupings of the original stream:
 
->>>  (S.toList . mapsM S.toList . chunksOf 5) $  (S.toList . mapsM S.toList . chunksOf 3) $ S.duplicate $ each [1..10]
+>>>  (S.toList . mapped S.toList . chunksOf 5) $  (S.toList . mapped S.toList . chunksOf 3) $ S.duplicate $ each [1..10]
 [[1,2,3,4,5],[6,7,8,9,10]] :> ([[1,2,3],[4,5,6],[7,8,9],[10]] :> ())
 
     The procedure can be iterated as one pleases, as one can see from this (otherwise unadvisable!) example:
 
->>>  (S.toList . mapsM S.toList . chunksOf 4) $ (S.toList . mapsM S.toList . chunksOf 3) $ S.duplicate $ (S.toList . mapsM S.toList . chunksOf 2) $ S.duplicate $ each [1..12]
+>>>  (S.toList . mapped S.toList . chunksOf 4) $ (S.toList . mapped S.toList . chunksOf 3) $ S.duplicate $ (S.toList . mapped S.toList . chunksOf 2) $ S.duplicate $ each [1..12]
 [[1,2,3,4],[5,6,7,8],[9,10,11,12]] :> ([[1,2,3],[4,5,6],[7,8,9],[10,11,12]] :> ([[1,2],[3,4],[5,6],[7,8],[9,10],[11,12]] :> ()))
 
 -}
