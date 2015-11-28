@@ -355,7 +355,8 @@ inspect = loop where
 
 -}
 unfold :: (Monad m, Functor f) 
-        => (s -> m (Either r (f s))) -> s -> Stream f m r
+        => (s -> m (Either r (f s))) 
+        -> s -> Stream f m r
 unfold step = loop where
   loop s0 = Effect $ do 
     e <- step s0
@@ -375,27 +376,6 @@ maps phi = loop where
     Step f    -> Step (phi (fmap loop f))
 {-# INLINABLE maps #-}
 
-
-
-
--- newtype NT g f = NT {runNT :: forall x . f x -> g x}
--- newtype NTM g m f = NTM {runNTM :: forall x . f x -> m (g x)}
--- compNTNT :: NT f g -> NT g h -> NT f h
--- compNTNT (NT f) (NT g) = NT (f . g)
--- compNTNTM :: Monad m => NT f g -> NTM g m h -> NTM f m h
--- compNTNTM (NT f) (NTM g) = NTM (liftM f . g)
--- compNTMNT :: Monad m =>  NTM f m g -> NT g h -> NTM f m h
--- compNTMNT (NTM f) (NT g) = NTM (f . g)
--- compNTMNTM ::  Monad m =>  NTM f m g -> NTM g m h -> NTM f m h
--- compNTMNTM (NTM f) (NTM g) = NTM (f <=< g)
---
--- {-# NOINLINE [0] mapsNT #-}
--- mapsNT :: (Functor f, Functor g, Monad m) => NT g f -> Stream f m r -> Stream g m r
--- mapsNT (NT phi) = loop where
---   loop stream = case stream of
---     Return r  -> Return r
---     Effect m   -> Effect (liftM loop m)
---     Step f    -> Step (phi (fmap loop f))
 
 {- | Map layers of one functor to another with a transformation involving the base monad
      @maps@ is more fundamental than @mapsM@, which is best understood as a convenience

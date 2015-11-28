@@ -2163,7 +2163,14 @@ sumToCompose x = case x of
 {-#INLINE sumToCompose #-}
 
 {-| Store the result of any suitable fold over a stream, keeping the stream for
-    further manipulation.
+    further manipulation. @store f = f . duplicate@ :
+
+>>> S.print $ S.store S.product $ each [1..4]
+1
+2
+3
+4
+24 :> ()
 
 >>> S.print $ S.store S.sum $ S.store S.product $ each [1..4]
 1
@@ -2173,9 +2180,11 @@ sumToCompose x = case x of
 10 :> (24 :> ())
 
    Here the sum (10) and the product (24) have been \'stored\' for use when 
-   finally we have traversed the stream. Needless to say, folds that you 
-   apply successively with @store@ are performed simultaneously, 
-   as they would be if, say, you linked them with @Control.Fold@:
+   finally we have traversed the stream with 'print' . Needless to say,
+   a second 'pass' is excluded conceptually, so the 
+   folds that you apply successively with @store@ are performed 
+   simultaneously, and in constant memory -- as they would be if, 
+   say, you linked them together with @Control.Fold@:
 
 >>> L.impurely S.foldM (liftA3 (\a b c -> (b,c)) (L.sink print) (L.generalize L.sum) (L.generalize L.product)) $ each [1..4]
 1
@@ -2184,16 +2193,18 @@ sumToCompose x = case x of
 4
 (10,24) :> ()
 
-   This sort of fold fusion will generally be a bit faster, by a constant factor, 
-   than the succession of uses of 'store'. But 'store' is /much/ more powerful 
-   as you can see by reflecting on uses like this:
+   Fusing folds after the fashion of @Control.Foldl@ will generally be a bit faster
+   than the corresponding succession of uses of 'store', but by
+   constant factor that will be completely dwarfed when any IO is at issue.
+
+   But 'store' / 'duplicate' is /much/ more powerful, as you can see by reflecting on 
+   uses like this:
 
 >>> S.sum $ S.store (S.sum . mapsM S.product . chunksOf 2) $ S.store (S.product . mapsM S.sum . chunksOf 2 )$ each [1..6]
 21 :> (44 :> (231 :> ()))
 
-   which cannot be reproduced with any combination of lenses, @Control.Fold@ folds,
-   or the like. A number of prejudices conspire to make this seem impossible. 
-   (See also the discussion of 'duplicate'.)
+   It will be clear that this cannot be reproduced with any combination of lenses, 
+   @Control.Fold@ folds, or the like.  (See also the discussion of 'duplicate'.)
 
    'store' is intended to be used at types like these
 
@@ -2205,8 +2216,9 @@ sumToCompose x = case x of
 >          -> ( MonadIO n => Stream (Of a) n r -> Stream (Of a) n (Of b r)
 > storeMIO = store
 
-    And similarly for other constraints that @Stream (Of a)@ inherits, like 'MonadResource'. 
-    Thus I can filter and write to one file, but nub and write to another: 
+    And similarly for other constraints that @Stream (Of a)@ inherits, 
+    like 'MonadResource'.  Thus I can filter and write to one file, but 
+    nub and write to another: 
 
 >>> runResourceT $ (S.writeFile "hello2.txt" . S.nub) $ store (S.writeFile "hello.txt" . S.filter (/= "world")) $ each ["hello", "world", "goodbye", "world"]
 >>> :! cat hello.txt
@@ -2226,17 +2238,34 @@ store f x = f (duplicate x)
 {-#INLINE store #-}
 
 {-| Duplicate the content of stream, so that it can be acted on twice in different ways, 
-    but without breaking streaming. Where the action you are contemplating is
-    in each case a simple fold over the elements, or a selection of elements, 
-    then you are just the coupling of the folds
-    is more straightforwardly effected with `Control.Foldl`, e.g.
+    but without breaking streaming. Thus, given: 
+
+>>> S.print $ each ["one","two"]
+"one"
+"two"
+>>> S.stdoutLn $ each ["one","two"]
+one
+two
+
+    I can as well do:
+
+>>> S.print $ S.stdoutLn $ S.duplicate $ each ["one","two"]
+one
+"one"
+two
+"two"
+
+    Where the actions you are contemplating are each simple folds over 
+    the elements, or a selection of elements, then the coupling of the 
+    folds is often more straightforwardly effected with `Control.Foldl`, 
+    e.g.
 
 >>> L.purely S.fold (liftA2 (,) L.sum L.product) $ each [1..10]
 (55,3628800) :> ()
 
     rather than
 
->>> S.sum $ S.product $ S.duplicate $ each [1..10]
+>>> S.sum $ S.product . S.duplicate $ each [1..10]
 55 :> (3628800 :> ())
 
     A @Control.Foldl@ fold can be altered to act on a selection of elements by 
