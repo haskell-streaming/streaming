@@ -89,30 +89,39 @@ import Control.Monad.Base
 import Control.Monad.Trans.Resource
 {- $stream
 
-    The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
-    succession of steps, where the form of the steps or 'commands' is 
-    specified by the first (functor) parameter. The present module exports
-    functions that pertain to that general case. So for example, if the
-    functor is 
+    The 'Stream' data type can be used to represent any effectful
+    succession of steps arising in some monad. 
+    The form of the steps is specified by the first (\"functor\") 
+    parameter in @Stream f m r@, the monad of effects by the second.
+    This module exports combinators that pertain to that general case.
+    Some of these are quite abstract and pervade any use of the library, 
+    e.g. 
 
-    > data Split r = Split r r
+>   maps ::   (forall x . f x -> g x)     -> Stream f m r -> Stream g m r  
+>   mapped :: (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r  
+>   hoist :: (forall x . m x -> n x) -> Stream f m r -> Stream f n r
+>   concats :: Stream (Stream f m) m r -> Stream f m r          
+           
+    (assuming here and thoughout that @m@ or @n@ satisfies a @Monad@ constraint, and
+    @f@ or @g@ a @Functor@ constraint.)
 
-    The @Stream Split m r@ will the type of binary trees with @r@ at the leaves
-    and in which each episode of branching results from an @m@-effect. 
-    
+    Others are surprisingly determinate in content:
+
+>   chunksOf :: Int -> Stream f m r -> Stream (Stream f m) m r
+>   splits :: 
 
 
-    In the simplest case, the base functor is @ (,) a @. Here the news 
-    or /command/ at each step is an /individual element of type/ @ a @, 
-    i.e. the command is a @yield@ statement.  The associated 
-    @Streaming@ 'Streaming.Prelude' 
-    uses the left-strict pair @Of a b@ in place of the Haskell pair @(a,b)@ 
+    One way to see that /any/ streaming library needs some such general type is
+    that it is required to represent the segmentation of a stream, and to
+    express the equivalents of @Prelude/Data.List@ combinators that involve
+    'lists of lists' and the like.  The module @Streaming.Prelude@ exports
+    combinators relating to 
 
+> Stream (Of a) m r
 
-and operations like e.g. 
+    where @Of a r = !a :> r@ is a left-strict pair.
 
-> chunksOf :: Monad m => Int -> Stream f m r -> Stream (Stream f m) m r
-> mapsM Streaming.Prelude.length' :: Stream (Stream (Of a) m) r -> Stream (Of Int) m r
+> mapped Streaming.Prelude.length :: Stream (Stream (Of a) m) r -> Stream (Of Int) m r
 
 -}
 

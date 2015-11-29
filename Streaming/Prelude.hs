@@ -855,8 +855,6 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 >>> S.fold (*) 1 id $ S.fold (+) 0 id $ S.duplicate $ each [1..10]
 3628800 :> (55 :> ())
 
->>> S.fold (*) 1 id $ S.fold_ (+) 0 id $ S.duplicate $ each [1..10]
-3628800 :> 55 
 
     It can be used to replace a standard Haskell type with one more suited to 
     writing a strict accumulation function. It is also crucial to the 
