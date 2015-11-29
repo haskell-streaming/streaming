@@ -6,7 +6,6 @@ module Streaming.Internal (
     Stream (..)
     
     -- * Introducing a stream
-    , construct 
     , unfold 
     , replicates
     , repeats
@@ -14,6 +13,8 @@ module Streaming.Internal (
     , effect
     , wrap
     , yields
+    , streamBuild 
+    , cycles
     
     -- * Eliminating a stream
     , intercalates 
@@ -84,7 +85,7 @@ import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
 import Data.Functor.Sum
-import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime, addUTCTime)
+-- import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime, addUTCTime)
 
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
@@ -268,18 +269,6 @@ bracketStream alloc free inside = do
 {-#INLINABLE bracketStream #-}
         
 {-| Map a stream directly to its church encoding; compare @Data.List.foldr@
-    It permits distinctions that should be hidden, as can be seen from
-    e.g. 
-
-isPure stream = destroy_ (const True) (const False) (const True)
-
-    and similar nonsense.  The crucial 
-    constraint is that the @m x -> x@ argument is an /Eilenberg-Moore algebra/.
-    See Atkey "Reasoning about Stream Processing with Effects"
-
-    The destroy exported by the safe modules is 
-
-destroy str = destroy (observe str)
 -}
 destroy
   :: (Functor f, Monad m) =>
@@ -294,29 +283,41 @@ destroy stream0 construct effect done = loop (unexposed stream0) where
 
 {-| 'streamFold' reorders the arguments of 'destroy' to be more akin
     to @foldr@  It is more convenient to query in ghci to figure out
-    what kind of \'algebra\' you need to write.
+    what kind of \'algebra\' you need to write. 
 
 >>> :t streamFold return join 
 (Monad m, Functor f) => 
      (f (m a) -> m a) -> Stream f m a -> m a        -- iterT
+
 >>> :t streamFold return (join . lift)
 (Monad m, Monad (t m), Functor f, MonadTrans t) =>
      (f (t m a) -> t m a) -> Stream f m a -> t m a  -- iterTM
+
 >>> :t streamFold return effect 
-(Monad m, Functor f, Functor f1) =>
-     (f (Stream f1 m r) -> Stream f1 m r) -> Stream f m r -> Stream f1 m r
->>> :t streamFold effect return (wrap . lazily)
-Monad m => 
-     Stream (Of a) m r -> Stream ((,) a) m r
->>> :t streamFold effect return (wrap . strictly)
-Monad m => 
-     Stream ((,) a) m r -> Stream (Of a) m r
->>> :t streamFold Data.ByteString.Streaming.effect return  
+(Monad m, Functor f, Functor g) =>
+     (f (Stream g m r) -> Stream g m r) -> Stream f m r -> Stream g m r
+
+>>> :t \f -> streamFold return effect (wrap . f)
+(Monad m, Functor f, Functor g) =>
+     (f (Stream g m a) -> g (Stream g m a))
+     -> Stream f m a -> Stream g m a                 -- maps
+
+>>> :t \f -> streamFold return effect (effect . liftM wrap . f)
+(Monad m, Functor f, Functor g) =>
+     (f (Stream g m a) -> m (g (Stream g m a)))
+     -> Stream f m a -> Stream g m a                 -- mapped
+
+    So for example, when we realize that
+
+>>> :t streamFold return Q.mwrap 
 (Monad m, Functor f) =>
-     (f (ByteString m r) -> ByteString m r) -> Stream f m r -> ByteString m r
->>> :t streamFold Data.ByteString.Streaming.effect return (\(a:>b) -> consChunk a b) 
-Monad m => 
-     Stream (Of B.ByteString) m r -> ByteString m r -- fromChunks
+   (f (Q.ByteString m a) -> Q.ByteString m a)
+   -> Stream f m a -> Q.ByteString m a
+
+   it is easy to see how to write @fromChunks@:
+
+>>> streamFold return Q.mwrap (\(a:>b) -> Q.chunk a >>  b)
+Monad m => Stream (Of B.ByteString) m a -> Q.ByteString m a -- fromChunks
 -}
 streamFold
   :: (Functor f, Monad m) =>
@@ -324,11 +325,14 @@ streamFold
 streamFold done effect construct stream  = destroy stream construct effect done
 {-#INLINE streamFold #-}
 
--- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
-construct
+{- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
+
+> destroy a b c (streamBuild psi)  = 
+-}
+streamBuild
   :: (forall b . (f b -> b) -> (m b -> b) -> (r -> b) -> b) ->  Stream f m r
-construct = \phi -> phi Step Effect Return
-{-# INLINE construct #-}
+streamBuild = \phi -> phi Step Effect Return
+{-# INLINE streamBuild #-}
 
 
 {-| Inspect the first stage of a freely layered sequence. 
@@ -367,7 +371,13 @@ unfold step = loop where
 {-# INLINABLE unfold #-}
 
 
--- | Map layers of one functor to another with a transformation
+{- | Map layers of one functor to another with a transformation. Compare
+     hoist, which has a similar effect on the 'monadic' parameter. 
+
+> maps id = id
+> maps f . maps g = maps (f . g)
+
+-}
 maps :: (Monad m, Functor f) 
      => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
 maps phi = loop where
@@ -397,7 +407,15 @@ mapsM phi = loop where
      for effecting this frequent composition:
 
 > mapped = mapsM 
-> mapsM phi = decompose . maps (Compose . phi)
+> mapsM phi = decompose . maps (Compose . phi)  
+
+     @mapped@ obeys these rules:
+
+> mapped return       = id
+> mapped f . mapped g = mapped (f <=< g)
+> map f . mapped g    = mapped (liftM f . g)
+> mapped f . map g    = mapped (f . g)
+
 -}
 
 mapped :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
@@ -435,7 +453,7 @@ run = loop where
 {-# INLINABLE run #-}
 
 
-{-| Map each layer to an effect in the base monad, and run them all.
+{-| Map each layer to an effect, and run them all.
 -}
 mapsM_ :: (Functor f, Monad m) => (forall x . f x -> m x) -> Stream f m r -> m r
 mapsM_ f = run . maps f 
@@ -447,7 +465,7 @@ mapsM_ f = run . maps f
 > intercalates :: (Monad m, Functor f) => Stream f m () -> Stream (Stream f m) m r -> Stream f m r
 -}
 intercalates :: (Monad m, Monad (t m), MonadTrans t) =>
-     t m a -> Stream (t m) m b -> t m b
+     t m x -> Stream (t m) m r -> t m r
 intercalates sep = go0
   where
     go0 f = case f of 
@@ -465,9 +483,9 @@ intercalates sep = go0
                 go1 f'
 {-# INLINABLE intercalates #-}
 
-{-| Specialized fold
+{-| Specialized fold following the usage of @Control.Monad.Trans.Free@
 
-> iterTM alg stream = destroy stream alg (join . lift) return
+> iterTM alg = streamFold return (join . lift)
 -}
 iterTM ::
   (Functor f, Monad m, MonadTrans t,
@@ -476,9 +494,9 @@ iterTM ::
 iterTM out stream = destroyExposed stream out (join . lift) return
 {-# INLINE iterTM #-}
 
-{-| Specialized fold
+{-| Specialized fold following the usage of @Control.Monad.Trans.Free@
 
-> iterT alg stream = destroy stream alg join return
+> iterT alg = streamFold return join alg 
 -}
 iterT ::
   (Functor f, Monad m) => (f (m a) -> m a) -> Stream f m a -> m a
@@ -486,18 +504,6 @@ iterT out stream = destroyExposed stream out join return
 {-# INLINE iterT #-}
 
 {-| Dissolves the segmentation into layers of @Stream f m@ layers.
-
-> concats stream = destroy stream join (join . lift) return
-
->>> S.print $ concats $ maps (cons 1776) $ chunksOf 2 $ each [1..5]
-1776
-1
-2
-1776
-3
-4
-1776
-5
 
 -}
 concats :: (Monad m, Functor f) => Stream (Stream f m) m r -> Stream f m r
@@ -516,6 +522,20 @@ concats  = loop where
 >>> S.print rest
 2
 3
+
+> splitAt 0 = return
+> splitAt n >=> splitAt m = splitAt (m+n)
+
+    Thus, e.g. 
+
+>>> rest <- S.print $ splitsAt 2 >=> splitsAt 2 $ each [1..5]
+1
+2
+3
+4
+>>> S.print rest
+5
+
 -}
 splitsAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
 splitsAt = loop where
@@ -528,15 +548,40 @@ splitsAt = loop where
           0 -> Return (Step fs)
           _ -> Step (fmap (loop (n-1)) fs)
 {-# INLINABLE splitsAt #-}  
-                      
+
+{- Functor-general take. 
+
+   @takes 3@ can take three individual values
+
+>>> S.print $ takes 3 $ each [1..]
+1
+2
+3
+
+
+    or three sub-streams
+
+>>> S.print $ mapped S.toList $ takes 3 $ chunksOf 2 $ each [1..]
+[1,2]
+[3,4]
+[5,6]
+
+   Or, using 'Data.ByteString.Streaming.Char' (here called @Q@),
+   three byte streams.
+
+>>> Q.stdout $ Q.unlines $ takes 3 $ Q.lines $ Q.chunk "a\nb\nc\nd\ne\nf"
+a
+b
+c
+
+-}
 takes :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
 takes n = void . splitsAt n
 {-# INLINE takes #-}                        
 
 {-| Break a stream into substreams each with n functorial layers. 
 
->>>  S.print $ maps' sum' $ chunksOf 2 $ each [1,1,1,1,1,1,1]
-2
+>>>  S.print $ mapped S.sum $ chunksOf 2 $ each [1,1,1,1,1]
 2
 2
 1
@@ -544,9 +589,9 @@ takes n = void . splitsAt n
 chunksOf :: (Monad m, Functor f) => Int -> Stream f m r -> Stream (Stream f m) m r
 chunksOf n0 = loop where
   loop stream = case stream of
-    Return r       -> Return r
-    Effect m        -> Effect (liftM loop m)
-    Step fs        -> Step $ Step $ fmap (fmap loop . splitsAt (n0-1)) fs
+    Return r  -> Return r
+    Effect m  -> Effect (liftM loop m)
+    Step fs   -> Step (Step (fmap (fmap loop . splitsAt (n0-1)) fs))
 {-# INLINABLE chunksOf #-}          
 
 {- | Make it possible to \'run\' the underlying transformed monad. 
@@ -579,12 +624,7 @@ replicates n f = splitsAt n (repeats f) >> return ()
 
 > cycles = forever
 
->>> S.print $ S.take 3 $ forever $ S.each "hi"
-'h'
-'i'
-'h'
-> S.sum $ S.take 13 $ forever $ S.each [1..3]
-25
+>>> 
 -}
  
 cycles :: (Monad m, Functor f) =>  Stream f m () -> Stream f m r
@@ -731,39 +771,24 @@ switch s = case s of InL a -> InR a; InR a -> InL a
     with the streaming on the other functor as the governing monad. This is
     useful for acting on one or the other functor with a fold.
   
->>> let odd_even = S.maps (S.distinguish even) $ S.each [1..10]
->>> :t S.effects $ separate odd_even
+>>> let odd_even = S.maps (S.distinguish even) $ S.each [1..10::Int]
+>>> :t separate odd_even
+separate odd_even
+  :: Monad m => Stream (Of Int) (Stream (Of Int) m) ()
 
     Now, for example, it is convenient to fold on the left and right values separately:
 
->>>  toListM' $ toList' (separate odd_even)
+>>>  toList $ toList $ separate odd_even
 [2,4,6,8,10] :> ([1,3,5,7,9] :> ())
->>>  S.toListM' $ S.print $ separate $  odd_even
-1
-3
-5
-7
-9
-[2,4,6,8,10] :> ()
-  
-    We can easily use this device in place of filter:
-  
-> filter = S.effects . separate . maps (distinguish f)
-  
->>> :t hoist S.effects $ separate odd_even
-hoist S.effects $ separate odd_even :: Monad n => Stream (Of Int) n ()
->>>  S.print $ effects $ separate odd_even
-2
-4
-6
-8
-10
->>>  S.print $ hoist effects $ separate odd_even
-1
-3
-5
-7
-9
+
+   We can achieve the above effect more simply
+   in the case of @Stream (Of a) m r@ by using 'Streaming.Prelude.duplicate'
+
+>>> S.toList . S.filter even $ S.toList . S.filter odd $ S.duplicate $ each [1..10::Int]
+[2,4,6,8,10] :> ([1,3,5,7,9] :> ())
+
+
+    But 'separate' and 'unseparate' are functor-general. 
 
 -}
 
@@ -795,7 +820,6 @@ unzips str = destroyExposed
 
 {-| Group layers in an alternating stream into adjoining sub-streams
     of one type or another. 
-=
 -}
 groups :: (Monad m, Functor f, Functor g) 
            => Stream (Sum f g) m r 

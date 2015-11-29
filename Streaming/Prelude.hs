@@ -596,7 +596,7 @@ effects = loop where
 > drained :: Monad m => Stream (Of a) m (Stream (Of b) m r) -> Stream (Of a) m r
 > drained = join . fmap (lift . effects)
  
-   Here we split a stream in two places and throw out the middle segment:
+   Here, for example, we split a stream in two places and throw out the middle segment:
  
 >>> rest <- S.print $ S.drained $ S.splitAt 2 $ S.splitAt 5 $ each [1..7]
 1
@@ -604,6 +604,13 @@ effects = loop where
 >>> S.print rest
 6
 7
+
+   In particular, we can define versions  of @take@ and @takeWhile@ which 
+   retrieve the return value of the rest of the stream - and which can 
+   thus be used with 'maps':
+
+> take' n = S.drained . S.splitAt n
+> takeWhile' thus = S.drained . S.span thus
 
 -}
 drained :: (Monad m, Monad (t m), Functor (t m), MonadTrans t) => t m (Stream (Of a) m r) -> t m r

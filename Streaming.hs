@@ -4,15 +4,15 @@ module Streaming
    -- * Free monad transformer
    -- $stream
    Stream, 
-   -- * Constructing a 'Stream' on a base functor
+   -- * Constructing a 'Stream' on a given functor
    unfold,
-   construct,
    yields,
    replicates,
    repeats,
    repeatsM,
    effect,
    wrap,
+   streamBuild,
    
    -- * Transforming streams
    decompose,
