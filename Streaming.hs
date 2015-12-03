@@ -92,7 +92,9 @@ import Control.Monad.Trans.Resource
     The 'Stream' data type can be used to represent any effectful
     succession of steps arising in some monad. 
     The form of the steps is specified by the first (\"functor\") 
-    parameter in @Stream f m r@, the monad of effects by the second.
+    parameter in @Stream f m r@. The monad of the underlying effects 
+    is expressed by the second parameter. 
+
     This module exports combinators that pertain to that general case.
     Some of these are quite abstract and pervade any use of the library, 
     e.g. 
