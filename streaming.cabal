@@ -1,16 +1,45 @@
 name:                streaming
-version:             0.1.2.2
+version:             0.1.3.0
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and a general monad transformer for streaming applications.
 
-description:         @Streaming.Prelude@ exports an elementary streaming prelude; @Streaming@ exports a free monad transformer 
-                     optimized for streaming applications and replacing @FreeT@. See the 
+description:         @Streaming.Prelude@ exports an elementary streaming prelude relating to 
+                     an elementary source\/generator\/producer type, @Stream (Of a) m r@. 
+                     @Streaming@ exports a much more general type, @Stream f m r@, which
+                     can be used to 'stream' successive distinct steps characterized by any 
+                     functor @f@, though we are here interested only in a limited range of 
+                     cases. 
+                     .
+                     The streaming-io libraries have various devices for dealing
+                     with effectful variants of @[a]@ or @([a],r)@. But it is only with
+                     the general type @Stream f m r@, or some equivalent, 
+                     that one can hope to stream streams, as one makes lists of 
+                     lists in the Haskell @Prelude@ and @Data.List@. Once one sees 
+                     the necessity of this type even to 
+                     express a properly streaming equivalent of e.g.
+                     
+                     > groups :: Ord a => [a] -> [[a]]
+                     > chunksOf :: Int -> [a] -> [[a]]
+                     
+                     and the like, one sees one is already in possession of a complete
+                     elementary streaming library. The present @Streaming.Prelude@ is the
+                     simplest streaming library that can replicate anything like the 
+                     API of the @Prelude@ and @Data.List@. 
+                     .
+                     @Streaming.Prelude@ makes no claim to replace other 
+                     libraries; its emphasis is on emphasis on interoperation; for
+                     the rest its advantages are: extreme simplicity and re-use of 
+                     intuitions the user has gathered from mastery of @Prelude@ and
+                     @Data.List@. The two  conceptual pre-requisites are some 
+                     comprehension of monad transformers
+                     and some familiarity with \'rank 2 types\'.
+                     . 
+                     See the 
                      <https://hackage.haskell.org/package/streaming#readme readme> below
-                     for an explanation. Elementary usage can be divined from the ghci examples in 
-                     @Streaming.Prelude@ and from the remarks somewhat theoretical
-                     <https://hackage.haskell.org/package/streaming#readme readme>
-                     below, including the examples linked there. Note also the 
+                     for an explanation, including the examples linked there. Elementary usage can be divined from the ghci examples in 
+                     @Streaming.Prelude@ and perhaps from this rough beginning of a 
+                     <https://github.com/michaelt/streaming-tutorial/blob/master/tutorial.md tutorial> Note also the 
                      <https://hackage.haskell.org/package/streaming-bytestring streaming bytestring> 
                      and 
                      <https://hackage.haskell.org/package/streaming-utils streaming utils> 
@@ -38,8 +67,8 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      .
                      Here are the results of some
                      <https://gist.github.com/michaelt/f19bef01423b17f29ffd microbenchmarks> 
-                     based on
-                     <https://github.com/ekmett/machines/blob/master/benchmarks/Benchmarks.hs those> 
+                     based on the
+                     <https://github.com/ekmett/machines/blob/master/benchmarks/Benchmarks.hs benchmarks> 
                      included in the machines package:
                      .
                      <<http://i.imgur.com/sSG5MvH.png>>

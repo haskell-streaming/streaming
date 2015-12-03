@@ -1518,19 +1518,19 @@ scanned step begin done = loop Nothing' begin
     Thus, to mark times of user input we might write something like:
 
 >>> S.toList $ S.take 3 $ S.zip S.seconds S.stdinLn 
-a
-b
-c
+a<Enter>
+b<Enter>
+c<Enter>
 [(0.0,"a"),(1.088711,"b"),(3.7289649999999996,"c")] :> ()
   
    To restrict user input to some number of seconds, we might write:
   
 >>> S.toList $ S.zipWith (flip const) (S.takeWhile (< 5) S.seconds) S.stdinLn
-one
-two
-three
-four
-five
+one<Enter>
+two<Enter>
+three<Enter>
+four<Enter>
+five<Enter>
 ["one","two","three","four","five"] :> ()
 
   -}
@@ -1561,6 +1561,9 @@ seconds = do
 
 > sequence :: Monad m =>       [m a]           -> m [a]
 > sequence :: Monad m => Stream (Of (m a)) m r -> Stream (Of a) m r
+
+   This obeys the rule
+
 -}
 sequence :: Monad m => Stream (Of (m a)) m r -> Stream (Of a) m r
 sequence = loop where
@@ -1590,7 +1593,7 @@ sum_ = fold_ (+) 0 id
 
 {-| Fold a 'Stream' of numbers into their sum with the return value
 
->  maps' sum' :: Stream (Stream (Of Int)) m r -> Stream (Of Int) m r
+>  mapped S.sum :: Stream (Stream (Of Int)) m r -> Stream (Of Int) m r
 
 
 >>> S.sum $ each [1..10]
@@ -1698,8 +1701,11 @@ take = loop where
 -- takeWhile
 -- ---------------
 
--- | End stream when an element fails a condition; the original return value is lost
--- 'span' preserves this information.
+{-| End stream when an element fails a condition; the original return value is lost.
+    By contrast 'span' preserves this information.
+
+
+-}
 takeWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m ()
 takeWhile pred = loop where
   loop str = case str of 
@@ -1711,7 +1717,7 @@ takeWhile pred = loop where
 
 {-| Convert an effectful 'Stream (Of a)' into a list of @as@
 
-    Note: Needless to say this function does not stream properly.
+    Note: Needless to say, this function does not stream properly.
     It is basically the same as 'mapM' which, like 'replicateM',
     'sequence' and similar operations on traversable containers
     is a leading cause of space leaks.
@@ -1752,7 +1758,7 @@ uncons = loop where
     The seed can of course be anything, but this is one natural way 
     to consume a @pipes@ 'Pipes.Producer'. Consider:
 
->>> S.stdoutLn $ S.take 2 (S.unfoldr P.next P.stdinLn)
+>>> S.stdoutLn $ S.take 2 $ S.unfoldr P.next P.stdinLn
 hello<Enter>
 hello
 goodbye<Enter>
@@ -1900,12 +1906,9 @@ zip3 = zipWith3 (,,)
 -- IO fripperies 
 -- --------------
 
-{-| repeatedly stream lines as 'String' from stdin
-
->>> stdoutLn $ S.show (S.each [1..3])
-1
-2
-3
+{-| View standard input as a 'Stream (Of String) m r'. 'stdoutLn', by
+    contrast, renders a 'Stream (Of String) m r' to standard output. The names
+    follow @Pipes.Prelude@
 
 >>> stdoutLn stdinLn 
 hello<Enter>
@@ -2060,8 +2063,7 @@ stdoutLn' = loop where
     Step (s :> rest) -> liftIO (putStrLn s) >> loop rest
 {-# INLINE stdoutLn' #-}
 
-{-| Read a series of strings as lines to a file. The handle is crudely 
-    managed with 'ResourceT':
+{-| Read a series of strings as lines to a file.
 
 >>> runResourceT $ S.writeFile "lines.txt" $ S.take 2 S.stdinLn
 hello<Enter>
@@ -2069,6 +2071,11 @@ world<Enter>
 >>> runResourceT $ S.print $ S.readFile "lines.txt" 
 "hello"
 "world"
+
+    'runResourceT', as it is used here, means something like 'closing_handles';
+    it makes it possible to write convenient, fairly sensible versions of 
+    'readFile', 'writeFile' and 'appendFile'. Its use is explained 
+    <https://www.fpcomplete.com/user/snoyberg/library-documentation/resourcet here>.
 
 -}
 
