@@ -1,7 +1,7 @@
 {-#LANGUAGE RankNTypes #-}
 module Streaming 
    (
-   -- * Free monad transformer
+   -- * An iterable streaming monad transformer
    -- $stream
    Stream, 
    -- * Constructing a 'Stream' on a given functor
@@ -99,7 +99,7 @@ import Control.Monad.Trans.Resource
 
 >   maps ::   (forall x . f x -> g x)     -> Stream f m r -> Stream g m r  
 >   mapped :: (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r  
->   hoist :: (forall x . m x -> n x) -> Stream f m r -> Stream f n r
+>   hoist :: (forall x . m x -> n x) -> Stream f m r -> Stream f n r -- via MFunctor
 >   concats :: Stream (Stream f m) m r -> Stream f m r          
            
     (assuming here and thoughout that @m@ or @n@ satisfies a @Monad@ constraint, and
@@ -108,21 +108,28 @@ import Control.Monad.Trans.Resource
     Others are surprisingly determinate in content:
 
 >   chunksOf :: Int -> Stream f m r -> Stream (Stream f m) m r
->   splits :: 
-
+>   splitsAt ::  Int -> Stream f m r -> Stream f m (Stream f m r)
+>   zipsWith :: (forall x y. f x -> g y -> h (x, y)) -> Stream f m r -> Stream g m r -> Stream h m r
+>   intercalates :: Stream f m () -> Stream (Stream f m) m r -> Stream f m r
+>   groups: Stream (Sum f g) m r -> Stream (Sum (Stream f m) (Stream g m)) m r
 
     One way to see that /any/ streaming library needs some such general type is
     that it is required to represent the segmentation of a stream, and to
     express the equivalents of @Prelude/Data.List@ combinators that involve
-    'lists of lists' and the like.  The module @Streaming.Prelude@ exports
-    combinators relating to 
+    'lists of lists' and the like. See for example this 
+    <http://www.haskellforall.com/2013/09/perfect-streaming-using-pipes-bytestring.html post> 
+    on the correct expression of a streaming \'lines\' function. 
+
+    The module @Streaming.Prelude@ exports combinators relating to 
 
 > Stream (Of a) m r
 
     where @Of a r = !a :> r@ is a left-strict pair.
 
-> mapped Streaming.Prelude.length :: Stream (Stream (Of a) m) r -> Stream (Of Int) m r
 
+   This expresses the concept of a 'Producer' or 'Source' or 'Generator' and
+   easily inter-operates with types with such names in e.g. 'conduit', 
+   'iostreams' and 'pipes'.
 -}
 
 {-| Map a stream to its church encoding; compare @Data.List.foldr@
