@@ -16,24 +16,24 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      the general type @Stream f m r@, or some equivalent, 
                      that one can hope to stream streams, as one makes lists of 
                      lists in the Haskell @Prelude@ and @Data.List@. Once one sees 
-                     the necessity of this type even to 
+                     the necessity of some such type if we are to
                      express a properly streaming equivalent of e.g.
                      
                      > groups :: Ord a => [a] -> [[a]]
                      > chunksOf :: Int -> [a] -> [[a]]
                      
-                     and the like, one sees one is already in possession of a complete
+                     and the like, then one will also see that, with it, 
+                     one is already in possession of a complete
                      elementary streaming library. The present @Streaming.Prelude@ is the
                      simplest streaming library that can replicate anything like the 
                      API of the @Prelude@ and @Data.List@. 
                      .
-                     @Streaming.Prelude@ makes no claim to replace other 
-                     libraries; its emphasis is on emphasis on interoperation; for
+                     The emphasis of the library is on interoperation; for
                      the rest its advantages are: extreme simplicity and re-use of 
                      intuitions the user has gathered from mastery of @Prelude@ and
-                     @Data.List@. The two  conceptual pre-requisites are some 
-                     comprehension of monad transformers
-                     and some familiarity with \'rank 2 types\'.
+                     @Data.List@. The two conceptual pre-requisites are some 
+                     comprehension of monad transformers and some familiarity 
+                     with \'rank 2 types\'.
                      . 
                      See the 
                      <https://hackage.haskell.org/package/streaming#readme readme> below
