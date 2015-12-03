@@ -1,30 +1,36 @@
 name:                streaming
-version:             0.1.3.1
+version:             0.1.3.2
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and a general stream type.
 
 description:         @Streaming.Prelude@ exports an elementary streaming prelude relating to 
-                     an elementary source\/generator\/producer type, @Stream (Of a) m r@. 
-                     @Streaming@ exports a much more general type, @Stream f m r@, which
-                     can be used to 'stream' successive distinct steps characterized by any 
+                     an elementary source\/generator\/producer type, namely @Stream (Of a) m r@. 
+                     The main module, @Streaming@, exports a much more general type, 
+                     @Stream f m r@, which
+                     can be used to stream successive distinct steps characterized by /any/ 
                      functor @f@, though we are here interested only in a limited range of 
                      cases. 
                      .
                      The streaming-io libraries have various devices for dealing
                      with effectful variants of @[a]@ or @([a],r)@. But it is only with
                      the general type @Stream f m r@, or some equivalent, 
-                     that one can hope to stream streams, as one makes lists of 
-                     lists in the Haskell @Prelude@ and @Data.List@. Once one sees 
-                     the necessity of some such type if we are to
+                     that one can hope to stream their sorts of stream, as one 
+                     makes lists of lists in the Haskell @Prelude@ and @Data.List@. 
+                     One needs some such type if we are to
                      express a properly streaming equivalent of e.g.
                      .
-                     > groups :: Ord a => [a] -> [[a]]
+                     > group :: Ord a => [a] -> [[a]]
                      > chunksOf :: Int -> [a] -> [[a]]
+                     > lines :: [Char] -> [[Char]] -- but similarly with bytestring, etc.
                      .
-                     and the like, then one will also see that, with it, 
-                     one is already in possession of a complete
-                     elementary streaming library. The present @Streaming.Prelude@ is the
+                     to mention a few obviously desirable operations. But once one grasps 
+                     the concept needed to express those functions - i.e. @Stream f m r@ or
+                     some equivalent - then one will also see that, 
+                     with it, one is already in possession of a complete
+                     elementary streaming library - since one possesses @Stream (Of a) m r@, which
+                     is the type of a \'generator\' or \'producer\' or whatever you call an 
+                     effectful stream of items. The present @Streaming.Prelude@ is the
                      simplest streaming library that can replicate anything like the 
                      API of the @Prelude@ and @Data.List@. 
                      .
