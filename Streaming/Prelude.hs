@@ -85,14 +85,17 @@ module Streaming.Prelude (
     -- $pipes
     , map
     , mapM
-    , chain
     , maps
+    , for
+    , with
+    , subst
+    , duplicate
+    , store
+    , chain
     , sequence
     , nub
     , filter
     , filterM
-    , for
-    , with
     , delay
     , intersperse
     , take
@@ -109,8 +112,7 @@ module Streaming.Prelude (
     , read
     , show
     , cons
-    , duplicate
-    , store
+
 
     -- * Splitting and inspecting streams of elements
     , next
@@ -1666,7 +1668,25 @@ splitAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m
 splitAt = splitsAt
 {-# INLINE splitAt #-}
 
-
+-- -------
+-- subst
+-- -------
+{-| Replace each element in a stream of individual values with a functorial
+    layer of any sort. @subst = flip with@ and is more convenient in 
+    a sequence of compositions that transform a stream.
+   
+> with = flip subst
+> for str f = concats $ subst f str
+> subst f = maps (\(a:>r) -> r <$ f a)
+> S.concat = concats . subst each
+-}
+subst :: (Monad m, Functor f) =>  (a -> f x) -> Stream (Of a) m r -> Stream f m r
+subst f s = loop s where
+  loop str = case str of 
+    Return r         -> Return r
+    Effect m         -> Effect (liftM loop m)
+    Step (a :> rest) -> Step (loop rest <$ f a)
+{-#INLINABLE subst #-}
 -- ---------------
 -- take
 -- ---------------
@@ -1797,6 +1817,7 @@ unfoldr step = loop where
 > for str f  = concats (with str f)  
 > with str f = for str (yields . f)
 > with str f = maps (\(a:>r) -> r <$ f a) str
+> with = flip subst
 
 >>> with (each [1..3]) (yield . show) & intercalates (yield "--") & S.stdoutLn
 1
