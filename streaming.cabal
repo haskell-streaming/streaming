@@ -1,5 +1,5 @@
 name:                streaming
-version:             0.1.3.3
+version:             0.1.3.4
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and a general stream type.
