@@ -59,10 +59,11 @@ module Streaming.Prelude (
     , fromHandle
     , readFile
     , iterate
+    , iterateM
     , repeat
+    , repeatM
     , replicate
     , cycle
-    , repeatM
     , replicateM
     , enumFrom
     , enumFromThen
