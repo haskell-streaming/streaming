@@ -583,7 +583,12 @@ delay seconds = loop where
 3
 4
 5
+    'effects' should be understood together with 'duplicate' and is subject to the rules
 
+> S.effects . S.duplicate       = id
+> hoist S.effects . S.duplicate = id
+
+    The similar @effects@ and @duplicate@ operations in @Data.ByteString.Streaming@ obey the same rules. 
 
 -}
 effects :: Monad m => Stream (Of a) m r -> m r
@@ -686,17 +691,17 @@ dropWhile pred = loop where
 
 {- | Stream the elements of a pure, foldable container.
 
->>> each [1..3] & S.print
+>>> S.print $ each [1..3] 
 1
 2
 3
->>> S.replicateM 5 getLine & chunksOf 3 & mapped S.toList & S.print
-s
-t
-u
+>>> S.print $ mapped S.toList $ chunksOf 3 $ S.replicateM 5 getLine
+s<Enter>
+t<Enter>
+u<Enter>
 ["s","t","u"]
-v
-w
+v<Enter>
+w<Enter>
 ["v","w"]
 
 -}
@@ -733,7 +738,7 @@ elem_ a = fold_ op False id where
    and @zipWith@, which require the same return type in the zipped streams. 
    With @each [1..]@ the following bit of connect-and-resume would be impossible:
 
->>> rest <- S.print $  S.zip (S.enumFrom 'a') $ S.splitAt 3 $ S.enumFrom 1
+>>> rest <- S.print $ S.zip (S.enumFrom 'a') $ S.splitAt 3 $ S.enumFrom 1
 ('a',1)
 ('b',2)
 ('c',3)
@@ -810,7 +815,7 @@ filterM pred = loop where
 50
 
     The general folds 'fold', fold_', 'foldM' and 'foldM_' are arranged 
-    for use with 'Control.Foldl'
+    for use with @Control.Foldl@ 'Control.Foldl.purely' and 'Control.Foldl.impurely'
 
 >>> L.purely fold_ L.sum $ each [1..10]
 55
@@ -865,7 +870,6 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 
 >>> S.fold (*) 1 id $ S.fold (+) 0 id $ S.duplicate $ each [1..10]
 3628800 :> (55 :> ())
-
 
     It can be used to replace a standard Haskell type with one more suited to 
     writing a strict accumulation function. It is also crucial to the 
@@ -2331,7 +2335,7 @@ store f x = f (duplicate x)
 {-#INLINE store #-}
 
 {-| Duplicate the content of stream, so that it can be acted on twice in different ways, 
-    but without breaking streaming. Thus, given: 
+    but without breaking streaming. Thus, with @each [1,2]@ I might do:
 
 >>> S.print $ each ["one","two"]
 "one"
@@ -2340,13 +2344,20 @@ store f x = f (duplicate x)
 one
 two
 
-    I can as well do:
+    With duplicate, I can as well do:
 
 >>> S.print $ S.stdoutLn $ S.duplicate $ each ["one","two"]
 one
 "one"
 two
 "two"
+
+    'duplicate' should be understood together with 'effects' and is subject to the rules
+
+> S.effects . S.duplicate       = id
+> hoist S.effects . S.duplicate = id
+
+    The similar operations in 'Data.ByteString.Streaming' obey the same rules. 
 
     Where the actions you are contemplating are each simple folds over 
     the elements, or a selection of elements, then the coupling of the 
