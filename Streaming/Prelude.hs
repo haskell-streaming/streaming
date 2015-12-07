@@ -196,6 +196,7 @@ module Streaming.Prelude (
     , zip3
     , zipWith3
     , unzip
+    , partitionEithers
     
     -- * Pair manipulation
     , lazily
@@ -1124,7 +1125,7 @@ last_ = loop Nothing_ where
     Effect m            -> m >>= last_
     Step (a :> rest)  -> loop (Just_ a) rest
 {-#INLINABLE last_ #-}
-    
+
 -- ---------------
 -- length
 -- ---------------
@@ -1309,6 +1310,38 @@ nub = loop Set.empty where
     Step (a :> rest) -> if Set.member a set 
       then loop set rest
       else Step (a :> loop (Set.insert a set) rest)
+
+
+{-| Separate left and right values in distinct streams. ('separate' is 
+    a more powerful, functor-general, equivalent using 'Sum' in place of 'Either'). 
+    So, for example, to permit unlimited user
+    input of @Int@s on condition of only two errors, we might write:
+
+>>> S.toList $ S.print $ S.take 2 $ partitionEithers $ S.map readEither $ S.stdinLn  :: IO (Of [Int] ())
+1<Enter>
+2<Enter>
+qqqqqqqqqq<Enter>
+"Prelude.read: no parse"
+3<Enter>
+rrrrrrrrrr<Enter>
+"Prelude.read: no parse"
+[1,2,3] :> ()
+
+> partitionEithers = separate . maps S.eitherToSum  
+> lefts  = hoist S.effects . partitionEithers
+> rights = S.effects . partitionEithers
+> rights = S.concat 
+-}
+partitionEithers :: Monad m => Stream (Of (Either a b)) m r -> Stream (Of a) (Stream (Of b) m) r
+partitionEithers =  loop where
+   loop str = case str of 
+     Return r -> Return r
+     Effect m -> Effect (liftM loop (lift m))
+     Step (Left a :> rest) -> Step (a :> loop rest)
+     Step (Right b :> rest) -> Effect $ do
+       yield b
+       return (loop rest)
+
 
 -- | Fold a 'Stream' of numbers into their product
 product_ :: (Monad m, Num a) => Stream (Of a) m () -> m a
