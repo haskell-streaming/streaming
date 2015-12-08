@@ -24,7 +24,8 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      > chunksOf :: Int -> [a] -> [[a]]
                      > lines :: [Char] -> [[Char]] -- but similarly with bytestring, etc.
                      .
-                     to mention a few obviously desirable operations. But once one grasps 
+                     to mention a few obviously desirable operations, appearing here as
+                     . But once one grasps 
                      the concept needed to express those functions - to wit, 
                      @Stream f m r@ or some equivalent - then one will also see that, 
                      with it, one is already in possession of a complete
@@ -32,9 +33,9 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      or equivalently @Stream (Of a) m r@. This
                      is the type of a \'generator\' or \'producer\' or whatever 
                      you call an effectful stream of items. 
-                     /The present @Streaming.Prelude@ 
-                     is the simplest streaming library that can replicate anything 
-                     like the API of the @Prelude@ and @Data.List@./
+                     /The present @Streaming.Prelude@ is the simplest streaming library/
+                     /that can replicate anything like the API of the/
+                     /@Prelude@ and @Data.List@./ 
                      .
                      The emphasis of the library is on interoperation; for
                      the rest its advantages are: extreme simplicity and re-use of 
@@ -47,7 +48,8 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      <https://hackage.haskell.org/package/streaming#readme readme> below
                      for an explanation, including the examples linked there. Elementary usage can be divined from the ghci examples in 
                      @Streaming.Prelude@ and perhaps from this rough beginning of a 
-                     <https://github.com/michaelt/streaming-tutorial/blob/master/tutorial.md tutorial> Note also the 
+                     <https://github.com/michaelt/streaming-tutorial/blob/master/tutorial.md tutorial>. 
+                     Note also the 
                      <https://hackage.haskell.org/package/streaming-bytestring streaming bytestring> 
                      and 
                      <https://hackage.haskell.org/package/streaming-utils streaming utils> 

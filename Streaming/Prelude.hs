@@ -90,6 +90,7 @@ module Streaming.Prelude (
     , with
     , subst
     , duplicate
+    , duplicate'
     , store
     , chain
     , sequence
@@ -2276,11 +2277,11 @@ sumToCompose x = case x of
 4
 10 :> (24 :> ())
 
-   Here the sum (10) and the product (24) have been \'stored\' for use when 
+   Here the sum (10) and the product (24) have been \'stored\' for use when
    finally we have traversed the stream with 'print' . Needless to say,
-   a second 'pass' is excluded conceptually, so the 
-   folds that you apply successively with @store@ are performed 
-   simultaneously, and in constant memory -- as they would be if, 
+   a second 'pass' is excluded conceptually, so the
+   folds that you apply successively with @store@ are performed
+   simultaneously, and in constant memory -- as they would be if,
    say, you linked them together with @Control.Fold@:
 
 >>> L.impurely S.foldM (liftA3 (\a b c -> (b,c)) (L.sink print) (L.generalize L.sum) (L.generalize L.product)) $ each [1..4]
@@ -2294,28 +2295,35 @@ sumToCompose x = case x of
    than the corresponding succession of uses of 'store', but by
    constant factor that will be completely dwarfed when any IO is at issue.
 
-   But 'store' / 'duplicate' is /much/ more powerful, as you can see by reflecting on 
+   But 'store' / 'duplicate' is /much/ more powerful, as you can see by reflecting on
    uses like this:
 
 >>> S.sum $ S.store (S.sum . mapped S.product . chunksOf 2) $ S.store (S.product . mapped S.sum . chunksOf 2 )$ each [1..6]
 21 :> (44 :> (231 :> ()))
 
-   It will be clear that this cannot be reproduced with any combination of lenses, 
+   It will be clear that this cannot be reproduced with any combination of lenses,
    @Control.Fold@ folds, or the like.  (See also the discussion of 'duplicate'.)
 
-   'store' is intended to be used at types like these
+   It would conceivable be clearer to import a series of specializations of 'store'.
+   It is intended to be used at types like these:
 
-> storeM ::  (Monad m => Stream (Of a) m r -> m (Of b r)) 
+> storeM ::  (forall s m . Monad m => Stream (Of a) m s -> m (Of b s))
 >         -> (Monad n => Stream (Of a) n r -> Stream (Of a) n (Of b r))
 > storeM = store
 >
-> storeMIO :: (MonadIO m => Stream (Of a) m r -> m (Of b r)) 
+> storeMIO :: (forall s m . MonadIO m => Stream (Of a) m s -> m (Of b s))
 >          -> ( MonadIO n => Stream (Of a) n r -> Stream (Of a) n (Of b r)
 > storeMIO = store
 
-    And similarly for other constraints that @Stream (Of a)@ inherits, 
-    like 'MonadResource'.  Thus I can filter and write to one file, but 
-    nub and write to another: 
+    It is clear from these types that we are just using the general instances:
+
+> instance (Functor f, Monad m )  => Monad (Stream f m)
+> instance (Functor f, MonadIO m) => MonadIO (Stream f m)
+
+    We thus can't be touching the elements of the stream, or the final return value.
+    It it is the same with other constraints that @Stream (Of a)@ inherits,
+    like 'MonadResource'.  Thus I can filter and write to one file, but
+    nub and write to another, or to a database or the like:
 
 >>> runResourceT $ (S.writeFile "hello2.txt" . S.nub) $ store (S.writeFile "hello.txt" . S.filter (/= "world")) $ each ["hello", "world", "goodbye", "world"]
 >>> :! cat hello.txt
@@ -2334,7 +2342,7 @@ store
 store f x = f (duplicate x)
 {-#INLINE store #-}
 
-{-| Duplicate the content of stream, so that it can be acted on twice in different ways, 
+{-| Duplicate the content of stream, so that it can be acted on twice in different ways,
     but without breaking streaming. Thus, with @each [1,2]@ I might do:
 
 >>> S.print $ each ["one","two"]
@@ -2357,11 +2365,11 @@ two
 > S.effects . S.duplicate       = id
 > hoist S.effects . S.duplicate = id
 
-    The similar operations in 'Data.ByteString.Streaming' obey the same rules. 
+    The similar operations in 'Data.ByteString.Streaming' obey the same rules.
 
-    Where the actions you are contemplating are each simple folds over 
-    the elements, or a selection of elements, then the coupling of the 
-    folds is often more straightforwardly effected with `Control.Foldl`, 
+    Where the actions you are contemplating are each simple folds over
+    the elements, or a selection of elements, then the coupling of the
+    folds is often more straightforwardly effected with `Control.Foldl`,
     e.g.
 
 >>> L.purely S.fold (liftA2 (,) L.sum L.product) $ each [1..10]
@@ -2372,8 +2380,8 @@ two
 >>> S.sum $ S.product . S.duplicate $ each [1..10]
 55 :> (3628800 :> ())
 
-    A @Control.Foldl@ fold can be altered to act on a selection of elements by 
-    using 'Control.Foldl.handles' on an appropriate lens. Some such 
+    A @Control.Foldl@ fold can be altered to act on a selection of elements by
+    using 'Control.Foldl.handles' on an appropriate lens. Some such
     manipulations are simpler and more 'Data.List'-like, using 'duplicate':
 
 >>> L.purely S.fold (liftA2 (,) (L.handles (filtered odd) L.sum) (L.handles (filtered even) L.product)) $ each [1..10]
@@ -2384,13 +2392,13 @@ two
 >>> S.sum $ S.filter odd $ S.product $ S.filter even $ S.duplicate $ each [1..10]
 25 :> (3840 :> ())
 
-    or using 'store' 
+    or using 'store'
 
 >>> S.sum $ S.filter odd $ S.store (S.product . S.filter even) $ each [1..10]
 25 :> (3840 :> ())
 
     But anything that fold of a @Stream (Of a) m r@ into e.g. an @m (Of b r)@
-    that has a constraint on @m@ that is carried over into @Stream f m@ - 
+    that has a constraint on @m@ that is carried over into @Stream f m@ -
     e.g. @Monad@, @MonadIO@, @MonadResource@, etc. can be used on the stream.
     Thus, I can fold over different groupings of the original stream:
 
@@ -2410,8 +2418,23 @@ duplicate = loop where
   loop str = case str of
     Return r         -> Return r
     Effect m         -> Effect (liftM loop (lift m))
-    Step (a :> rest) -> Step (a :> Effect (Step (a :> Return (loop rest))))
+    Step (a :> rest) -> Effect (Step (a :> Return (Step (a :> loop rest))))
+
 {-#INLINABLE duplicate#-}
+
+{-| @duplicate'@ is the same as @duplicate@ but reverses the order of interleaved effects.
+    The difference should not be observable at all for pure folds over the data.
+
+-}
+duplicate'
+  :: Monad m =>
+     Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
+duplicate' = loop where
+ loop str = case str of
+   Return r         -> Return r
+   Effect m         -> Effect (liftM loop (lift m))
+   Step (a :> rest) -> Step (a :> Effect (Step (a :> Return (loop rest))))   
+{-#INLINABLE duplicate' #-}
 
 {-| The type
 
