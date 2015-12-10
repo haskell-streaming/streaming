@@ -1477,12 +1477,15 @@ reread step s = loop where
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 scan step begin done = loop begin
   where
-    loop !x stream = Step $ done x :> 
-        case stream of 
-          Return r -> Return r
-          Effect m  -> Effect $ liftM (loop x) m
-          Step (a :> rest) -> loop (step x a) rest
-{-# INLINABLE scan #-}
+  loop !acc stream = do
+    case stream of 
+      Return r -> yield (done acc)  >> return r
+      Effect m -> Effect (liftM (loop acc) m)
+      Step (a :> rest) -> do
+            yield (done acc) 
+            let !acc' = step acc a
+            loop acc' rest
+{-#INLINABLE scan #-}
 
 {-| Strict left scan, accepting a monadic function. It can be used with
     'FoldM's from @Control.Foldl@ using 'impurely'. Here we yield
