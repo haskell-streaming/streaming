@@ -140,6 +140,7 @@ test-suite streaming-tests
                  , streaming
                  , safe
                  , split
+                 , transformers
 
 
 
