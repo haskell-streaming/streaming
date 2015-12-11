@@ -198,6 +198,7 @@ module Streaming.Prelude (
     , zipWith3
     , unzip
     , partitionEithers
+    , partition
     
     -- * Pair manipulation
     , lazily
@@ -651,7 +652,8 @@ e<Enter>
   -}
 
 drop :: (Monad m) => Int -> Stream (Of a) m r -> Stream (Of a) m r
-drop = loop where
+drop n str | n <= 0 = str
+drop n str = loop n str where
   loop 0 stream = stream
   loop n stream = case stream of
       Return r       -> Return r
@@ -1316,6 +1318,21 @@ nub = loop Set.empty where
       then loop set rest
       else Step (a :> loop (Set.insert a set) rest)
 
+{-| 
+> filter p = hoist effects (partition p)
+       
+ -}
+partition :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
+partition thus = loop where
+   loop str = case str of 
+     Return r -> Return r
+     Effect m -> Effect (liftM loop (lift m))
+     Step (a :> rest) -> if thus a 
+       then Step (a :> loop rest)
+       else Effect $ do
+               yield a
+               return (loop rest)
+
 
 {-| Separate left and right values in distinct streams. ('separate' is 
     a more powerful, functor-general, equivalent using 'Sum' in place of 'Either'). 
@@ -1420,6 +1437,7 @@ repeatM ma = loop where
 
 -- | Repeat an element several times
 replicate :: Monad m => Int -> a -> Stream (Of a) m ()
+replicate n a | n <= 0 = return ()
 replicate n a = loop n where
   loop 0 = Return ()
   loop m = Step (a :> loop (m-1))
@@ -1433,6 +1451,7 @@ replicate n a = loop n where
 
 -}
 replicateM :: Monad m => Int -> m a -> Stream (Of a) m ()
+replicateM n ma | n <= 0 = return () 
 replicateM n ma = loop n where 
   loop 0 = Return ()
   loop n = Effect $ do 
@@ -1751,7 +1770,8 @@ subst f s = loop s where
 -}
 
 take :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
-take = loop where
+take n0 str | n0 <= 0 = return ()
+take n0 str = loop n0 str where
   loop 0 p = return ()
   loop n p = 
     case p of Step fas -> Step (fmap (loop (n-1)) fas)
