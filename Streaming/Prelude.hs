@@ -3,9 +3,7 @@
     articulated in the latter two modules. Because we dispense with piping and 
     conduiting, the distinction between all of these modules collapses. 
     The leading type is chosen to permit an api that is as close as possible to that 
-    of Data.List and the Prelude. Thecan 
-    be used with any 
-    rational \"streaming IO\" system. 
+    of Data.List and the Prelude. 
 
     Import qualified thus:
 
@@ -494,7 +492,7 @@ chain f = loop where
 {-| Make a stream of traversable containers into a stream of their separate elements.
     This is just 
 
-> concat = for str each
+> concat str = for str each
 
 >>> S.print $ S.concat (each ["xy","z"])
 'x'
@@ -557,9 +555,7 @@ cycle str = loop where loop = str >> loop
 {-#INLINABLE cycle #-}
 
 
-{-| A
-
-
+{-| Interpolate a delay of n seconds between yields.
 -}
 delay :: MonadIO m => Double -> Stream (Of a) m r -> Stream (Of a) m r
 delay seconds = loop where
@@ -1757,15 +1753,14 @@ subst f s = loop s where
     just a number of items from a stream of elements, but a number 
     of substreams and the like.
 
->>> S.toList $ S.take 3 $ each "pennsylvania"
-"pen" :> ()
+>>> S.toList $ S.take 3 $ each "with"
+"wit" :> ()
 
->>> total <- S.sum_ $ S.take 3 S.readLn :: IO Int
-1<Enter>
-10<Enter>
-100<Enter>
->>> print total
-111
+>>> runResourceT $ S.stdoutLn $ S.take 3 $ S.readFile "stream.hs"
+import Streaming  
+import qualified Streaming.Prelude as S
+import Streaming.Prelude (each, next, yield)
+
 
 -}
 
@@ -1784,8 +1779,18 @@ take n0 str = loop n0 str where
 -- ---------------
 
 {-| End stream when an element fails a condition; the original return value is lost.
-    By contrast 'span' preserves this information.
+    By contrast 'span' preserves this information, and is generally more desirable.
 
+> S.takeWhile thus = void . S.span thus
+
+    To preserve the information - but thus also force the rest of the stream to be 
+    developed - write 
+
+> S.drained . S.span thus
+
+    as @dropWhile thus@ is
+
+> S.effects . S.span thus
 
 -}
 takeWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m ()
@@ -1800,7 +1805,7 @@ takeWhile pred = loop where
 {-| Convert an effectful 'Stream (Of a)' into a list of @as@
 
     Note: Needless to say, this function does not stream properly.
-    It is basically the same as 'mapM' which, like 'replicateM',
+    It is basically the same as Prelude 'mapM' which, like 'replicateM',
     'sequence' and similar operations on traversable containers
     is a leading cause of space leaks.
     
@@ -1812,7 +1817,16 @@ toList_ = fold_ (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 
 {-| Convert an effectful 'Stream' into a list alongside the return value
 
->  mapped toListM :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m 
+>  mapped toList :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m 
+
+    Like 'toList_', it breaks streaming; unlike 'toList_' it preserves
+    the return value and thus is frequently useful with e.g. 'mapped'
+
+>>> S.print $ mapped S.toList $ chunksOf 3 $ each [1..9]
+[1,2,3]
+[4,5,6]
+[7,8,9]
+
 -}
 toList :: Monad m => Stream (Of a) m r -> m (Of [a] r)
 toList = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
@@ -1879,6 +1893,7 @@ unfoldr step = loop where
 > with str f = for str (yields . f)
 > with str f = maps (\(a:>r) -> r <$ f a) str
 > with = flip subst
+> subst = flip with
 
 >>> with (each [1..3]) (yield . show) & intercalates (yield "--") & S.stdoutLn
 1
@@ -2146,7 +2161,7 @@ stdoutLn' = loop where
     Step (s :> rest) -> liftIO (putStrLn s) >> loop rest
 {-# INLINE stdoutLn' #-}
 
-{-| Read a series of strings as lines to a file.
+{-| Read the lines of a file as Haskell 'String's
 
 >>> runResourceT $ S.writeFile "lines.txt" $ S.take 2 S.stdinLn
 hello<Enter>
@@ -2155,9 +2170,10 @@ world<Enter>
 "hello"
 "world"
 
-    'runResourceT', as it is used here, means something like 'closing_handles';
-    it makes it possible to write convenient, fairly sensible versions of 
-    'readFile', 'writeFile' and 'appendFile'. Its use is explained 
+    'runResourceT', as it is used here, means something like 'closing_all_handles'.
+    It makes it possible to write convenient, fairly sensible versions of 
+    'readFile', 'writeFile' and 'appendFile'. @IO.withFile IO.ReadMode ...@
+    is more complicated but is generally to be preferred. Its use is explained 
     <https://www.fpcomplete.com/user/snoyberg/library-documentation/resourcet here>.
 
 -}
