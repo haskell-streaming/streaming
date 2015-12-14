@@ -61,11 +61,13 @@ module Streaming.Prelude (
     , repeat
     , repeatM
     , replicate
+    , untilRight
     , cycle
     , replicateM
     , enumFrom
     , enumFromThen
     , seconds
+    
     
     -- * Consuming streams of elements
     -- $consumers
@@ -75,7 +77,9 @@ module Streaming.Prelude (
     , print
     , toHandle
     , writeFile
+    , first
     , effects
+    , erase
     , drained
     
 
@@ -772,6 +776,19 @@ enumFromThen first second = Streaming.Prelude.map toEnum (loop _first)
 {-# INLINABLE enumFromThen #-}
 
 -- ---------------
+-- erase
+-- ---------------
+{- | Remove the elements from a stream of values, retaining the structure of layers.
+-}
+erase :: Monad m => Stream (Of a) m r -> Stream Identity m r
+erase = loop where
+  loop str = case str of
+    Return r -> Return r
+    Effect m -> Effect (liftM loop m)
+    Step (a:>rest) -> Step (Identity (loop rest))
+{-# INLINABLE erase #-}   
+
+-- ---------------
 -- filter 
 -- ---------------
 
@@ -803,6 +820,25 @@ filterM pred = loop where
         else return $ loop as
 {-# INLINABLE filterM #-}
 
+
+-- ---------------
+-- first
+-- ---------------
+{- | Take either the first item in a stream or the return value, if it is empty.
+     The typical mark of an infinite stream is a polymorphic return value; in 
+     that case, 'first' is a sort of @safeHead@
+
+     To iterate an action returning a 'Maybe', until it succeeds.
+
+-}
+first :: Monad m => Stream (Of r) m r -> m r
+first = loop where
+  loop str = case str of
+    Return r -> return r
+    Effect m -> m >>= loop
+    Step (r :> rest) -> return r
+{-# INLINABLE first #-} 
+    
 -- ---------------
 -- fold
 -- ---------------
@@ -1883,6 +1919,18 @@ unfoldr step = loop where
       Right (a,s) -> return (Step (a :> loop s)))
 {-# INLINABLE unfoldr #-}
 
+-- ---------------------------------------
+-- untilRight
+-- ---------------------------------------
+untilRight :: Monad m => m (Either a r) -> Stream (Of a) m r
+untilRight act = Effect loop where
+  loop = do 
+    e <- act
+    case e of
+      Right r -> return (Return r)
+      Left a -> return (Step (a :> Effect loop))
+{-#INLINABLE untilRight #-}
+      
 -- ---------------------------------------
 -- with
 -- ---------------------------------------
