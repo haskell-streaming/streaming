@@ -880,7 +880,7 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
     Thus, specializing a bit:
 
 > L.purely S.fold L.sum :: Stream (Of Int) Int r -> m (Of Int r)
-> maps (L.purely S.fold L.sum) :: Stream (Stream (Of Int)) IO r -> Stream (Of Int) IO r
+> mapped (L.purely S.fold L.sum) :: Stream (Stream (Of Int)) IO r -> Stream (Of Int) IO r
 
     Here we use the Applicative instance for @Control.Foldl.Fold@ to 
     stream three-item segments of a stream together with their sums and products.
