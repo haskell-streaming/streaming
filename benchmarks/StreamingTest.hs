@@ -18,9 +18,9 @@ import           Test.Hspec.Expectations
 
 main :: IO ()
 main = do
-    hspec $ do
-        describe "basic tests" $
-            it "passes tests" $ True `shouldBe` True
+    -- hspec $ do
+    --     describe "basic tests" $
+    --         it "passes tests" $ True `shouldBe` True
 
     defaultMain [
         bgroup "basic" [ bench "stream"         $ nfIO stream_basic

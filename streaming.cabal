@@ -127,21 +127,3 @@ library
 
 
 
-
-test-suite streaming-tests
-  Default-Language: Haskell2010
-  type: exitcode-stdio-1.0
-  Main-Is:  Main.hs
-  hs-source-dirs: tests
-  Build-Depends: base >= 4 && < 5
-                 , QuickCheck
-                 , tasty
-                 , tasty-quickcheck
-                 , streaming
-                 , safe
-                 , split
-                 , transformers
-
-
-
-  Ghc-Options: -O0

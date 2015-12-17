@@ -99,21 +99,21 @@ import Control.Monad.Trans.Resource
     Some of these are quite abstract and pervade any use of the library, 
     e.g. 
 
->   maps ::   (forall x . f x -> g x)     -> Stream f m r -> Stream g m r  
->   mapped :: (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r  
->   hoist :: (forall x . m x -> n x) -> Stream f m r -> Stream f n r -- via MFunctor
+>   maps ::    (forall x . f x -> g x)     -> Stream f m r -> Stream g m r  
+>   mapped ::  (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r  
+>   hoist ::   (forall x . m x -> n x)     -> Stream f m r -> Stream f n r -- from the MFunctor instance
 >   concats :: Stream (Stream f m) m r -> Stream f m r          
-           
+
     (assuming here and thoughout that @m@ or @n@ satisfies a @Monad@ constraint, and
     @f@ or @g@ a @Functor@ constraint.)
 
     Others are surprisingly determinate in content:
 
->   chunksOf :: Int -> Stream f m r -> Stream (Stream f m) m r
->   splitsAt ::  Int -> Stream f m r -> Stream f m (Stream f m r)
->   zipsWith :: (forall x y. f x -> g y -> h (x, y)) -> Stream f m r -> Stream g m r -> Stream h m r
+>   chunksOf ::     Int -> Stream f m r -> Stream (Stream f m) m r
+>   splitsAt ::     Int -> Stream f m r -> Stream f m (Stream f m r)
+>   zipsWith ::     (forall x y. f x -> g y -> h (x, y)) -> Stream f m r -> Stream g m r -> Stream h m r
 >   intercalates :: Stream f m () -> Stream (Stream f m) m r -> Stream f m r
->   groups: Stream (Sum f g) m r -> Stream (Sum (Stream f m) (Stream g m)) m r
+>   groups:         Stream (Sum f g) m r -> Stream (Sum (Stream f m) (Stream g m)) m r
 
     One way to see that /any/ streaming library needs some such general type is
     that it is required to represent the segmentation of a stream, and to

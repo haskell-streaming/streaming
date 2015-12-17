@@ -91,8 +91,8 @@ module Streaming.Prelude (
     , for
     , with
     , subst
-    , duplicate
-    , duplicate'
+    , copy
+    , copy'
     , store
     , chain
     , sequence
@@ -115,6 +115,8 @@ module Streaming.Prelude (
     , read
     , show
     , cons
+    , duplicate
+    , duplicate'
 
 
     -- * Splitting and inspecting streams of elements
@@ -585,12 +587,12 @@ delay seconds = loop where
 3
 4
 5
-    'effects' should be understood together with 'duplicate' and is subject to the rules
+    'effects' should be understood together with 'copy' and is subject to the rules
 
-> S.effects . S.duplicate       = id
-> hoist S.effects . S.duplicate = id
+> S.effects . S.copy       = id
+> hoist S.effects . S.copy = id
 
-    The similar @effects@ and @duplicate@ operations in @Data.ByteString.Streaming@ obey the same rules. 
+    The similar @effects@ and @copy@ operations in @Data.ByteString.Streaming@ obey the same rules. 
 
 -}
 effects :: Monad m => Stream (Of a) m r -> m r
@@ -903,7 +905,7 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 >>> S.fold (+) 0 id $ each [1..10]
 55 :> ()
 
->>> S.fold (*) 1 id $ S.fold (+) 0 id $ S.duplicate $ each [1..10]
+>>> S.fold (*) 1 id $ S.fold (+) 0 id $ S.copy $ each [1..10]
 3628800 :> (55 :> ())
 
     It can be used to replace a standard Haskell type with one more suited to 
@@ -2348,7 +2350,7 @@ sumToCompose x = case x of
 {-#INLINE sumToCompose #-}
 
 {-| Store the result of any suitable fold over a stream, keeping the stream for
-    further manipulation. @store f = f . duplicate@ :
+    further manipulation. @store f = f . copy@ :
 
 >>> S.print $ S.store S.product $ each [1..4]
 1
@@ -2382,14 +2384,14 @@ sumToCompose x = case x of
    than the corresponding succession of uses of 'store', but by
    constant factor that will be completely dwarfed when any IO is at issue.
 
-   But 'store' / 'duplicate' is /much/ more powerful, as you can see by reflecting on
+   But 'store' / 'copy' is /much/ more powerful, as you can see by reflecting on
    uses like this:
 
 >>> S.sum $ S.store (S.sum . mapped S.product . chunksOf 2) $ S.store (S.product . mapped S.sum . chunksOf 2 )$ each [1..6]
 21 :> (44 :> (231 :> ()))
 
    It will be clear that this cannot be reproduced with any combination of lenses,
-   @Control.Fold@ folds, or the like.  (See also the discussion of 'duplicate'.)
+   @Control.Fold@ folds, or the like.  (See also the discussion of 'copy'.)
 
    It would conceivable be clearer to import a series of specializations of 'store'.
    It is intended to be used at types like these:
@@ -2426,7 +2428,7 @@ goodbye
 store
   :: Monad m =>
      (Stream (Of a) (Stream (Of a) m) r -> t) -> Stream (Of a) m r -> t
-store f x = f (duplicate x)
+store f x = f (copy x)
 {-#INLINE store #-}
 
 {-| Duplicate the content of stream, so that it can be acted on twice in different ways,
@@ -2439,18 +2441,18 @@ store f x = f (duplicate x)
 one
 two
 
-    With duplicate, I can as well do:
+    With copy, I can as well do:
 
->>> S.print $ S.stdoutLn $ S.duplicate $ each ["one","two"]
+>>> S.print $ S.stdoutLn $ S.copy $ each ["one","two"]
 one
 "one"
 two
 "two"
 
-    'duplicate' should be understood together with 'effects' and is subject to the rules
+    'copy' should be understood together with 'effects' and is subject to the rules
 
-> S.effects . S.duplicate       = id
-> hoist S.effects . S.duplicate = id
+> S.effects . S.copy       = id
+> hoist S.effects . S.copy = id
 
     The similar operations in 'Data.ByteString.Streaming' obey the same rules.
 
@@ -2464,19 +2466,19 @@ two
 
     rather than
 
->>> S.sum $ S.product . S.duplicate $ each [1..10]
+>>> S.sum $ S.product . S.copy $ each [1..10]
 55 :> (3628800 :> ())
 
     A @Control.Foldl@ fold can be altered to act on a selection of elements by
     using 'Control.Foldl.handles' on an appropriate lens. Some such
-    manipulations are simpler and more 'Data.List'-like, using 'duplicate':
+    manipulations are simpler and more 'Data.List'-like, using 'copy':
 
 >>> L.purely S.fold (liftA2 (,) (L.handles (filtered odd) L.sum) (L.handles (filtered even) L.product)) $ each [1..10]
 (25,3840) :> ()
 
      becomes
 
->>> S.sum $ S.filter odd $ S.product $ S.filter even $ S.duplicate $ each [1..10]
+>>> S.sum $ S.filter odd $ S.product $ S.filter even $ S.copy $ each [1..10]
 25 :> (3840 :> ())
 
     or using 'store'
@@ -2489,39 +2491,51 @@ two
     e.g. @Monad@, @MonadIO@, @MonadResource@, etc. can be used on the stream.
     Thus, I can fold over different groupings of the original stream:
 
->>>  (S.toList . mapped S.toList . chunksOf 5) $  (S.toList . mapped S.toList . chunksOf 3) $ S.duplicate $ each [1..10]
+>>>  (S.toList . mapped S.toList . chunksOf 5) $  (S.toList . mapped S.toList . chunksOf 3) $ S.copy $ each [1..10]
 [[1,2,3,4,5],[6,7,8,9,10]] :> ([[1,2,3],[4,5,6],[7,8,9],[10]] :> ())
 
     The procedure can be iterated as one pleases, as one can see from this (otherwise unadvisable!) example:
 
->>>  (S.toList . mapped S.toList . chunksOf 4) $ (S.toList . mapped S.toList . chunksOf 3) $ S.duplicate $ (S.toList . mapped S.toList . chunksOf 2) $ S.duplicate $ each [1..12]
+>>>  (S.toList . mapped S.toList . chunksOf 4) $ (S.toList . mapped S.toList . chunksOf 3) $ S.copy $ (S.toList . mapped S.toList . chunksOf 2) $ S.copy $ each [1..12]
 [[1,2,3,4],[5,6,7,8],[9,10,11,12]] :> ([[1,2,3],[4,5,6],[7,8,9],[10,11,12]] :> ([[1,2],[3,4],[5,6],[7,8],[9,10],[11,12]] :> ()))
 
 -}
-duplicate
+copy
   :: Monad m =>
      Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
-duplicate = loop where
+copy = loop where
   loop str = case str of
     Return r         -> Return r
     Effect m         -> Effect (liftM loop (lift m))
     Step (a :> rest) -> Effect (Step (a :> Return (Step (a :> loop rest))))
+{-#INLINABLE copy#-}
 
-{-#INLINABLE duplicate#-}
+duplicate
+  :: Monad m =>
+     Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
+duplicate = copy
+{-#INLINE duplicate #-}
 
-{-| @duplicate'@ is the same as @duplicate@ but reverses the order of interleaved effects.
+     
+{-| @copy'@ is the same as @copy@ but reverses the order of interleaved effects.
     The difference should not be observable at all for pure folds over the data.
 
 -}
-duplicate'
+copy'
   :: Monad m =>
      Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
-duplicate' = loop where
+copy' = loop where
  loop str = case str of
    Return r         -> Return r
    Effect m         -> Effect (liftM loop (lift m))
    Step (a :> rest) -> Step (a :> Effect (Step (a :> Return (loop rest))))   
-{-#INLINABLE duplicate' #-}
+{-#INLINABLE copy' #-}
+
+duplicate'
+  :: Monad m =>
+     Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
+duplicate' = copy'
+{-#INLINE duplicate' #-}
 
 {-| The type
 
@@ -2531,7 +2545,43 @@ duplicate' = loop where
 
 > Streaming.unzip :: Stream (Of (a,b)) m r -> Stream (Of a) m (Stream (Of b) m r)
  
-   which would not stream. Of course, neither does 'Data.List.unzip'
+   which would not stream, since it would have to accumulate the second stream (of @b@s).
+   Of course, @Data.List@ 'Data.List.unzip' doesn't stream either. 
+
+   This @unzip@ does
+   stream, though of course you can spoil this by using e.g. 'toList':
+   
+>>> let xs =  map (\x-> (x,show x)) [1..5::Int]
+
+>>> S.toList $ S.toList $ S.unzip (S.each xs)
+["1","2","3","4","5"] :> ([1,2,3,4,5] :> ())
+
+>>> Prelude.unzip xs
+([1,2,3,4,5],["1","2","3","4","5"])
+
+    Note the difference of order in the results. It may be of some use to think why.
+    The first application of 'toList' was applied to a stream of integers:
+
+>>> :t S.unzip $ S.each xs
+S.unzip $ S.each xs :: Monad m => Stream (Of Int) (Stream (Of String) m) ()
+
+    Like any fold, 'toList' takes no notice of the monad of effects.
+
+> toList :: Monad m => Stream (Of a) m r -> m (Of [a] r)
+ 
+    In the case at hand (since I am in @ghci@) @m = Stream (Of String) IO@. 
+    So when I apply 'toList', I exhaust that stream of integers, folding 
+    it into a list:
+
+>>> :t S.toList $ S.unzip $ S.each xs
+S.toList $ S.unzip $ S.each xs
+  :: Monad m => Stream (Of String) m (Of [Int] ())
+
+    When I apply 'toList' to /this/, I reduce everything to an ordinary action in @IO@,
+    and return a list of strings:
+
+>>> S.toList $ S.toList $ S.unzip (S.each xs)
+["1","2","3","4","5"] :> ([1,2,3,4,5] :> ())
 
 -}
 unzip :: Monad m =>  Stream (Of (a,b)) m r -> Stream (Of a) (Stream (Of b) m) r
