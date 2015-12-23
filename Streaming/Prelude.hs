@@ -165,6 +165,8 @@ module Streaming.Prelude (
     , last_
     , elem
     , elem_
+    , notElem
+    , notElem_
     , length
     , length_
     , toList
@@ -184,7 +186,7 @@ module Streaming.Prelude (
     -- , and
     -- , or
     -- , elem
-    -- , notElem
+
     -- , find
     -- , findIndex
     -- , head
@@ -232,12 +234,13 @@ import Data.Foldable (Foldable)
 import Data.Traversable (Traversable)
 import qualified Data.Foldable as Foldable
 import Text.Read (readMaybe)
-import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat, sum, product
-                      , iterate, repeat, cycle, replicate, splitAt
+import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat
+                      , sum, product, iterate, repeat, cycle, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
                       , print, zipWith, zip, zipWith3, zip3, unzip, seq, show, read
                       , readLn, sequence, concat, span, break, readFile, writeFile
-                      , minimum, maximum, elem, intersperse, all, any, head, last)
+                      , minimum, maximum, elem, notElem, intersperse, all, any, head
+                      , last)
 
 import qualified GHC.IO.Exception as G
 import qualified System.IO as IO
@@ -719,17 +722,27 @@ each = Foldable.foldr (\a p -> (Step (a :> p))) (Return ())
 -}
 
 elem :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m (Of Bool r)
-elem a = fold op False id where
-  op True _ = True
-  op False a' | a == a' = True
-  op _ _ = False
+elem a' = loop False where
+  loop True str = liftM (True :>) (effects str)
+  loop False str = case str of
+    Return r -> return (False :> r)
+    Effect m -> m >>= loop False
+    Step (a:> rest) -> 
+      if a == a' 
+        then liftM (True :>) (effects rest)
+        else loop False rest
 {-#INLINABLE elem #-}
-  
+
 elem_ :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m Bool
-elem_ a = fold_ op False id where
-  op True _ = True
-  op False a' | a == a' = True
-  op _ _ = False
+elem_ a' = loop False where
+  loop True str = return True
+  loop False str = case str of
+    Return r -> return False
+    Effect m -> m >>= loop False
+    Step (a:> rest) -> 
+      if a == a' 
+        then return True
+        else loop False rest
 {-#INLINABLE elem_ #-}
 
 -- -----
@@ -1204,15 +1217,20 @@ length = fold (\n _ -> n + 1) 0 id
 ahpla
 ateb
 -}
+
 map :: Monad m => (a -> b) -> Stream (Of a) m r -> Stream (Of b) m r
-map f = maps (\(x :> rest) -> f x :> rest)
-  -- loop where
+map f =  maps (\(x :> rest) -> f x :> rest)
+-- loop where  --
   -- loop stream = case stream of
   --   Return r -> Return r
   --   Effect m -> Effect (liftM loop m)
   --   Step (a :> as) -> Step (f a :> loop as)
 {-# INLINABLE map #-}
-
+-- {-# NOINLINE [1] map #-}
+-- {-# RULES
+-- "map/map"  [~1] forall f g bs . map f (map g bs) =
+--   map (f . g) bs
+-- #-}
 
 {-| Replace each element of a stream with the result of a monadic action
 
@@ -1331,6 +1349,35 @@ next = loop where
     Step (a :> rest) -> return (Right (a,rest))
 {-# INLINABLE next #-}
 
+
+{-| Exhaust a stream deciding whether @a@ was an element.
+
+-}
+
+notElem :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m (Of Bool r)
+notElem a' = loop True where
+  loop False str = liftM (False :>) (effects str)
+  loop True str = case str of
+    Return r -> return (True:> r)
+    Effect m -> m >>= loop True
+    Step (a:> rest) -> 
+      if a == a' 
+        then liftM (False :>) (effects rest)
+        else loop True rest
+{-#INLINABLE notElem #-}
+
+notElem_ :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m Bool
+notElem_ a' = loop True where
+  loop False str = return False
+  loop True str = case str of
+    Return r -> return True
+    Effect m -> m >>= loop True
+    Step (a:> rest) -> 
+      if a == a' 
+        then return False 
+        else loop True rest
+{-#INLINABLE notElem_ #-}
+
 {-| Remove repeated elements from a Stream. 'nub' of course accumulates a 'Data.Set.Set' of
     elements that have already been seen and should thus be used with care.
  
@@ -1343,6 +1390,7 @@ next = loop where
 [1,2,3]
 
 -}
+
 nub :: (Monad m, Ord a) => Stream (Of a) m r -> Stream (Of a) m r
 nub = loop Set.empty where
   loop !set stream = case stream of 
@@ -2091,7 +2139,6 @@ stdinLn = fromHandle IO.stdin
 1@#$%^&*\<Enter>
 3<Enter>
 [1,2,3] :> ()
-
 
 -}
 
