@@ -1,19 +1,20 @@
 name:                streaming
-version:             0.1.3.4
+version:             0.1.4.0
 cabal-version:       >=1.10
 build-type:          Simple
-synopsis:            an elementary streaming prelude and a general stream type.
+synopsis:            an elementary streaming prelude and general stream type.
 
-description:         @Streaming.Prelude@ exports an elementary streaming prelude relating to
-                     an elementary source, generator or producer type, namely @Stream (Of a) m r@,
-                     a sort of effectful version of @([a],r)@.
+description:         @Streaming.Prelude@ exports an elementary streaming prelude focussed on
+                     a simple \"source\" or \"producer\" type, namely @Stream (Of a) m r@.
+                     This is a sort of effectful version of @([a],r)@ in which monadic action 
+                     is interleaved between successive elements.
                      The main module, @Streaming@, exports a much more general type,
                      @Stream f m r@, which can be used to stream successive distinct
                      steps characterized by /any/
                      functor @f@, though we are here interested only in a limited range of
                      cases.
                      .
-                     The streaming-io libraries have various devices for dealing
+                     The streaming-IO libraries have various devices for dealing
                      with effectful variants of @[a]@ or @([a],r)@. But it is only with
                      the general type @Stream f m r@, or some equivalent,
                      that one can envisage (for example) the connected streaming of their
@@ -70,8 +71,74 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      .
                      > Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
                      .
-                     These conversions should never be more expensive than a single @>->@ or @=$=@. Further
-                     points of comparison are discussed in the
+                     These conversions should never be more expensive than a single @>->@ or @=$=@. 
+                     Here is a simple example that runs a single underlying stream with several
+                     streaming-io libraries at once, superimposing their effects 
+                     without any accumulation:
+                     .
+                     > module Main (main) where
+                     > import Streaming  
+                     > import Pipes 
+                     > import Data.Conduit
+                     > import qualified Streaming.Prelude as S
+                     > import qualified Data.Conduit.List as CL
+                     > import qualified Pipes.Prelude as P
+                     > import qualified System.IO.Streams as IOS
+                     > import Data.ByteString.Char8 (pack)
+                     > import Data.Function ((&))
+                     >
+                     > mkConduit  = CL.unfoldM S.uncons
+                     > mkPipe     = P.unfoldr S.next
+                     > mkIOStream = IOS.unfoldM S.uncons
+                     >
+                     > main = iostreamed where
+                     >   urstream = S.take 4 S.readLn :: Stream (Of Int) IO () 
+                     >   streamed = S.copy urstream
+                     >                  & S.map (\n -> "streaming says: " ++ show n) 
+                     >                  & S.stdoutLn 
+                     >   piped = runEffect $ 
+                     >                  mkPipe (S.copy streamed)
+                     >                  >-> P.map (\n -> "pipes says: " ++ show n)
+                     >                  >-> P.stdoutLn           
+                     >   conduited = mkConduit (S.copy piped) 
+                     >                  $$ CL.map (\n -> "conduit says:  " ++ show n)
+                     >                  =$ CL.mapM_ (liftIO . putStrLn)
+                     >   iostreamed = do
+                     >     str0 <- mkIOStream conduited
+                     >     str1 <- IOS.map (\n -> pack $ "io-streams says: " ++ show n ++ "\n") str0 
+                     >     IOS.supply str1 IOS.stdout
+                     .
+                     This program successively parses four @Int@s from standard input, 
+                     and /simulaneously/ passes them to (here trivial) stream-consuming 
+                     processes from four different libraries, using the @copy@ function from
+                     @Streaming.Prelude@. I mark my own input with @/<Enter/>@:
+                     .
+                     > >>> main
+                     > 1 <Enter>
+                     > streaming says: 1
+                     > pipes says: 1
+                     > conduit says:  1
+                     > io-streams says: 1
+                     > 2 <Enter>
+                     > streaming says: 2
+                     > pipes says: 2
+                     > conduit says:  2
+                     > io-streams says: 2
+                     > 3 <Enter>
+                     > streaming says: 3
+                     > pipes says: 3
+                     > conduit says:  3
+                     > io-streams says: 3
+                     > 4 <Enter>
+                     > streaming says: 4
+                     > pipes says: 4
+                     > conduit says:  4
+                     > io-streams says: 4
+                     .
+                     Of course, I could as well have passed the stream to several
+                     independent conduits, for example. Further
+                     points of comparison with the going streaming-IO libraries
+                     are discussed in the
                      <https://hackage.haskell.org/package/streaming#readme readme>
                      below.
                      .
@@ -82,6 +149,11 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      included in the machines package:
                      .
                      <<http://i.imgur.com/sSG5MvH.png>>
+                     .
+                     Because these are microbenchmarks for individual functions, 
+                     they represent a sort of "worst case"; many other factors can influence
+                     the speed of a complex program.
+                    
                      .
 
 

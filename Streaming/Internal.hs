@@ -30,7 +30,6 @@ module Streaming.Internal (
     -- * Transforming streams
     , maps 
     , mapsM 
-    , mapped
     , decompose
     , mapsM_
     , run
@@ -393,6 +392,10 @@ maps phi = loop where
      for effecting this frequent composition:
 
 > mapsM phi = decompose . maps (Compose . phi)
+
+     The streaming prelude exports the same function under the better name @mapped@,
+     which overlaps with the lens libraries. 
+  
 -}
 mapsM :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
 mapsM phi = loop where
@@ -402,25 +405,6 @@ mapsM phi = loop where
     Step f    -> Effect (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsM #-}
 
-{- | Map layers of one functor to another with a transformation involving the base monad
-     @maps@ is more fundamental than @mapped@, which is best understood as a convenience
-     for effecting this frequent composition:
-
-> mapped = mapsM 
-> mapsM phi = decompose . maps (Compose . phi)  
-
-     @mapped@ obeys these rules:
-
-> mapped return       = id
-> mapped f . mapped g = mapped (f <=< g)
-> map f . mapped g    = mapped (liftM f . g)
-> mapped f . map g    = mapped (f . g)
-
--}
-
-mapped :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
-mapped = mapsM
-{-#INLINE mapped #-}
 
 {-| Resort a succession of layers of the form @m (f x)@. Though @mapsM@ 
     is best understood as:
@@ -600,9 +584,9 @@ distribute :: (Monad m, Functor f, MonadTrans t, MFunctor t, Monad (t (Stream f 
            => Stream f (t m) r -> t (Stream f m) r
 distribute = loop where
   loop stream = case stream of 
-    Return r    -> lift $ Return r
+    Return r     -> lift $ Return r
     Effect tmstr -> hoist lift tmstr >>= distribute
-    Step fstr   -> join $ lift (Step (fmap (Return . distribute) fstr))
+    Step fstr    -> join $ lift (Step (fmap (Return . distribute) fstr))
     
 -- | Repeat a functorial layer, command or instruction forever.
 repeats :: (Monad m, Functor f) => f () -> Stream f m r 

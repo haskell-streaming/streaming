@@ -12,7 +12,7 @@
 
     For the examples below, one sometimes needs
 
-> import Streaming.Prelude (each, yield, stdoutLn, stdinLn)
+> import Streaming.Prelude (each, yield, next, mapped, stdoutLn, stdinLn)
 > import Data.Function ((&)) 
 
    Other libraries that come up in passing are
@@ -88,6 +88,7 @@ module Streaming.Prelude (
     , map
     , mapM
     , maps
+    , mapped
     , for
     , with
     , subst
@@ -961,7 +962,7 @@ fold step begin done str = fold_loop str begin
 foldM_
     :: Monad m
     => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> m b
-foldM_ step begin done  = liftM (\(a:>rest) -> a) . foldM step begin done
+foldM_ step begin done  = liftM (\(a :> rest) -> a) . foldM step begin done
 {-#INLINE foldM_ #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
@@ -996,8 +997,9 @@ foldM step begin done str = do
     See also the more general 'iterTM' in the 'Streaming' module 
     and the still more general 'destroy'
 
-> foldrT (\a p -> Pipes.yield a >> p) :: Monad m => Stream (Of a) m r -> Producer a m r
-> foldrT (\a p -> Conduit.yield a >> p) :: Monad m => Stream (Of a) m r -> Conduit a m r
+> foldrT (\a p -> Streaming.yield a >> p) = id
+> foldrT (\a p -> Pipes.yield a     >> p) :: Monad m => Stream (Of a) m r -> Producer a m r
+> foldrT (\a p -> Conduit.yield a   >> p) :: Monad m => Stream (Of a) m r -> Conduit a m r
 
 -}
 
@@ -1006,7 +1008,7 @@ foldrT :: (Monad m, MonadTrans t, Monad (t m))
 foldrT step = loop where
   loop stream = case stream of
     Return r       -> return r
-    Effect m        -> lift m >>= loop
+    Effect m       -> lift m >>= loop
     Step (a :> as) -> step a (loop as)
 {-# INLINABLE foldrT #-}  
 
@@ -1019,7 +1021,7 @@ foldrM :: Monad m
 foldrM step = loop where
   loop stream = case stream of
     Return r       -> return r
-    Effect m        -> m >>= loop
+    Effect m       -> m >>= loop
     Step (a :> as) -> step a (loop as)
 {-# INLINABLE foldrM #-}  
 
@@ -1279,6 +1281,29 @@ mapM_ f = loop where
       f a 
       loop as 
 {-# INLINABLE mapM_ #-}
+
+
+
+{- | Map layers of one functor to another with a transformation involving the base monad
+     @maps@ is more fundamental than @mapped@, which is best understood as a convenience
+     for effecting this frequent composition:
+
+> mapped = mapsM 
+> mapsM phi = decompose . maps (Compose . phi)  
+
+     @mapped@ obeys these rules:
+
+> mapped return       = id
+> mapped f . mapped g = mapped (f <=< g)
+> map f . mapped g    = mapped (liftM f . g)
+> mapped f . map g    = mapped (f . g)
+
+-}
+
+mapped :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
+mapped = mapsM
+{-#INLINE mapped #-}
+
 
 {-| Fold streamed items into their monoidal sum
 
@@ -2554,7 +2579,7 @@ copy = loop where
   loop str = case str of
     Return r         -> Return r
     Effect m         -> Effect (liftM loop (lift m))
-    Step (a :> rest) -> Effect (Step (a :> Return (Step (a :> loop rest))))
+    Step (a :> rest) -> Step (a :> Effect (Step (a :> Return (loop rest)))) 
 {-#INLINABLE copy#-}
 
 duplicate
@@ -2572,10 +2597,10 @@ copy'
   :: Monad m =>
      Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
 copy' = loop where
- loop str = case str of
-   Return r         -> Return r
-   Effect m         -> Effect (liftM loop (lift m))
-   Step (a :> rest) -> Step (a :> Effect (Step (a :> Return (loop rest))))   
+  loop str = case str of
+    Return r         -> Return r
+    Effect m         -> Effect (liftM loop (lift m))
+    Step (a :> rest) -> Effect (Step (a :> Return (Step (a :> loop rest))))
 {-#INLINABLE copy' #-}
 
 duplicate'
