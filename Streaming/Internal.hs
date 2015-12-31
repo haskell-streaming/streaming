@@ -326,11 +326,11 @@ streamFold done effect construct stream  = destroy stream construct effect done
 
 {- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
 
-> destroy a b c (streamBuild psi)  = 
+> streamFold return_ effect_ step_ (streamBuild psi)  = psi return_ effect_ step_
 -}
 streamBuild
-  :: (forall b . (f b -> b) -> (m b -> b) -> (r -> b) -> b) ->  Stream f m r
-streamBuild = \phi -> phi Step Effect Return
+  :: (forall b . (r -> b) -> (m b -> b) -> (f b -> b) ->  b) ->  Stream f m r
+streamBuild = \phi -> phi Return Effect Step
 {-# INLINE streamBuild #-}
 
 

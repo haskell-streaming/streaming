@@ -67,9 +67,11 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      > Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
                      > IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
                      .
-                     A simple exit to <http://hackage.haskell.org/package/conduit conduit> would be, e.g.:
+                     With <http://hackage.haskell.org/package/conduit conduit> one might use, e.g.:
                      .
-                     > Conduit.unfoldM Streaming.uncons    :: Stream (Of a) m ()  -> Source m a
+                     > Conduit.unfoldM Streaming.uncons                :: Stream (Of a) m ()  -> Source m a
+                     > Streaming.mapM_ Conduit.yield . hoist lift      :: Stream (Of o) m r -> ConduitM i o m r
+                     > ($$ Conduit.mapM_ Streaming.yield) . hoist lift :: Source m a -> Stream (Of a) m ()
                      .
                      These conversions should never be more expensive than a single @>->@ or @=$=@. 
                      Here is a simple example that runs a single underlying stream with several
@@ -93,16 +95,15 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      >
                      > main = iostreamed where
                      >   urstream = S.take 4 S.readLn :: Stream (Of Int) IO () 
-                     >   streamed = S.copy urstream
-                     >                  & S.map (\n -> "streaming says: " ++ show n) 
-                     >                  & S.stdoutLn 
+                       
+                     >   streamed = S.copy urstream & S.map (\n -> "streaming says: " ++ show n) 
+                     >                              & S.stdoutLn 
                      >   piped = runEffect $ 
-                     >                  mkPipe (S.copy streamed)
-                     >                  >-> P.map (\n -> "pipes says: " ++ show n)
-                     >                  >-> P.stdoutLn           
-                     >   conduited = mkConduit (S.copy piped) 
-                     >                  $$ CL.map (\n -> "conduit says:  " ++ show n)
-                     >                  =$ CL.mapM_ (liftIO . putStrLn)
+                     >     mkPipe (S.copy streamed) >-> P.map (\n -> "pipes says: " ++ show n)  
+                     >                              >-> P.stdoutLn           
+                     >   conduited = 
+                     >     mkConduit (S.copy piped) $$ CL.map (\n -> "conduit says:  " ++ show n) 
+                     >                              =$ CL.mapM_ (liftIO . putStrLn)
                      >   iostreamed = do
                      >     str0 <- mkIOStream conduited
                      >     str1 <- IOS.map (\n -> pack $ "io-streams says: " ++ show n ++ "\n") str0 
