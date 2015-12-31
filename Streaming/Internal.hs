@@ -306,17 +306,6 @@ destroy stream0 construct effect done = loop (unexposed stream0) where
      (f (Stream g m a) -> m (g (Stream g m a)))
      -> Stream f m a -> Stream g m a                 -- mapped
 
-    So for example, when we realize that
-
->>> :t streamFold return Q.mwrap 
-(Monad m, Functor f) =>
-   (f (Q.ByteString m a) -> Q.ByteString m a)
-   -> Stream f m a -> Q.ByteString m a
-
-   it is easy to see how to write @fromChunks@:
-
->>> streamFold return Q.mwrap (\(a:>b) -> Q.chunk a >>  b)
-Monad m => Stream (Of B.ByteString) m a -> Q.ByteString m a -- fromChunks
 -}
 streamFold
   :: (Functor f, Monad m) =>
@@ -753,8 +742,9 @@ switch s = case s of InL a -> InR a; InR a -> InL a
   
 {-| Given a stream on a sum of functors, make it a stream on the left functor,
     with the streaming on the other functor as the governing monad. This is
-    useful for acting on one or the other functor with a fold.
-  
+    useful for acting on one or the other functor with a fold. It generalizes
+    'Data.Either.partitionEithers' massively, but actually streams properly.
+
 >>> let odd_even = S.maps (S.distinguish even) $ S.each [1..10::Int]
 >>> :t separate odd_even
 separate odd_even
@@ -762,13 +752,30 @@ separate odd_even
 
     Now, for example, it is convenient to fold on the left and right values separately:
 
->>>  toList $ toList $ separate odd_even
+>>>  S.toList $ S.toList $ separate odd_even
 [2,4,6,8,10] :> ([1,3,5,7,9] :> ())
 
-   We can achieve the above effect more simply
-   in the case of @Stream (Of a) m r@ by using 'Streaming.Prelude.duplicate'
 
->>> S.toList . S.filter even $ S.toList . S.filter odd $ S.duplicate $ each [1..10::Int]
+   Or we can write them to separate files or whatever:
+
+>>> runResourceT $ S.writeFile "even.txt" . S.show $ S.writeFile "odd.txt" . S.show $ S.separate odd_even 
+>>> :! cat even.txt 
+2
+4
+6
+8
+10
+>>> :! cat odd.txt
+1
+3
+5
+7
+9
+
+   Of course, in the special case of @Stream (Of a) m r@, we can achieve the above 
+   effects more simply by using 'Streaming.Prelude.copy'
+
+>>> S.toList . S.filter even $ S.toList . S.filter odd $ S.copy $ each [1..10::Int]
 [2,4,6,8,10] :> ([1,3,5,7,9] :> ())
 
 
