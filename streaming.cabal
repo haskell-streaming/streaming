@@ -46,8 +46,9 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      with \'rank 2 types\'.
                      .
                      See the
-                     <https://hackage.haskell.org/package/streaming#readme readme> below
-                     for an explanation, including the examples linked there. Elementary usage can be divined from the ghci examples in
+                     <https://hackage.haskell.org/package/streaming#readme readme> 
+                     below for an explanation, including the examples linked there. 
+                     Elementary usage can be divined from the ghci examples in
                      @Streaming.Prelude@ and perhaps from this rough beginning of a
                      <https://github.com/michaelt/streaming-tutorial/blob/master/tutorial.md tutorial>.
                      Note also the
@@ -56,25 +57,32 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      <https://hackage.haskell.org/package/streaming-utils streaming utils>
                      packages.
                      .
-                     The simplest form of interoperation with <http://hackage.haskell.org/package/pipes pipes>
+                     The simplest form of interoperation with 
+                     <http://hackage.haskell.org/package/pipes pipes>
                      is accomplished with this isomorphism:
                      .
                      > Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
                      > Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r
                      .
-                     Interoperation with <http://hackage.haskell.org/package/io-streams io-streams> is thus:
+                     Interoperation with 
+                     <http://hackage.haskell.org/package/io-streams io-streams> 
+                     is thus:
                      .
                      > Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
                      > IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
                      .
-                     With <http://hackage.haskell.org/package/conduit conduit> one might use, e.g.:
+                     With 
+                     <http://hackage.haskell.org/package/conduit conduit> 
+                     one might use, e.g.:
                      .
                      > Conduit.unfoldM Streaming.uncons                :: Stream (Of a) m ()  -> Source m a
                      > Streaming.mapM_ Conduit.yield . hoist lift      :: Stream (Of o) m r -> ConduitM i o m r
                      > ($$ Conduit.mapM_ Streaming.yield) . hoist lift :: Source m a -> Stream (Of a) m ()
                      .
                      These conversions should never be more expensive than a single @>->@ or @=$=@. 
-                     Here is a simple example that runs a single underlying stream with several
+                     .
+                     Here is a simple example (conceptually it is a bit advanced, maybe) 
+                     that runs a single underlying stream with several
                      streaming-io libraries at once, superimposing their effects 
                      without any accumulation:
                      .
@@ -94,7 +102,7 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      > mkIOStream = IOS.unfoldM S.uncons
                      >
                      > main = iostreamed where
-                     >   urstream = S.take 4 S.readLn :: Stream (Of Int) IO () 
+                     >   urstream = S.take 3 S.readLn :: Stream (Of Int) IO () 
                        
                      >   streamed = S.copy urstream & S.map (\n -> "streaming says: " ++ show n) 
                      >                              & S.stdoutLn 
@@ -109,10 +117,10 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      >     str1 <- IOS.map (\n -> pack $ "io-streams says: " ++ show n ++ "\n") str0 
                      >     IOS.supply str1 IOS.stdout
                      .
-                     This program successively parses four @Int@s from standard input, 
+                     This program successively parses three @Int@s from standard input, 
                      and /simulaneously/ passes them to (here trivial) stream-consuming 
                      processes from four different libraries, using the @copy@ function from
-                     @Streaming.Prelude@. I mark my own input with @/<Enter/>@:
+                     @Streaming.Prelude@. I mark my own input with @/<Enter/>@ below:
                      .
                      > >>> main
                      > 1 <Enter>
@@ -130,14 +138,12 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      > pipes says: 3
                      > conduit says:  3
                      > io-streams says: 3
-                     > 4 <Enter>
-                     > streaming says: 4
-                     > pipes says: 4
-                     > conduit says:  4
-                     > io-streams says: 4
+                     > >>>
                      .
                      Of course, I could as well have passed the stream to several
-                     independent conduits, for example. Further
+                     independent conduits; and I might have derived the original
+                     stream from a conduit @Source@ or pipes @Producer@ etc., using
+                     one of the \'conversion\' functions above. Further
                      points of comparison with the going streaming-IO libraries
                      are discussed in the
                      <https://hackage.haskell.org/package/streaming#readme readme>
@@ -152,7 +158,7 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      <<http://i.imgur.com/sSG5MvH.png>>
                      .
                      Because these are microbenchmarks for individual functions, 
-                     they represent a sort of "worst case"; many other factors can influence
+                     they represent a sort of \"worst case\"; many other factors can influence
                      the speed of a complex program.
                     
                      .

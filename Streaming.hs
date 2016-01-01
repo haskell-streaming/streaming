@@ -5,17 +5,16 @@ module Streaming
    -- $stream
    Stream, 
    -- * Constructing a 'Stream' on a given functor
-   unfold,
    yields,
+   effect,
+   wrap,
    replicates,
    repeats,
    repeatsM,
-   effect,
-   wrap,
+   unfold,
    streamBuild,
    
    -- * Transforming streams
-   decompose,
    maps,
    mapsM,
    mapped, 
@@ -25,23 +24,6 @@ module Streaming
    -- * Inspecting a stream
    inspect,
    
-   
-   -- * Zipping and unzipping streams
-   zipsWith,
-   zips,
-   unzips,
-   interleaves,
-   separate,
-   unseparate,
-   
-   -- * Eliminating a 'Stream'
-   iterTM,
-   iterT,
-   destroy,
-   streamFold, 
-   mapsM_,
-   run,
-
    -- * Splitting and joining 'Stream's 
    splitsAt,
    takes,
@@ -50,6 +32,25 @@ module Streaming
    intercalates,
    -- period,
    -- periods,
+   
+   
+   -- * Zipping, unzipping, separating and unseparating streams
+   zipsWith,
+   zips,
+   unzips,
+   interleaves,
+   separate,
+   unseparate,
+   decompose,
+
+
+   -- * Eliminating a 'Stream'
+   mapsM_,
+   run,
+   streamFold, 
+   iterTM,
+   iterT,
+   destroy,
 
    -- * Base functor for streams of individual items
    Of (..),
@@ -66,6 +67,8 @@ module Streaming
    MonadTrans(..),
    MonadIO(..),
    Compose(..),
+   Sum(..),
+   Identity(..),
    MonadThrow(..),
    MonadResource(..),
    MonadBase(..),
@@ -84,6 +87,8 @@ import Control.Monad
 import Control.Applicative
 import Control.Monad.Trans
 import Data.Functor.Compose 
+import Data.Functor.Sum
+import Data.Functor.Identity
 
 import Control.Monad.Base
 import Control.Monad.Trans.Resource

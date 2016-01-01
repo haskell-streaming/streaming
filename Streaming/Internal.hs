@@ -577,19 +577,22 @@ distribute = loop where
     Effect tmstr -> hoist lift tmstr >>= distribute
     Step fstr    -> join $ lift (Step (fmap (Return . distribute) fstr))
     
--- | Repeat a functorial layer, command or instruction forever.
+-- | Repeat a functorial layer (a \"command\" or \"instruction\") forever.
 repeats :: (Monad m, Functor f) => f () -> Stream f m r 
 repeats f = loop where
   loop = Step $ fmap (\_ -> loop) f
 
--- Repeat a functorial layer, command or instruction forever.
+-- | Repeat an effect containing a functorial layer, command or instruction forever.
 repeatsM :: (Monad m, Functor f) => m (f ()) -> Stream f m r 
 repeatsM mf = loop where
   loop = Effect $ do
      f <- mf
      return $ Step $ fmap (\_ -> loop) f
 
--- | Repeat a functorial layer, command or instruct several times.
+{- | Repeat a functorial layer, command or instruction a fixed number of times.
+
+> replicates n = takes n . repeats 
+-}
 replicates :: (Monad m, Functor f) => Int -> f () -> Stream f m ()
 replicates n f = splitsAt n (repeats f) >> return ()
 
@@ -660,21 +663,55 @@ unexposed = Effect . loop where
 {-# INLINABLE unexposed #-}   
 
 
+{- Wrap a new layer of a stream. So, e.g.
 
-effect :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
-effect = Effect
-{-#INLINE effect #-}
+> S.cons :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
+> S.cons a str = wrap (a :> str)
 
+   and, recursively:
+
+> S.each :: (Monad m, Foldable t) => t a -> Stream (Of a) m ()
+> S.each = foldr (\a b -> wrap (a :> b)) (return ())
+
+   The two operations 
+
+> wrap :: (Monad m, Functor f )   => f (Stream f m r) -> Stream f m r
+> effect :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
+
+   are fundamental. We can define the parallel operations @yields@ and @lift@ in 
+   terms of them
+
+> yields :: (Monad m, Functor f )  => f r -> Stream f m r
+> yields = wrap . fmap return
+> lift ::  (Monad m, Functor f )   => m r -> Stream f m r
+> lift = effect . fmap return
+
+-}
 wrap :: (Monad m, Functor f ) => f (Stream f m r) -> Stream f m r
 wrap = Step
 {-#INLINE wrap #-}
 
 
-{-| Lift for items in the base functor. Makes a singleton or
-    one-layer succession. It is named by similarity to lift: 
+{- | Wrap an effect that returns a stream
 
-> lift :: (Monad m, Functor f)     => m r -> Stream f m r
+> effect = join . lift 
+
+-}
+effect :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
+effect = Effect
+{-#INLINE effect #-}
+
+
+{-| @yields@ is like @lift@ for items in the streamed functor. 
+    It makes a singleton or one-layer succession. 
+
+> lift :: (Monad m, Functor f)    => m r -> Stream f m r
 > yields ::  (Monad m, Functor f) => f r -> Stream f m r
+
+    Viewed in another light, it is like a functor-general version of @yield@:
+
+> S.yield a = yields (a :> ())
+
 -}
 
 yields ::  (Monad m, Functor f) => f r -> Stream f m r
