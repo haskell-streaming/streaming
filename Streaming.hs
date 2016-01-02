@@ -14,6 +14,7 @@ module Streaming
    unfold,
    untilJust,
    streamBuild,
+   delays,
    
    -- * Transforming streams
    maps,
@@ -70,21 +71,26 @@ module Streaming
    Compose(..),
    Sum(..),
    Identity(..),
+   Alternative((<|>)),
    MonadThrow(..),
    MonadResource(..),
    MonadBase(..),
    ResourceT(..),
    runResourceT,
    join,
+   liftM,
+   liftM2,
    liftA2,
    liftA3,
    void,
+   (<>)
    )
    where
 import Streaming.Internal 
 import Streaming.Prelude 
 import Control.Monad.Morph
 import Control.Monad
+import Data.Monoid ((<>))
 import Control.Applicative
 import Control.Monad.Trans
 import Data.Functor.Compose 

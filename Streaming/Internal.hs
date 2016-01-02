@@ -15,6 +15,8 @@ module Streaming.Internal (
     , yields
     , streamBuild 
     , cycles
+    , delays
+    , never
     , untilJust
     
     -- * Eliminating a stream
@@ -85,6 +87,7 @@ import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
 import Data.Functor.Sum
+import Control.Concurrent (threadDelay)
 -- import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime, addUTCTime)
 
 import Control.Monad.Base
@@ -206,20 +209,12 @@ instance (Functor f, Monad m) => Applicative (Stream f m) where
 -- {-# INLINABLE (<*) #-}
 
 instance (Applicative f, Monad m) => Alternative (Stream f m) where
-  empty = let loop = Step (pure loop) in loop
+  empty = let loop = Effect $ return $ Step $ pure loop in loop
   {-#INLINABLE empty #-}
   
-  str <|> str' = Effect (loop str str')
-    where
-      loop str0 str0' = case str0 of
-        Return r -> return (Return r)
-        Effect m -> m >>= \s -> loop s str0'
-        Step f   -> case str0' of
-          Return r -> return (Return r)
-          Effect m -> m >>= loop (Step f)
-          Step f'  -> return $ Step $ liftA2 (<|>) f f'
-  {-#INLINABLE (<|>) #-}
-          
+  str <|> str' = zipsWith (liftA2 (,)) str str'
+  {-#INLINE (<|>) #-}
+
 instance (Applicative f, Monad m) => MonadPlus (Stream f m) where
   mzero = empty
   mplus = (<|>)
@@ -925,6 +920,17 @@ groups = loop
 --       Left r           -> return (return r)
 --       Right (InL fstr) -> wrap (fmap loop fstr)
 --       Right (InR gstr) -> return (wrap (InR gstr))
+
+never :: (Monad m, Applicative f) => Stream f m r
+never = empty
+{-#INLINE never #-}
+
+
+delays :: (MonadIO m, Applicative f) => Double -> Stream f m r
+delays seconds = loop where
+  loop = Effect $ liftIO (threadDelay delay) >> return (Step (pure loop))
+  delay = fromInteger (truncate (1000000 * seconds)) 
+{-#INLINABLE delays #-}
 
 -- {-| Permit streamed actions to proceed unless the clock has run out.
 --

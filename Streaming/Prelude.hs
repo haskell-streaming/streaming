@@ -97,7 +97,6 @@ module Streaming.Prelude (
     , store
     , chain
     , sequence
-    , nub
     , filter
     , filterM
     , delay
@@ -254,7 +253,6 @@ import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
 import Data.Functor.Classes
 import Data.Functor.Compose
 import Control.Monad.Trans.Resource
-import qualified Data.Set as Set
 
 import GHC.Exts ( SpecConstrAnnotation(..) )
 
@@ -1403,27 +1401,6 @@ notElem_ a' = loop True where
         else loop True rest
 {-#INLINABLE notElem_ #-}
 
-{-| Remove repeated elements from a Stream. 'nub' of course accumulates a 'Data.Set.Set' of
-    elements that have already been seen and should thus be used with care.
- 
->>> S.toList_ $ S.nub $ S.take 5 S.readLn :: IO ([Int])
-1<Enter>
-2<Enter>
-3<Enter>
-1<Enter>
-2<Enter>
-[1,2,3]
-
--}
-
-nub :: (Monad m, Ord a) => Stream (Of a) m r -> Stream (Of a) m r
-nub = loop Set.empty where
-  loop !set stream = case stream of 
-    Return r         -> Return r
-    Effect m         -> Effect (liftM (loop set) m)
-    Step (a :> rest) -> if Set.member a set 
-      then loop set rest
-      else Step (a :> loop (Set.insert a set) rest)
 
 {-| 
 > filter p = hoist effects (partition p)
@@ -1695,7 +1672,7 @@ c<Enter>
   
    To restrict user input to some number of seconds, we might write:
   
->>> S.toList $ S.zipWith (flip const) (S.takeWhile (< 5) S.seconds) S.stdinLn
+>>> S.toList $ S.map fst $ S.zip S.stdinLn $ S.takeWhile (< 3) S.seconds
 one<Enter>
 two<Enter>
 three<Enter>
@@ -1703,7 +1680,7 @@ four<Enter>
 five<Enter>
 ["one","two","three","four","five"] :> ()
 
-   This is of course crude as it does not interrupt an action that has already begun.
+   This is of course does not interrupt an action that has already begun.
 
   -}
   
