@@ -12,6 +12,7 @@ module Streaming
    repeats,
    repeatsM,
    unfold,
+   untilJust,
    streamBuild,
    
    -- * Transforming streams

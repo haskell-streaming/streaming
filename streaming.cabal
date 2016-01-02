@@ -1,5 +1,5 @@
 name:                streaming
-version:             0.1.4.0
+version:             0.1.4.1
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and general stream type.
@@ -43,7 +43,7 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      intuitions the user has gathered from mastery of @Prelude@ and
                      @Data.List@. The two conceptual pre-requisites are some
                      comprehension of monad transformers and some familiarity
-                     with \'rank 2 types\'.
+                     with \'rank 2 types\'. 
                      .
                      See the
                      <https://hackage.haskell.org/package/streaming#readme readme> 
@@ -55,7 +55,11 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      <https://hackage.haskell.org/package/streaming-bytestring streaming bytestring>
                      and
                      <https://hackage.haskell.org/package/streaming-utils streaming utils>
-                     packages.
+                     packages. Questions about usage can be put
+                     raised on StackOverflow with the tag @[haskell-streaming]@, 
+                     or as an issue on Github, or on the 
+                     <https://groups.google.com/forum/#!forum/haskell-pipes pipes list>
+                     (the package understands itself as part of the pipes \'ecosystem\'.)
                      .
                      The simplest form of interoperation with 
                      <http://hackage.haskell.org/package/pipes pipes>

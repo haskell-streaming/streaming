@@ -15,6 +15,7 @@ module Streaming.Internal (
     , yields
     , streamBuild 
     , cycles
+    , untilJust
     
     -- * Eliminating a stream
     , intercalates 
@@ -191,19 +192,38 @@ instance (Functor f, Monad m) => Applicative (Stream f m) where
   {-# INLINE pure #-}
   streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)}   
   {-# INLINE (<*>) #-}    
-  -- stra0 *> strb = loop stra0 where
-  --   loop stra = case stra of
-  --     Return _ -> strb
-  --     Effect m  -> Effect (do {stra' <- m ; return (stra' *> strb)})
-  --     Step fstr -> Step (fmap (*> strb) fstr)
-  -- {-# INLINABLE (*>) #-}
-  -- stra <* strb0 = loop strb0 where
-  --   loop strb = case strb of
-  --     Return _ -> stra
-  --     Effect m  -> Effect (do {strb' <- m ; return (stra <* strb')})
-  --     Step fstr -> Step (fmap (stra <*) fstr)
-  -- {-# INLINABLE (<*) #-}
-  --
+-- stra0 *> strb = loop stra0 where
+--   loop stra = case stra of
+--     Return _ -> strb
+--     Effect m  -> Effect (do {stra' <- m ; return (stra' *> strb)})
+--     Step fstr -> Step (fmap (*> strb) fstr)
+-- {-# INLINABLE (*>) #-}
+-- stra <* strb0 = loop strb0 where
+--   loop strb = case strb of
+--     Return _ -> stra
+--     Effect m  -> Effect (do {strb' <- m ; return (stra <* strb')})
+--     Step fstr -> Step (fmap (stra <*) fstr)
+-- {-# INLINABLE (<*) #-}
+
+instance (Applicative f, Monad m) => Alternative (Stream f m) where
+  empty = let loop = Step (pure loop) in loop
+  {-#INLINABLE empty #-}
+  
+  str <|> str' = Effect (loop str str')
+    where
+      loop str0 str0' = case str0 of
+        Return r -> return (Return r)
+        Effect m -> m >>= \s -> loop s str0'
+        Step f   -> case str0' of
+          Return r -> return (Return r)
+          Effect m -> m >>= loop (Step f)
+          Step f'  -> return $ Step $ liftA2 (<|>) f f'
+  {-#INLINABLE (<|>) #-}
+          
+instance (Applicative f, Monad m) => MonadPlus (Stream f m) where
+  mzero = empty
+  mplus = (<|>)
+  
 instance Functor f => MonadTrans (Stream f) where
   lift = Effect . liftM Return
   {-# INLINE lift #-}
@@ -978,3 +998,15 @@ groups = loop
 --               Effect m -> Effect (liftM loop m)
 --               Step f   -> Step (fmap loop f)
 --     loop str
+
+{- | Repeat a 
+
+-}
+
+untilJust :: (Monad m, Applicative f) => m (Maybe r) -> Stream f m r
+untilJust act = loop where
+  loop = Effect $ do
+    m <- act
+    case m of 
+      Nothing -> return $ Step $ pure loop
+      Just a -> return $ Return a
