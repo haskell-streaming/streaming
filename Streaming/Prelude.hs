@@ -1703,6 +1703,8 @@ four<Enter>
 five<Enter>
 ["one","two","three","four","five"] :> ()
 
+   This is of course crude as it does not interrupt an action that has already begun.
+
   -}
   
 seconds :: Stream (Of Double) IO r

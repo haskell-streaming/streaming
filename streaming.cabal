@@ -200,7 +200,6 @@ library
                      , mmorph >=1.0 && <1.2
                      , transformers >=0.4 && <0.5
                      , transformers-base
-                     , bytestring
                      , time
                      , resourcet
                      , exceptions
