@@ -199,7 +199,7 @@ instance Functor f => MonadTrans (Stream f) where
   {-# INLINE lift #-}
 
 instance Functor f => MFunctor (Stream f) where
-  hoist trans = loop . unexposed where
+  hoist trans = loop  where
     loop stream = case stream of 
       Return r  -> Return r
       Effect m   -> Effect (trans (liftM loop m))
@@ -212,7 +212,7 @@ instance Functor f => MMonad (Stream f) where
       Return r -> Return r
       Effect  m -> phi m >>= loop
       Step   f -> Step (fmap loop f)
-  {-# INLINABLE embed #-}   
+  {-# INLINABLE embed #-} 
 
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   liftIO = Effect . liftM Return . liftIO
@@ -306,7 +306,7 @@ bracketStream alloc free inside = do
 destroy
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroy stream0 construct effect done = loop (unexposed stream0) where
+destroy stream0 construct effect done = loop stream0 where
   loop stream = case stream of
     Return r -> done r
     Effect m  -> effect (liftM loop m)
@@ -429,14 +429,21 @@ mapsM phi = loop where
 {-# INLINABLE mapsM #-}
 
 
-{-| Resort a succession of layers of the form @m (f x)@. Though @mapsM@ 
-    is best understood as:
-
-> mapsM phi = decompose . maps (Compose . phi)
+{-| Rearrange a succession of layers of the form @Compose m (f x)@. 
 
    we could as well define @decompose@ by @mapsM@:
 
-> decompose = mapsM getCompose
+> decompose = mapped getCompose
+
+  but @mapped@ is best understood as:
+
+> mapped phi = decompose . maps (Compose . phi)
+
+  since @maps@ and @hoist@ are the really fundamental operations that preserve the
+  shape of the stream:
+
+> maps  :: (Monad m, Functor f) => (forall x. f x -> g x) -> Stream f m r -> Stream g m r
+> hoist :: (Monad m, Functor f) => (forall a. m a -> n a) -> Stream f m r -> Stream f n r
 
 -}
 decompose :: (Monad m, Functor f) => Stream (Compose m f) m r -> Stream f m r
@@ -545,7 +552,7 @@ concats  = loop where
 
 -}
 splitsAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
-splitsAt = loop where
+splitsAt  = loop  where
   loop !n stream 
     | n <= 0 = Return stream
     | otherwise = case stream of
@@ -607,14 +614,14 @@ distribute :: (Monad m, Functor f, MonadTrans t, MFunctor t, Monad (t (Stream f 
            => Stream f (t m) r -> t (Stream f m) r
 distribute = loop where
   loop stream = case stream of 
-    Return r     -> lift $ Return r
+    Return r     -> lift (Return r)
     Effect tmstr -> hoist lift tmstr >>= distribute
-    Step fstr    -> join $ lift (Step (fmap (Return . distribute) fstr))
+    Step fstr    -> join (lift (Step (fmap (Return . distribute) fstr)))
     
 -- | Repeat a functorial layer (a \"command\" or \"instruction\") forever.
 repeats :: (Monad m, Functor f) => f () -> Stream f m r 
 repeats f = loop where
-  loop = Step $ fmap (\_ -> loop) f
+  loop = Effect (return (Step (fmap (\_ -> loop) f)))
 
 -- | Repeat an effect containing a functorial layer, command or instruction forever.
 repeatsM :: (Monad m, Functor f) => m (f ()) -> Stream f m r 
@@ -749,7 +756,7 @@ effect = Effect
 -}
 
 yields ::  (Monad m, Functor f) => f r -> Stream f m r
-yields fr = Step (fmap Return fr)
+yields fr = Effect (return (Step (fmap Return fr)))
 {-#INLINE yields #-}
 
 

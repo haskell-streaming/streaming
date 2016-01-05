@@ -578,32 +578,7 @@ delay seconds = loop where
         loop rest
 {-#INLINABLE delay #-}
 
--- ---------------
--- effects
--- ---------------
 
-{- | Reduce a stream, performing its actions but ignoring its elements. 
-    
->>> rest <- S.effects $ S.splitAt 2 $ each [1..5]
->>> S.print rest
-3
-4
-5
-    'effects' should be understood together with 'copy' and is subject to the rules
-
-> S.effects . S.copy       = id
-> hoist S.effects . S.copy = id
-
-    The similar @effects@ and @copy@ operations in @Data.ByteString.Streaming@ obey the same rules. 
-
--}
-effects :: Monad m => Stream (Of a) m r -> m r
-effects = loop where
-  loop stream = case stream of 
-    Return r         -> return r
-    Effect m         -> m >>= loop 
-    Step (_ :> rest) -> loop rest
-{-#INLINABLE effects #-}
   
 {-| Where a transformer returns a stream, run the effects of the stream, keeping
    the return value. This is usually used at the type
@@ -713,8 +688,36 @@ w<Enter>
 
 -}
 each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
-each = Foldable.foldr (\a p -> (Step (a :> p))) (Return ())
+each = Foldable.foldr (\a p -> (Effect (return (Step (a :> p))))) (Return ())
 {-# INLINABLE each #-}
+
+
+-- ---------------
+-- effects
+-- ---------------
+
+{- | Reduce a stream, performing its actions but ignoring its elements. 
+    
+>>> rest <- S.effects $ S.splitAt 2 $ each [1..5]
+>>> S.print rest
+3
+4
+5
+    'effects' should be understood together with 'copy' and is subject to the rules
+
+> S.effects . S.copy       = id
+> hoist S.effects . S.copy = id
+
+    The similar @effects@ and @copy@ operations in @Data.ByteString.Streaming@ obey the same rules. 
+
+-}
+effects :: Monad m => Stream (Of a) m r -> m r
+effects = loop where
+  loop stream = case stream of 
+    Return r         -> return r
+    Effect m         -> m >>= loop 
+    Step (_ :> rest) -> loop rest
+{-#INLINABLE effects #-}
 
 {-| Exhaust a stream remembering only whether @a@ was an element.
 
@@ -767,7 +770,7 @@ elem_ a' = loop False where
 -}
 enumFrom :: (Monad m, Enum n) => n -> Stream (Of n) m r
 enumFrom = loop where
-  loop !n = Step (n :> loop (succ n))
+  loop !n = Effect (return (Step (n :> loop (succ n))))
 {-# INLINABLE enumFrom #-}
 
 
@@ -1143,9 +1146,9 @@ intersperse x str = case str of
 
 
 -}
-iterate :: (a -> a) -> a -> Stream (Of a) m r
+iterate :: Monad m => (a -> a) -> a -> Stream (Of a) m r
 iterate f = loop where
-  loop a' = Step (a' :> loop (f a'))
+  loop a' = Effect (return (Step (a' :> loop (f a'))))
 {-# INLINABLE iterate #-}
 
 -- | Iterate a monadic function from a seed value, streaming the results forever
@@ -1503,8 +1506,8 @@ read stream = for stream $ \str -> case readMaybe str of
 1
 -}
 
-repeat :: a -> Stream (Of a) m r
-repeat a = loop where loop = Step (a :> loop)
+repeat :: Monad m => a -> Stream (Of a) m r
+repeat a = loop where loop = Effect (return (Step (a :> loop)))
 {-# INLINE repeat #-}
 
 
@@ -1533,7 +1536,7 @@ replicate :: Monad m => Int -> a -> Stream (Of a) m ()
 replicate n a | n <= 0 = return ()
 replicate n a = loop n where
   loop 0 = Return ()
-  loop m = Step (a :> loop (m-1))
+  loop m = Effect (return (Step (a :> loop (m-1))))
 {-# INLINABLE replicate #-}
 
 {-| Repeat an action several times, streaming the results.
@@ -2047,7 +2050,7 @@ Enter a number:
 -}
 
 yield :: Monad m => a -> Stream (Of a) m ()
-yield a = Step (a :> Return ())
+yield a = Effect (return (Step (a :> Return ())))
 {-# INLINE yield #-}
 
 -- | Zip two 'Streams's 
