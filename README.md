@@ -5,14 +5,23 @@ Contents
 --------
 
 § 1.  The freely generated stream on a streamable functor
+
 § 2.  A freely generated stream of individual Haskell values is a Producer, Generator or Source
+
 § 3.  `Streaming.Prelude`
+
 § 4.  Mother's `Prelude` v. `Streaming.Prelude`
+
 § 5.  How come there's not one of those fancy "ListT done right" implementations in here?
+
 § 6.  Didn't I hear that free monads are a dog from the point of view of efficiency?
+
 § 7.  Interoperation with the streaming-io libraries
+
 § 8.  Where can I find examples of use?
+
 § 9.  Problems
+
 § 10. Implementation and benchmarking notes
 
 
