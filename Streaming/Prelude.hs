@@ -1282,19 +1282,28 @@ mapM_ f = loop where
 
 
 
-{- | Map layers of one functor to another with a transformation involving the base monad
+{- | Map layers of one functor to another with a transformation involving the base monad.
+     This could be trivial, e.g.
+
+> let noteBeginning text x = putStrLn text >> return text
+
+     this puts the
+     is completely functor-general 
+
+     @maps@ and @mapped@ obey these rules:
+
+> maps id              = id
+> mapped return        = id
+> maps f . maps g      = maps (f . g)
+> mapped f . mapped g  = mapped (f <=< g)
+> maps f . mapped g    = mapped (liftM f . g)
+> mapped f . maps g    = mapped (f <=< liftM g)
+
      @maps@ is more fundamental than @mapped@, which is best understood as a convenience
      for effecting this frequent composition:
 
-> mapped = mapsM 
-> mapsM phi = decompose . maps (Compose . phi)  
+> mapped phi = decompose . maps (Compose . phi)  
 
-     @mapped@ obeys these rules:
-
-> mapped return       = id
-> mapped f . mapped g = mapped (f <=< g)
-> map f . mapped g    = mapped (liftM f . g)
-> mapped f . map g    = mapped (f . g)
 
 -}
 

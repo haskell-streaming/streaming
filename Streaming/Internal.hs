@@ -44,6 +44,7 @@ module Streaming.Internal (
     , chunksOf 
     , splitsAt
     , takes
+    , cutoff
     -- , period
     -- , periods
     
@@ -76,6 +77,11 @@ module Streaming.Internal (
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Class
+import Control.Monad.Reader.Class
+import Control.Monad.Writer.Class
+import Control.Monad.State.Class
+import Control.Monad.Error.Class
+import Control.Monad.Cont.Class
 import Control.Applicative
 import Data.Foldable ( Foldable(..) )
 import Data.Traversable
@@ -152,42 +158,16 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
       Effect m  -> Effect (liftM loop m)
       Step f   -> Step (fmap loop f)    
   {-# INLINABLE (>>) #-}
-  (>>=) = _bind
-  {-#INLINE (>>=) #-}
-  
-  -- stream >>= f = 
-  --   loop stream where
-  --   loop stream0 = case stream0 of
-  --     Step fstr -> Step (fmap loop fstr)
-  --     Effect m   -> Effect (liftM loop m)
-  --     Return r  -> f r
-  -- {-# INLINABLE (>>=) #-}                         
-
-  fail = lift . fail
-  {-#INLINE fail #-}
-  
-
-_bind
-    :: (Functor f, Monad m)
-    => Stream f m r
-    -> (r -> Stream f m s)
-    -> Stream f m s
-_bind p0 f = go p0 where
+  p0 >>= f = go p0 where
     go p = case p of
       Step fstr  -> Step (fmap go fstr)
       Effect m   -> Effect (m >>= \s -> return (go s))
       Return r  -> f r
-{-#INLINABLE[0] _bind #-}
-      
-{-# RULES
-    "_bind (Step    fstr) f" forall  fstr f .
-        _bind (Step fstr) f = Step (fmap (\p -> _bind p f) fstr);
-    "_bind (Effect      m) f" forall m    f .
-        _bind (Effect   m) f = Effect (m >>= \p -> return (_bind p f));
-    "_bind (Return     r) f" forall r    f .
-        _bind (Return  r) f = f r;
-  #-}
+  {-#INLINABLE (>>=) #-}
+                      
 
+  fail = lift . fail
+  {-#INLINE fail #-}
   
   
 instance (Functor f, Monad m) => Applicative (Stream f m) where
@@ -195,22 +175,17 @@ instance (Functor f, Monad m) => Applicative (Stream f m) where
   {-# INLINE pure #-}
   streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)}   
   {-# INLINE (<*>) #-}    
--- stra0 *> strb = loop stra0 where
---   loop stra = case stra of
---     Return _ -> strb
---     Effect m  -> Effect (do {stra' <- m ; return (stra' *> strb)})
---     Step fstr -> Step (fmap (*> strb) fstr)
--- {-# INLINABLE (*>) #-}
--- stra <* strb0 = loop strb0 where
---   loop strb = case strb of
---     Return _ -> stra
---     Effect m  -> Effect (do {strb' <- m ; return (stra <* strb')})
---     Step fstr -> Step (fmap (stra <*) fstr)
--- {-# INLINABLE (<*) #-}
 
+{- | The 'Alternative' instance glues streams together stepwise. 
+
+> empty = never
+> (<|>) = zipsWith (liftA2 (,))
+
+   See also 'never', 'untilJust' and 'delays'
+-}
 instance (Applicative f, Monad m) => Alternative (Stream f m) where
-  empty = let loop = Effect $ return $ Step $ pure loop in loop
-  {-#INLINABLE empty #-}
+  empty = never
+  {-#INLINE empty #-}
   
   str <|> str' = zipsWith (liftA2 (,)) str str'
   {-#INLINE (<|>) #-}
@@ -250,8 +225,6 @@ instance (MonadBase b m, Functor f) => MonadBase b (Stream f m) where
 instance (MonadThrow m, Functor f) => MonadThrow (Stream f m) where
   throwM = lift . throwM 
   {-#INLINE throwM #-}
-  
-
 
 instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
   catch str f = go str
@@ -268,7 +241,52 @@ instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
 instance (MonadResource m, Functor f) => MonadResource (Stream f m) where
   liftResourceT = lift . liftResourceT
   {-#INLINE liftResourceT #-}
-  
+
+
+instance (Functor f, MonadReader r m) => MonadReader r (Stream f m) where
+  ask = lift ask
+  {-# INLINE ask #-}
+  local f = hoist (local f)
+  {-# INLINE local #-}
+
+-- instance (Functor f, MonadWriter w m) => MonadWriter w (Stream f m) where
+--   tell = lift . tell
+--   {-# INLINE tell #-}
+-- --   listen (FreeT m) = FreeT $ liftM concat' $ listen (fmap listen `liftM` m)
+--     where
+--       concat' (Pure x, w) = Pure (x, w)
+--       concat' (Free y, w) = Free $ fmap (second (w <>)) <$> y
+--   pass m = FreeT . pass' . runFreeT . hoist  clean $ listen m
+--     where
+--       clean = pass . liftM (\x -> (x, const mempty))
+--       pass' = join . liftM g
+--       g (Pure ((x, f), w)) = tell (f w) >> return (Pure x)
+--       g (Free f)           = return . Free . fmap (FreeT . pass' . runFreeT) $ f
+-- #if MIN_VERSION_mtl(2,1,1)
+--   writer w = lift (writer w)
+--   {-# INLINE writer #-}
+-- #endif
+--
+instance (Functor f, MonadState s m) => MonadState s (Stream f m) where
+  get = lift get
+  {-# INLINE get #-}
+  put = lift . put
+  {-# INLINE put #-}
+#if MIN_VERSION_mtl(2,1,1)
+  state f = lift (state f)
+  {-# INLINE state #-}
+#endif
+
+instance (Functor f, MonadError e m) => MonadError e (Stream f m) where
+  throwError = lift . throwError
+  {-# INLINE throwError #-}
+  str `catchError` f = loop str where
+    loop str = case str of
+      Return r -> Return r
+      Effect m -> Effect $ liftM loop m `catchError` (return . f)
+      Step f -> Step (fmap loop f)
+  {-# INLINABLE catchError #-}
+   
 bracketStream :: (Functor f, MonadResource m) =>
        IO a -> (a -> IO ()) -> (a -> Stream f m b) -> Stream f m b
 bracketStream alloc free inside = do
@@ -281,7 +299,8 @@ bracketStream alloc free inside = do
         Effect m -> Effect (liftM loop m)
         Step f   -> Step (fmap loop f)
 {-#INLINABLE bracketStream #-}
-        
+
+
 {-| Map a stream directly to its church encoding; compare @Data.List.foldr@
 -}
 destroy
@@ -921,9 +940,74 @@ groups = loop
 --       Right (InL fstr) -> wrap (fmap loop fstr)
 --       Right (InR gstr) -> return (wrap (InR gstr))
 
+{- | 'never' interleaves the pure applicative action with the return of the monad forever. 
+     It is the 'empty' of the 'Alternative' instance, thus
+
+> never <|> a = a
+> a <|> never = a
+
+     and so on. If w is a monoid then @never :: Stream (Of w) m r@ is
+     the infinite sequence of 'mempty', and
+     @str1 \<|\> str2@ appends the elements monoidally until one of streams ends.
+     Thus we have, e.g.
+
+>>> S.stdoutLn $ S.take 2 $ S.stdinLn <|> S.repeat " " <|> S.stdinLn  <|> S.repeat " " <|> S.stdinLn 
+1<Enter>  
+2<Enter>
+3<Enter>
+1 2 3
+4<Enter>
+5<Enter>
+6<Enter>
+4 5 6
+
+    This is equivalent to 
+
+>>> S.stdoutLn $ S.take 2 $ foldr (<|>) never [S.stdinLn, S.repeat " ", S.stdinLn, S.repeat " ", S.stdinLn ]
+
+     Where 'f' is a monad, @(\<|\>)@ sequences the conjoined streams stepwise. See the
+     definition of @paste@ <https://gist.github.com/michaelt/6c6843e6dd8030e95d58 here>,
+     where the separate steps are bytestreams corresponding to the lines of a file. 
+
+     Given, say,
+
+> data Branch r = Branch r r deriving Functor  -- add obvious applicative instance
+
+    then @never :: Stream Branch Identity r@  is the pure infinite binary tree with
+    (inaccessible) @r@s in its leaves. Given two binary trees, @tree1 \<|\> tree2@
+    intersects them, preserving the leaves that came first, 
+    so @tree1 \<|\> never = tree1@
+
+    @Stream Identity m r@ is an action in @m@ that is indefinitely delayed. Such an 
+    action can be constructed with e.g. 'untilJust'.
+
+> untilJust :: (Monad m, Applicative f) => m (Maybe r) -> Stream f m r
+
+    Given two such items, @\<|\>@ instance races them. 
+    It is thus the iterative monad transformer specially defined in 
+    <https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Iter.html Control.Monad.Trans.Iter>
+
+    So, for example, we might write
+
+>>> let justFour str = if length str == 4 then Just str else Nothing
+>>> let four = untilJust (liftM justFour getLine) 
+>>> run four
+one<Enter>
+two<Enter>
+three<Enter>
+four<Enter>
+"four"
+
+
+    The 'Alternative' instance in 
+    <https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html Control.Monad.Trans.Free> 
+    is avowedly wrong, though no explanation is given for this.
+
+
+-}
 never :: (Monad m, Applicative f) => Stream f m r
-never = empty
-{-#INLINE never #-}
+never =  let loop = Effect $ return $ Step $ pure loop in loop
+{-#INLINABLE never #-} 
 
 
 delays :: (MonadIO m, Applicative f) => Double -> Stream f m r
@@ -1016,3 +1100,13 @@ untilJust act = loop where
     case m of 
       Nothing -> return $ Step $ pure loop
       Just a -> return $ Return a
+      
+      
+cutoff :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Maybe r)
+cutoff = loop where
+  loop 0 str = return Nothing
+  loop n str = do 
+      e <- lift $ inspect str
+      case e of
+        Left r -> return (Just r)
+        Right (frest) -> Step $ fmap (loop (n-1)) frest
