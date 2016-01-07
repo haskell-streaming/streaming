@@ -51,6 +51,7 @@ module Streaming.Prelude (
     -- $producers
     , yield
     , each
+    , each'
     , unfoldr
     , stdinLn
     , readLn
@@ -688,9 +689,12 @@ w<Enter>
 
 -}
 each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
-each = Foldable.foldr (\a p -> (Effect (return (Step (a :> p))))) (Return ())
+each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
 {-# INLINABLE each #-}
 
+each' :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
+each' = Foldable.foldr (\a p -> Effect (return (Step (a :> p)))) (Return ())
+{-# INLINABLE each' #-}
 
 -- ---------------
 -- effects
@@ -1594,12 +1598,9 @@ scan step begin done = loop begin
   where
   loop !acc stream = do
     case stream of 
-      Return r -> yield (done acc)  >> return r
+      Return r -> Step (done acc :> Return r)
       Effect m -> Effect (liftM (loop acc) m)
-      Step (a :> rest) -> do
-            yield (done acc) 
-            let !acc' = step acc a
-            loop acc' rest
+      Step (a :> rest) -> Step (done acc :> loop (step acc a) rest)
 {-#INLINABLE scan #-}
 
 {-| Strict left scan, accepting a monadic function. It can be used with
@@ -2050,7 +2051,7 @@ Enter a number:
 -}
 
 yield :: Monad m => a -> Stream (Of a) m ()
-yield a = Effect (return (Step (a :> Return ())))
+yield a = Step (a :> Return ())
 {-# INLINE yield #-}
 
 -- | Zip two 'Streams's 
@@ -2566,11 +2567,12 @@ two
 copy
   :: Monad m =>
      Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
-copy = loop where
+copy = Effect . return . loop where
   loop str = case str of
     Return r         -> Return r
     Effect m         -> Effect (liftM loop (lift m))
-    Step (a :> rest) -> Step (a :> Effect (Step (a :> Return (loop rest)))) 
+    Step (a :> rest) -> Effect (Step (a :> Return (Step (a :> loop rest))))
+    
 {-#INLINABLE copy#-}
 
 duplicate
@@ -2587,11 +2589,11 @@ duplicate = copy
 copy'
   :: Monad m =>
      Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
-copy' = loop where
+copy' = Effect . return . loop where
   loop str = case str of
     Return r         -> Return r
     Effect m         -> Effect (liftM loop (lift m))
-    Step (a :> rest) -> Effect (Step (a :> Return (Step (a :> loop rest))))
+    Step (a :> rest) -> Step (a :> Effect (Step (a :> Return (loop rest)))) 
 {-#INLINABLE copy' #-}
 
 duplicate'

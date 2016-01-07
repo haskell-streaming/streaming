@@ -158,17 +158,41 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
       Effect m  -> Effect (liftM loop m)
       Step f   -> Step (fmap loop f)    
   {-# INLINABLE (>>) #-}
-  p0 >>= f = go p0 where
-    go p = case p of
-      Step fstr  -> Step (fmap go fstr)
-      Effect m   -> Effect (m >>= \s -> return (go s))
-      Return r  -> f r
-  {-#INLINABLE (>>=) #-}
-                      
+  (>>=) = _bind
+  {-#INLINE (>>=) #-}
+  
+  -- stream >>= f = 
+  --   loop stream where
+  --   loop stream0 = case stream0 of
+  --     Step fstr -> Step (fmap loop fstr)
+  --     Effect m   -> Effect (liftM loop m)
+  --     Return r  -> f r
+  -- {-# INLINABLE (>>=) #-}                         
 
   fail = lift . fail
   {-#INLINE fail #-}
   
+
+_bind
+    :: (Functor f, Monad m)
+    => Stream f m r
+    -> (r -> Stream f m s)
+    -> Stream f m s
+_bind p0 f = go p0 where
+    go p = case p of
+      Step fstr  -> Step (fmap go fstr)
+      Effect m   -> Effect (m >>= \s -> return (go s))
+      Return r  -> f r
+{-#INLINABLE[0] _bind #-}
+      
+{-# RULES
+    "_bind (Step    fstr) f" forall  fstr f .
+        _bind (Step fstr) f = Step (fmap (\p -> _bind p f) fstr);
+    "_bind (Effect      m) f" forall m    f .
+        _bind (Effect   m) f = Effect (m >>= \p -> return (_bind p f));
+    "_bind (Return     r) f" forall r    f .
+        _bind (Return  r) f = f r;
+  #-}
   
 instance (Functor f, Monad m) => Applicative (Stream f m) where
   pure = Return
