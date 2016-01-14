@@ -780,7 +780,7 @@ effect = Effect
 -}
 
 yields ::  (Monad m, Functor f) => f r -> Stream f m r
-yields fr = Effect (return (Step (fmap Return fr)))
+yields fr = Step (fmap Return fr)
 {-#INLINE yields #-}
 
 
@@ -788,12 +788,12 @@ zipsWith :: (Monad m, Functor h)
   => (forall x y . f x -> g y -> h (x,y)) 
   -> Stream f m r -> Stream g m r -> Stream h m r
 zipsWith phi = curry loop where
-  loop (s1, s2) = Effect $ go s1 s2
-  go (Return r)  p        = return $ Return r
-  go q         (Return s) = return $ Return s
-  go (Effect m) p          = m >>= \s -> go s p
-  go q         (Effect m)  = m >>= go q
-  go (Step f) (Step g)    = return $ Step $ fmap loop (phi f g)
+  loop (s1, s2) = Effect (go s1 s2)
+  go (Return r)  p        = return (Return r)
+  go q         (Return s) = return (Return s)
+  go (Effect m) p          = m >>= (\s -> go s p)
+  go q         (Effect m)  = m >>= (\s -> go q s)
+  go (Step f) (Step g)    = return (Step (fmap loop (phi f g)))
 {-# INLINABLE zipsWith #-}   
   
 zips :: (Monad m, Functor f, Functor g) 
@@ -801,6 +801,7 @@ zips :: (Monad m, Functor f, Functor g)
 zips = zipsWith go where
   go fx gy = Compose (fmap (\x -> fmap (\y -> (x,y)) gy) fx)
 {-# INLINE zips #-}   
+
 
 
 {-| Interleave functor layers, with the effects of the first preceding

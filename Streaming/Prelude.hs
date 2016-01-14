@@ -316,17 +316,25 @@ instance (Show a) => Show1 (Of a) where showsPrec1 = showsPrec
 >  lazily           ::             Of a ~~> (,) a
 >  Identity . fst'  ::             Of a ~~> Identity a
 
-   Manipulation of a @Stream f m r@ by mapping often turns on recognizing natural transformations of @f@,
-   thus @maps@ is far more general the the @map@ of the present module, which can be
+   Manipulation of a @Stream f m r@ by mapping often turns on recognizing natural transformations of @f@.
+   Thus @maps@ is far more general the the @map@ of the @Streaming.Prelude@, which can be
    defined thus:
 
 >  S.map :: (a -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 >  S.map f = maps (mapOf f)
+
+  i.e.
+
+>  S.map f = maps (\(a :> x) -> (f a :> x))
   
   This rests on recognizing that @mapOf@ is a natural transformation; note though
   that it results in such a transformation as well:
   
 >  S.map :: (a -> b) -> Stream (Of a) m ~> Stream (Of b) m   
+
+  Thus we can @maps@ it in turn
+
+>  
 
 -}
 lazily :: Of a b -> (a,b)
@@ -339,13 +347,19 @@ strictly = \(a,b) -> a :> b
 
 fst' :: Of a b -> a
 fst' (a :> b) = a
+{-#INLINE fst' #-}
 
 snd' :: Of a b -> b
 snd' (a :> b) = b
+{-#INLINE snd' #-}
 
 mapOf :: (a -> b) -> Of a r -> Of b r
 mapOf f (a:> b) = (f a :> b)
+{-#INLINE mapOf #-}
 
+_first :: Functor f => (a -> f a1) -> Of a b -> f (Of a1 b)
+_first afb (a:>b) =  (\c -> (c:>b)) <$> afb a
+{-# INLINE _first #-}
 
 all :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m (Of Bool r)
 all thus = loop True where
