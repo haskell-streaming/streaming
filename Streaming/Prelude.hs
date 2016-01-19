@@ -358,7 +358,7 @@ mapOf f (a:> b) = (f a :> b)
 {-#INLINE mapOf #-}
 
 _first :: Functor f => (a -> f a1) -> Of a b -> f (Of a1 b)
-_first afb (a:>b) =  (\c -> (c:>b)) <$> afb a
+_first afb (a:>b) = fmap (\c -> (c:>b)) (afb a)
 {-# INLINE _first #-}
 
 all :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m (Of Bool r)
