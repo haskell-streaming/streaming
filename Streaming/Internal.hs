@@ -639,8 +639,9 @@ distribute :: (Monad m, Functor f, MonadTrans t, MFunctor t, Monad (t (Stream f 
 distribute = loop where
   loop stream = case stream of 
     Return r     -> lift (Return r)
-    Effect tmstr -> hoist lift tmstr >>= distribute
-    Step fstr    -> join (lift (Step (fmap (Return . distribute) fstr)))
+    Effect tmstr -> hoist lift tmstr >>= loop
+    Step fstr    -> join (lift (Step (fmap (Return . loop) fstr)))
+{-#INLINABLE distribute #-}
     
 -- | Repeat a functorial layer (a \"command\" or \"instruction\") forever.
 repeats :: (Monad m, Functor f) => f () -> Stream f m r 

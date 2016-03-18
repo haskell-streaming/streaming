@@ -256,7 +256,7 @@ import Data.Functor.Compose
 import Control.Monad.Trans.Resource
 
 import GHC.Exts ( SpecConstrAnnotation(..) )
-
+import GHC.Magic
 
 data SPEC = SPEC | SPEC2 
 
@@ -965,13 +965,14 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 -}
 
 fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
-fold step begin done str = fold_loop str begin
-  where
-    fold_loop stream !x = case stream of 
-      Return r         -> return (done x :> r)
-      Effect m         -> m >>= \str' -> fold_loop str' x
-      Step (a :> rest) -> fold_loop rest $! step x a
-{-# INLINABLE fold #-}
+fold step begin done  = foldM (\a b -> return $! step a b) (return begin) (return . done)
+  -- fold_loop str begin
+  -- where
+  --   fold_loop stream !x = case stream of
+  --     Return r         -> return (done x :> r)
+  --     Effect m         -> m >>= \str' -> fold_loop str' x
+  --     Step (a :> rest) -> fold_loop rest $! step x a
+{-# INLINE fold #-}
 
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
@@ -999,16 +1000,29 @@ foldM
     :: Monad m
     => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r ->m (Of b r)
 foldM step begin done str = do
-    x0 <- begin
-    loop str x0
-  where
-    loop stream !x = case stream of 
-      Return r         -> done x >>= \b -> return (b :> r)
-      Effect m          -> m >>= \s -> loop s x
-      Step (a :> rest) -> do
-        x' <- step x a
-        loop rest x'
-{-# INLINABLE foldM #-}
+      x <- begin
+      (x' :> r) <- streamFold
+        (\r x -> return (x :> r))
+        (\mx2mx -> oneShot (\x -> x `seq` mx2mx >>= ($ x) ))
+        (\(a :> x2mx') -> oneShot (\x -> x `seq` (step x a >>= x2mx')) )
+        ( str)
+        x
+      b <- done x'
+      return (b :> r)
+  where seq = Prelude.seq
+{-#INLINE foldM #-}
+
+-- foldM step begin done str = do
+--     x0 <- begin
+--     loop str x0
+--   where
+--     loop stream !x = case stream of
+--       Return r         -> done x >>= \b -> return (b :> r)
+--       Effect m          -> m >>= \s -> loop s x
+--       Step (a :> rest) -> do
+--         x' <- step x a
+--         loop rest x'
+-- {-# INLINABLE foldM #-}
 
 
 
