@@ -300,10 +300,10 @@ instance Monoid a => Monad (Of a) where
 instance (r ~ (), Monad m, f ~ Of Char) => IsString (Stream f m r) where
   fromString = each
 
-instance (Eq a) => Eq1 (Of a) where eq1 = (==)
-instance (Ord a) => Ord1 (Of a) where compare1 = compare
-instance (Read a) => Read1 (Of a) where readsPrec1 = readsPrec
-instance (Show a) => Show1 (Of a) where showsPrec1 = showsPrec
+-- instance (Eq a) => Eq1 (Of a) where eq1 = (==)
+-- instance (Ord a) => Ord1 (Of a) where compare1 = compare
+-- instance (Read a) => Read1 (Of a) where readsPrec1 = readsPrec
+-- instance (Show a) => Show1 (Of a) where showsPrec1 = showsPrec
 
 {-| Note that 'lazily', 'strictly', 'fst'', and 'mapOf' are all so-called /natural transformations/ on the primitive @Of a@ functor
     If we write 
