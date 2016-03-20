@@ -80,6 +80,8 @@ The special case of a *stream of individual Haskell values* that simply *comes t
     machines:   SourceT m a (= forall k. MachineT m k a)
     streaming:  Stream (Of a) m ()
 
+Note that the above libraries generally employ elaborate systems of type synonyms in order to intimate to the reader the meaning of specialized forms. `io-streams` is an exception. This libary is completely opposed to this tendency, and exports no synonyms.
+
 § 3. `Streaming.Prelude`
 -------------------------
 
@@ -105,7 +107,7 @@ Somehow, we didn't even need a four-character operator for that, nor advice abou
 § 4. Mother's `Prelude` v. `Streaming.Prelude`
 ------------------------------------------------
 
-The effort of `Streaming.Prelude` is to leverage the intuition the user has acquired in mastering `Prelude` and `Data.List` and to elevate her understanding into a general comprehension of effectful streaming transformations. Unsurprisingly, it takes longer to type out the signatures. It cannot be emphasized enough, thought, that *the transpositions are totally mechanical*:
+The effort of `Streaming.Prelude` is to leverage the intuition the user has acquired in mastering `Prelude` and `Data.List` and to elevate her understanding into a general comprehension of effectful streaming transformations. Unsurprisingly, it takes longer to type out the signatures. It cannot be emphasized enough, though, that *the transpositions are totally mechanical*:
 
     Data.List.Split.chunksOf :: Int -> [a]          -> [[a]]
     Streaming.chunksOf       :: Int -> Stream f m r -> Stream (Stream f m) m r
