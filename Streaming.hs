@@ -33,6 +33,7 @@ module Streaming
    chunksOf,
    concats,
    intercalates,
+   cutoff, 
    -- period,
    -- periods,
    

@@ -965,13 +965,12 @@ fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
 -}
 
 fold :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m (Of b r)
-fold step begin done  = foldM (\a b -> return $! step a b) (return begin) (return . done)
-  -- fold_loop str begin
-  -- where
-  --   fold_loop stream !x = case stream of
-  --     Return r         -> return (done x :> r)
-  --     Effect m         -> m >>= \str' -> fold_loop str' x
-  --     Step (a :> rest) -> fold_loop rest $! step x a
+fold step begin done str =  fold_loop str begin
+  where
+    fold_loop stream !x = case stream of
+      Return r         -> return (done x :> r)
+      Effect m         -> m >>= \str' -> fold_loop str' x
+      Step (a :> rest) -> fold_loop rest $! step x a
 {-# INLINE fold #-}
 
 
@@ -999,32 +998,32 @@ foldM_ step begin done  = liftM (\(a :> rest) -> a) . foldM step begin done
 foldM
     :: Monad m
     => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r ->m (Of b r)
+
 foldM step begin done str = do
-      x <- begin
-      (x' :> r) <- streamFold
-        (\r x -> return (x :> r))
-        (\mx2mx -> oneShot (\x -> x `seq` mx2mx >>= ($ x) ))
-        (\(a :> x2mx') -> oneShot (\x -> x `seq` (step x a >>= x2mx')) )
-        ( str)
-        x
-      b <- done x'
-      return (b :> r)
-  where seq = Prelude.seq
-{-#INLINE foldM #-}
+    x0 <- begin
+    loop str x0
+  where
+    loop stream !x = case stream of
+      Return r         -> done x >>= \b -> return (b :> r)
+      Effect m          -> m >>= \s -> loop s x
+      Step (a :> rest) -> do
+        x' <- step x a
+        loop rest x'
+{-# INLINABLE foldM #-}
 
+-- the following requires GHC.Magic.oneShot:
 -- foldM step begin done str = do
---     x0 <- begin
---     loop str x0
---   where
---     loop stream !x = case stream of
---       Return r         -> done x >>= \b -> return (b :> r)
---       Effect m          -> m >>= \s -> loop s x
---       Step (a :> rest) -> do
---         x' <- step x a
---         loop rest x'
--- {-# INLINABLE foldM #-}
-
-
+--       x <- begin
+--       (x' :> r) <- streamFold
+--         (\r x -> return (x :> r))
+--         (\mx2mx -> oneShot (\x -> x `seq` mx2mx >>= ($ x) ))
+--         (\(a :> x2mx') -> oneShot (\x -> x `seq` (step x a >>= x2mx')) )
+--         ( str)
+--         x
+--       b <- done x'
+--       return (b :> r)
+--   where seq = Prelude.seq
+-- {-#INLINE foldM #-}
 
 {-| A natural right fold for consuming a stream of elements. 
     See also the more general 'iterTM' in the 'Streaming' module 
