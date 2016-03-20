@@ -24,14 +24,11 @@ Contents
 
 § 10. Implementation and benchmarking notes
 
+------------------------------------------------------
 
 § 1.  The freely generated stream on a streamable functor
 
-`Stream` can be used wherever [FreeT](https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html) is used. The compiler's standard range of optimizations work better for operations written in terms of `Stream`. `FreeT f m r` and `Stream f m r` are of course extremely general, and many functor-general combinators are exported by the general module `Streaming`. 
-
-
-§ 2. A freely generated stream of individual Haskell values is a Producer, Generator or Source
----------------------------------------------------------------------------------------------------------
+`Stream` can be used wherever [`FreeT`](https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html) or [`Coroutine`](http://hackage.haskell.org/package/monad-coroutine-0.9.0.2/docs/Control-Monad-Coroutine.html#t:Coroutine) are used. The compiler's standard range of optimizations work better for operations written in terms of `Stream`.  `Stream f m r`, like `FreeT f m r` or `Couroutine f m r` - is of course extremely general, and many functor-general combinators are exported by the general module `Streaming`. The familiar literature on free monads in Haskell will be of use in reflecting on this case (e.g. [this post](http://www.haskellforall.com/2012/06/you-could-have-invented-free-monads.html) and similar literature), but is in many respects distracting;  the important ["Coroutine Pipelines" essay](https://themonadreader.files.wordpress.com/2011/10/issue19.pdf) is closer in spirit to this library. 
 
 In the applications we are thinking of, the general type `Stream f m r` expresses a succession of steps arising in a monad `m`, with a shape determined by the 'functor' parameter `f`, and resulting in a final value `r`. In the first instance you might read `Stream` as `Repeatedly`, with the understanding that one way of doing something some number of times, is to do it no times at all. 
 
@@ -39,9 +36,9 @@ Readings of `f` can be wildly various. Thus, for example,
 
      Stream Identity IO r
      
-is the type of an indefinitely delayed `IO r`,
+is the type of an indefinitely delayed `IO r`, or an extended `IO` process broken into stages marked by the `Identity` constructor. This is the `Trampoline` type of the "Coroutine Pipelines" tutorial, and the [`IterT`](http://hackage.haskell.org/package/free-4.12.4/docs/Control-Monad-Trans-Iter.html) of the `free` library (which is mysteriously not identified with `FreeT Identity`.) 
 
-But given readings of `f` and `m` we can, for example, always consider the type `Stream (Stream f m) m r`, in which steps of the form `Stream f m` are joined end to end. Such a stream-of-streams might arise in any number of ways; a crude (because hyper-general) way would be with
+In particular, given readings of `f` and `m` we can, for example, always consider the type `Stream (Stream f m) m r`, in which steps of the form `Stream f m` are joined end to end. Such a stream-of-streams might arise in any number of ways; a crude (because hyper-general) way would be with
 
     chunksOf :: Monad m, Functor f => Int -> Stream f m r -> Stream (Stream f m) m r
     
@@ -49,12 +46,16 @@ and we can always rejoin such a stream with
 
     concats ::  Monad m, Functor f =>  Stream (Stream f m) m r -> Stream f m r
 
-But things can be chunked and concatenated in that sense; indeed these functions are modeled on those in `pipes-group`. In our [representation](https://hackage.haskell.org/package/streaming-utils-0.1.4.0/docs/Streaming-Pipes.html#v:concats), these have the types
+But other things can be chunked and concatenated in that sense; they need not themselves be explicitly represented in terms of `Stream`; indeed these functions are modeled on those in `pipes-group`. In our [variant of `pipes-group`](https://hackage.haskell.org/package/streaming-utils-0.1.4.0/docs/Streaming-Pipes.html#v:concats), these have the types
 
     chunksOf :: Monad m => Int -> Producer a m r -> Stream (Producer a m) m r
     concats ::  Monad m =>  Stream (Producer a m) m r -> Producer a m r
     
-Of course, as soon as you grasp the general form of *succession*, you are already in possession of the most basic concrete form: a simple *succession of individual Haskell values* one after another. This is just `Stream ((,) a) m r`. Here we prefer `Stream (Of a) m r`, strictifying the left element of the pair with 
+
+§ 2. A freely generated stream of individual Haskell values is a Producer, Generator or Source
+---------------------------------------------------------------------------------------------------------
+
+Of course, as soon as you grasp the general form of *succession* you are already in possession of the most basic concrete form: a simple *succession of individual Haskell values* one after another, the effectful list or sequence. This is just `Stream ((,) a) m r`. Here we prefer to write `Stream (Of a) m r`, strictifying the left element of the pair with 
 
     data Of a r = !a :> r deriving Functor
 
