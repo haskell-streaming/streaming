@@ -207,6 +207,11 @@ module Streaming.Prelude (
     , partitionEithers
     , partition
     
+    -- * Maybes
+    -- $maybes
+    , catMaybes
+    , mapMaybe
+
     -- * Pair manipulation
     , lazily
     , strictly
@@ -2694,3 +2699,36 @@ unzip = loop where
 -- "scan/map" forall step begin done f str .
 -- scan step begin done (map f str) = scan (\x a -> step x $! f a) begin done str
 --
+
+{- $maybes
+    These functions discard the 'Nothing's that they encounter. They are analogous 
+    to the functions from @Data.Maybe@ that share their names.
+-}
+
+{-| The 'catMaybes' function takes a 'Stream' of 'Maybe's and returns
+    a 'Stream' of all of the 'Just' values.
+-}
+catMaybes :: Monad m => Stream (Of (Maybe a)) m r -> Stream (Of a) m r                   
+catMaybes = loop where                                                                   
+  loop stream = case stream of                                                                    
+    Return r -> Return r                                                      
+    Effect m -> Effect (liftM loop m)                                         
+    Step (ma :> snext) -> case ma of                                                    
+      Nothing -> loop snext                                                                       
+      Just a -> Step (a :> loop snext)                                                  
+{-#INLINABLE catMaybes #-}
+
+{-| The 'mapMaybe' function is a version of 'map' which can throw out elements. In particular, 
+    the functional argument returns something of type @'Maybe' b@. If this is 'Nothing', no element 
+    is added on to the result 'Stream'. If it is @'Just' b@, then @b@ is included in the result 'Stream'.
+-}
+mapMaybe :: Monad m => (a -> Maybe b) -> Stream (Of a) m r -> Stream (Of b) m r          
+mapMaybe phi = loop where                                                                
+  loop stream = case stream of                                                                    
+    Return r -> Return r                                                      
+    Effect m -> Effect (liftM loop m)                                         
+    Step (a :> snext) -> case phi a of                                                  
+      Nothing -> loop snext                                                                       
+      Just b -> Step (b :> loop snext)  
+{-#INLINABLE mapMaybe #-}
+
