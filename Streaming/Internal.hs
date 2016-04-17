@@ -94,12 +94,11 @@ import Prelude hiding (splitAt)
 import Data.Functor.Compose
 import Data.Functor.Sum
 import Control.Concurrent (threadDelay)
--- import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime, addUTCTime)
-
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
 import Control.Monad.Catch (MonadCatch (..))
 import Control.Monad.Trans.Control
+
 
 {- $stream
 

@@ -1,4 +1,4 @@
-{-#LANGUAGE RankNTypes #-}
+{-#LANGUAGE RankNTypes, CPP #-}
 module Streaming 
    (
    -- * An iterable streaming monad transformer
@@ -60,7 +60,6 @@ module Streaming
    Of (..),
    lazily,
    strictly,
-   mapOf,
    
    -- * ResourceT help
    
@@ -80,6 +79,10 @@ module Streaming
    MonadBase(..),
    ResourceT(..),
    runResourceT,
+#if MIN_VERSION_base(4,8,0)
+   Bifunctor(..),
+#endif
+   
    join,
    liftM,
    liftM2,
@@ -102,6 +105,10 @@ import Data.Functor.Identity
 
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
+#if MIN_VERSION_base(4,8,0)
+import Data.Bifunctor
+#endif
+
 {- $stream
 
     The 'Stream' data type can be used to represent any effectful

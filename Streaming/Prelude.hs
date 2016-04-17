@@ -41,7 +41,7 @@
 > 
 -}
 {-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable, TypeFamilies,
-             DeriveFoldable, DeriveFunctor, DeriveTraversable #-}
+             DeriveFoldable, DeriveFunctor, DeriveTraversable, CPP #-}
              
 module Streaming.Prelude (
     -- * Types
@@ -78,7 +78,6 @@ module Streaming.Prelude (
     , print
     , toHandle
     , writeFile
-    , first
     , effects
     , erase
     , drained
@@ -262,10 +261,10 @@ import Control.Monad.Trans.Resource
 
 import GHC.Exts ( SpecConstrAnnotation(..) )
 import GHC.Magic
+#if MIN_VERSION_base(4,8,0)
+import Data.Bifunctor
+#endif
 
-data SPEC = SPEC | SPEC2 
-
-{-# ANN type SPEC ForceSpecConstr #-}
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
     deriving (Data, Eq, Foldable, Ord,
@@ -283,6 +282,16 @@ instance Functor (Of a) where
   {-#INLINE fmap #-}
   a <$ (b :> x)   = b :> a
   {-#INLINE (<$) #-}
+
+#if MIN_VERSION_base(4,8,0)
+instance Bifunctor Of where
+  bimap f g (a :> b) = f a :> g b 
+  {-#INLINE bimap #-}
+  first f   (a :> b) = f a :> b
+  {-#INLINE first #-}
+  second g  (a :> b) = a :> g b 
+  {-#INLINE second #-}
+#endif
 
 instance Monoid a => Applicative (Of a) where
   pure x = mempty :> x
@@ -861,23 +870,23 @@ filterM pred = loop where
 {-# INLINABLE filterM #-}
 
 
--- ---------------
--- first
--- ---------------
-{- | Take either the first item in a stream or the return value, if it is empty.
-     The typical mark of an infinite stream is a polymorphic return value; in 
-     that case, 'first' is a sort of @safeHead@
-
-     To iterate an action returning a 'Maybe', until it succeeds.
-
--}
-first :: Monad m => Stream (Of r) m r -> m r
-first = loop where
-  loop str = case str of
-    Return r -> return r
-    Effect m -> m >>= loop
-    Step (r :> rest) -> return r
-{-# INLINABLE first #-} 
+-- -- ---------------
+-- -- first
+-- -- ---------------
+-- {- | Take either the first item in a stream or the return value, if it is empty.
+--      The typical mark of an infinite stream is a polymorphic return value; in
+--      that case, 'first' is a sort of @safeHead@
+--
+--      To iterate an action returning a 'Maybe', until it succeeds.
+--
+-- -}
+-- first :: Monad m => Stream (Of r) m r -> m r
+-- first = loop where
+--   loop str = case str of
+--     Return r -> return r
+--     Effect m -> m >>= loop
+--     Step (r :> rest) -> return r
+-- {-# INLINABLE first #-}
     
 -- ---------------
 -- fold
