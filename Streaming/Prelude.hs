@@ -216,6 +216,7 @@ module Streaming.Prelude (
     , strictly
     , fst'
     , snd'
+    , mapOf
     
     -- * Interoperation
     , reread
