@@ -217,6 +217,8 @@ module Streaming.Prelude (
     , fst'
     , snd'
     , mapOf
+    , _first
+    , _second
     
     -- * Interoperation
     , reread
@@ -327,7 +329,7 @@ instance (r ~ (), Monad m, f ~ Of Char) => IsString (Stream f m r) where
   
    then we can restate some types as follows:
   
->  mapOf            :: (a -> b) -> Of a ~~> Of b   -- bifunctor lmap
+>  mapOf            :: (a -> b) -> Of a ~~> Of b   -- Bifunctor first
 >  lazily           ::             Of a ~~> (,) a
 >  Identity . fst'  ::             Of a ~~> Identity a
 
@@ -347,34 +349,76 @@ instance (r ~ (), Monad m, f ~ Of Char) => IsString (Stream f m r) where
   
 >  S.map :: (a -> b) -> Stream (Of a) m ~> Stream (Of b) m   
 
-  Thus we can @maps@ it in turn
+  Thus we can @maps@ it in turn.
 
->  
 
 -}
 lazily :: Of a b -> (a,b)
 lazily = \(a:>b) -> (a,b)
 {-# INLINE lazily #-}
 
+{-# Convert a standard Haskell pair into a left-strict pair
+#-}
 strictly :: (a,b) -> Of a b
 strictly = \(a,b) -> a :> b
 {-# INLINE strictly #-}
 
+{-# @fst'@ and @snd'@ extract the first and second element of a pair
+
+>>> S.fst' (1:>"hi")
+1
+>>> S.snd' (1:>"hi")
+"hi"
+
+
+     They are contained in the @_first@ and @_second@ lenses, 
+     if any lens library is in scope
+  
+>>> import Lens.Micro
+>>> (1:>"hi") ^. S._first
+1
+>>> (1:>"hi") ^. S._second
+"hi"
+
+#-}
 fst' :: Of a b -> a
 fst' (a :> b) = a
 {-#INLINE fst' #-}
-
 snd' :: Of a b -> b
 snd' (a :> b) = b
 {-#INLINE snd' #-}
+
+{-# Map a function over the first element of an @Of@ pair
+
+>>> S.mapOf even (1:>"hi")
+False :> "hi"
+
+     @mapOf@ is just @first@ from the @Bifunctor@ instance 
+     
+>>> first even (1:>"hi")
+False :> "hi" 
+
+     and is contained in the @_first@ lens
+     
+>>> import Lens.Micro
+>>> over S._first even (1:>"hi")
+False :> "hi"
+
+#-}
 
 mapOf :: (a -> b) -> Of a r -> Of b r
 mapOf f (a:> b) = (f a :> b)
 {-#INLINE mapOf #-}
 
-_first :: Functor f => (a -> f a1) -> Of a b -> f (Of a1 b)
+{-# A lens into the first element of a left-strict pair#-}
+_first :: Functor f => (a -> f a') -> Of a b -> f (Of a' b)
 _first afb (a:>b) = fmap (\c -> (c:>b)) (afb a)
 {-# INLINE _first #-}
+
+{-# A lens into the second element of a left-strict pair#-}
+_second :: Functor f => (b -> f b') -> Of a b -> f (Of a b')
+_second afb (a:>b) = fmap (\c -> (a:>c)) (afb b)
+{-#INLINABLE _second #-}
 
 all :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m (Of Bool r)
 all thus = loop True where
