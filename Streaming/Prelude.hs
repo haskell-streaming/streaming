@@ -352,18 +352,17 @@ instance (r ~ (), Monad m, f ~ Of Char) => IsString (Stream f m r) where
   Thus we can @maps@ it in turn.
 
 
--}
+ -}
 lazily :: Of a b -> (a,b)
 lazily = \(a:>b) -> (a,b)
 {-# INLINE lazily #-}
 
-{-# Convert a standard Haskell pair into a left-strict pair
-#-}
+{-| Convert a standard Haskell pair into a left-strict pair  -}
 strictly :: (a,b) -> Of a b
 strictly = \(a,b) -> a :> b
 {-# INLINE strictly #-}
 
-{-# @fst'@ and @snd'@ extract the first and second element of a pair
+{-| @fst'@ and @snd'@ extract the first and second element of a pair
 
 >>> S.fst' (1:>"hi")
 1
@@ -380,7 +379,8 @@ strictly = \(a,b) -> a :> b
 >>> (1:>"hi") ^. S._second
 "hi"
 
-#-}
+ -}
+
 fst' :: Of a b -> a
 fst' (a :> b) = a
 {-#INLINE fst' #-}
@@ -388,7 +388,7 @@ snd' :: Of a b -> b
 snd' (a :> b) = b
 {-#INLINE snd' #-}
 
-{-# Map a function over the first element of an @Of@ pair
+{-| Map a function over the first element of an @Of@ pair
 
 >>> S.mapOf even (1:>"hi")
 False :> "hi"
@@ -404,18 +404,18 @@ False :> "hi"
 >>> over S._first even (1:>"hi")
 False :> "hi"
 
-#-}
+ -}
 
 mapOf :: (a -> b) -> Of a r -> Of b r
 mapOf f (a:> b) = (f a :> b)
 {-#INLINE mapOf #-}
 
-{-# A lens into the first element of a left-strict pair#-}
+{-| A lens into the first element of a left-strict pair -}
 _first :: Functor f => (a -> f a') -> Of a b -> f (Of a' b)
 _first afb (a:>b) = fmap (\c -> (c:>b)) (afb a)
 {-# INLINE _first #-}
 
-{-# A lens into the second element of a left-strict pair#-}
+{-| A lens into the second element of a left-strict pair -}
 _second :: Functor f => (b -> f b') -> Of a b -> f (Of a b')
 _second afb (a:>b) = fmap (\c -> (a:>c)) (afb b)
 {-#INLINABLE _second #-}
