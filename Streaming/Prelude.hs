@@ -41,7 +41,7 @@
 > 
 -}
 {-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable, TypeFamilies,
-             DeriveFoldable, DeriveFunctor, DeriveTraversable, CPP #-}
+             DeriveFoldable, DeriveFunctor, DeriveTraversable, CPP, Safe #-}
              
 module Streaming.Prelude (
     -- * Types
@@ -262,7 +262,6 @@ import Data.Functor.Classes
 import Data.Functor.Compose
 import Control.Monad.Trans.Resource
 
-import GHC.Exts ( SpecConstrAnnotation(..) )
 import GHC.Magic
 #if MIN_VERSION_base(4,8,0)
 import Data.Bifunctor
@@ -359,7 +358,7 @@ lazily = \(a:>b) -> (a,b)
 
 {-| Convert a standard Haskell pair into a left-strict pair  -}
 strictly :: (a,b) -> Of a b
-strictly = \(a,b) -> a :> b
+strictly = \(a,b) -> a :> b  
 {-# INLINE strictly #-}
 
 {-| @fst'@ and @snd'@ extract the first and second element of a pair

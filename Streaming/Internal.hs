@@ -1,5 +1,6 @@
 {-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
 {-# LANGUAGE UndecidableInstances, CPP, FlexibleInstances, MultiParamTypeClasses  #-} 
+{-#LANGUAGE Safe #-}
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
@@ -88,7 +89,6 @@ import Data.Traversable
 import Control.Monad.Morph
 import Data.Monoid (Monoid (..), (<>))
 import Data.Functor.Identity
-import GHC.Exts ( build )
 import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
