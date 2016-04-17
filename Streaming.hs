@@ -60,6 +60,7 @@ module Streaming
    Of (..),
    lazily,
    strictly,
+   mapOf,
    
    -- * ResourceT help
    
