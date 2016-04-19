@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
 {-# LANGUAGE UndecidableInstances, CPP, FlexibleInstances, MultiParamTypeClasses  #-} 
-{-#LANGUAGE Safe #-}
+{-#LANGUAGE Trustworthy #-}
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream

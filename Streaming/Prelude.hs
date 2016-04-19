@@ -41,7 +41,7 @@
 > 
 -}
 {-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable, TypeFamilies,
-             DeriveFoldable, DeriveFunctor, DeriveTraversable, CPP, Safe #-}
+             DeriveFoldable, DeriveFunctor, DeriveTraversable, CPP, Trustworthy #-}
              
 module Streaming.Prelude (
     -- * Types
