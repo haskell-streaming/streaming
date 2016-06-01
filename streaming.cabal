@@ -6,14 +6,35 @@ synopsis:            an elementary streaming prelude and general stream type.
 
 description:         @Streaming.Prelude@ exports an elementary streaming prelude focused on
                      a simple \"source\" or \"producer\" type, namely @Stream (Of a) m r@.
-                     This is a sort of effectful version of @([a],r)@ in which monadic action 
-                     is interleaved between successive elements.
-                     The main module, @Streaming@, exports a much more general type,
+                     @Stream (Of a) m r@ is a sort of effectful version of
+                     @([a],r)@ in which successive elements arise from some sort of monadic
+                     action. Everything is the library is organized to make 
+                     programming with this type as simple as possible
+                     by making it as close to @Prelude@ and @Data.List@. Thus for example
+                     the trivial program
+                     .
+                     > S.stdoutLn $ S.map reverse $ S.take 3 S.stdoutLn 
+                     .
+                     reverses the first three lines from stdin as they arise, 
+                     and sends them to stdout. Similarly, 
+                     .
+                     > S.sum $ S.take 3 (S.readLn :: Stream (Of Int) IO ())
+                     .
+                     sums the first three valid integers from user input. And so on,
+                     with mapping, breaking, chunking and so forth. 
+                     We program with streams of lines or @Int@s directly as 
+                     if they constituted a list rather than \"extracting a list from IO\". 
+                     Basically any case where you are 
+                     inclined to use @mapM@, @replicateM@, @traverse@ or @sequence@
+                     with Haskell lists, you would do better to 
+                     .
+                     The @Streaming@ module exports a much more general type,
                      @Stream f m r@, which can be used to stream successive distinct
                      steps characterized by /any/
                      functor @f@, though we are here interested only in a limited range of
                      cases.
                      .
+
                      The streaming-IO libraries have various devices for dealing
                      with effectful variants of @[a]@ or @([a],r)@. But it is only with
                      the general type @Stream f m r@, or some equivalent,
