@@ -13,7 +13,7 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      by making it as close to @Prelude@ and @Data.List@. Thus for example
                      the trivial program
                      .
-                     > S.stdoutLn $ S.map reverse $ S.take 3 S.stdoutLn 
+                     > S.stdoutLn $ S.map reverse $ S.take 3 S.stdinLn 
                      .
                      reverses the first three lines from stdin as they arise, 
                      and sends them to stdout. Similarly, 
@@ -26,16 +26,14 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      if they constituted a list rather than \"extracting a list from IO\". 
                      Basically any case where you are 
                      inclined to use @mapM@, @replicateM@, @traverse@ or @sequence@
-                     with Haskell lists, you would do better to 
+                     with Haskell lists, you would do better to use something like
+                     @Stream (Of a) m r@.
                      .
                      The @Streaming@ module exports a much more general type,
                      @Stream f m r@, which can be used to stream successive distinct
                      steps characterized by /any/
                      functor @f@, though we are here interested only in a limited range of
-                     cases.
-                     .
-
-                     The streaming-IO libraries have various devices for dealing
+                     cases. The streaming-IO libraries have various devices for dealing
                      with effectful variants of @[a]@ or @([a],r)@. But it is only with
                      the general type @Stream f m r@, or some equivalent,
                      that one can envisage (for example) the connected streaming of their
