@@ -13,31 +13,53 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      by making it as close to @Prelude@ and @Data.List@. Thus for example
                      the trivial program
                      .
-                     > S.stdoutLn $ S.map reverse $ S.take 3 S.stdinLn 
+                     > S.sum (S.take 3 (S.readLn :: Stream (Of Integer) IO ()))
+                     .
+                     sums the first three valid integers from user input. Similarly,
+                     .
+                     > S.stdoutLn (S.map reverse (S.take 3 S.stdinLn)) 
                      .
                      reverses the first three lines from stdin as they arise, 
-                     and sends them to stdout. Similarly, 
-                     .
-                     > S.sum $ S.take 3 (S.readLn :: Stream (Of Int) IO ())
-                     .
-                     sums the first three valid integers from user input. And so on,
-                     with mapping, breaking, chunking and so forth. 
-                     We program with streams of lines or @Int@s directly as 
-                     if they constituted a list rather than \"extracting a list from IO\". 
+                     and sends them to stdout. And so on,
+                     with filtering, mapping, breaking, chunking and so forth. 
+                     We program with streams of @Int@s or @String@s directly as 
+                     if they constituted something like a list rather than \"extracting a list from IO\",
+                     which is the origin of typical Haskell memory catastrophes. 
                      Basically any case where you are 
-                     inclined to use @mapM@, @replicateM@, @traverse@ or @sequence@
+                     tempted to use @mapM@, @replicateM@, @traverse@ or @sequence@
                      with Haskell lists, you would do better to use something like
-                     @Stream (Of a) m r@.
+                     @Stream (Of a) m r@. The type signatures are a little fancier, but 
+                     the programs themselves are mostly the same or simpler. Thus, 
+                     take the little demo program from
+                     <http://stackoverflow.com/questions/24068399/haskell-performance-of-iorefs this SO question>
                      .
-                     The @Streaming@ module exports a much more general type,
+                     > main = mapM newIORef [1..10^8::Int] >>= mapM readIORef >>= mapM_ print
+                     .
+                     It quickly exhausts memory, of course, and this has nothing to do with
+                     the efficiency of @IORefs@. It is immediately cured by writing
+                     .
+                     > import qualified Streaming.Prelude as S
+                     > main = S.print (S.mapM readIORef (S.mapM newIORef (S.each [1..10^8::Int])))
+                     .
+                     which uses no more memory than @hello-world@, and is simpler anyway, since it
+                     doesn't involve \"extracting a list from IO\". Almost
+                     every use of list @mapM@, @replicateM@, @traverse@ and @sequence@ produces
+                     this problem on a smaller scale. People get used to it, as if it were
+                     characteristic of Haskell programs to use a lot of memory, when
+                     \"extracting a list or sequence from IO\" is just bad practice pure and simple. 
+                     List @mapM@, @replicateM@, @traverse@ and @sequence@ make sense under certain 
+                     conditions. Similarly, @unsafePerformIO@ makes sense under certain conditions.
+                     .
+                     The @Streaming@ module exports the general type,
                      @Stream f m r@, which can be used to stream successive distinct
                      steps characterized by /any/
-                     functor @f@, though we are here interested only in a limited range of
-                     cases. The streaming-IO libraries have various devices for dealing
+                     functor @f@, though we are mostly interested in organizing computations
+                     of the form @Stream (Of a) m r@. The streaming-IO libraries have 
+                     various devices for dealing
                      with effectful variants of @[a]@ or @([a],r)@. But it is only with
                      the general type @Stream f m r@, or some equivalent,
                      that one can envisage (for example) the connected streaming of their
-                     sorts of stream -- as one makes lists of lists in the Haskell
+                     sorts of stream - as one makes lists of lists in the Haskell
                      @Prelude@ and @Data.List@. One needs some such type if we are
                      to express properly streaming equivalents of e.g.
                      .
@@ -45,28 +67,41 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      > chunksOf :: Int -> [a] -> [[a]]
                      > lines :: [Char] -> [[Char]] -- but similarly with bytestring, etc.
                      .
-                     to mention a few obviously desirable operations. But once one grasps
-                     the iterable stream concept needed to express those functions - to wit,
-                     @Stream f m r@ or some equivalent - then one will also see that,
-                     with it, one is already in possession of a complete
+                     to mention a few obviously desirable operations. (This is explained more elaborately in the <https://hackage.haskell.org/package/streaming#readme readme> below.) One could throw something
+                     like @Stream@ on top of a prior stream concept: this is how @pipes@ and
+                     @pipes-group@ (which are very much our model here) use @FreeT@.
+                     But once one grasps
+                     the iterable stream concept needed to express those functions - 
+                     here given a somewhat optimized implementation as @Stream f m r@ 
+                     (following, as usual, models derived from the @pipes@ library) - 
+                     then one will also see that,
+                     with it, one is /already/ in possession of a complete
                      elementary streaming library - since one possesses @Stream ((,) a) m r@
                      or equivalently @Stream (Of a) m r@. This
                      is the type of a \'generator\' or \'producer\' or whatever
                      you call an effectful stream of items.
-                     The present @Streaming.Prelude@ is thus the simplest streaming 
-                     library that can replicate anything like the API of the
-                     @Prelude@ and @Data.List@. 
+                     /The present @Streaming.Prelude@ is thus the simplest streaming library that can replicate anything like the API of the @Prelude@ and @Data.List@/. 
                      .
                      The emphasis of the library is on interoperation; for
-                     the rest its advantages are: extreme simplicity and re-use of
+                     the rest its advantages are: extreme simplicity, re-use of
                      intuitions the user has gathered from mastery of @Prelude@ and
-                     @Data.List@. The two conceptual pre-requisites are some
+                     @Data.List@, and a total and systematic rejection of type synonyms. 
+                     The two conceptual pre-requisites are some
                      comprehension of monad transformers and some familiarity
-                     with \'rank 2 types\'. 
+                     with \'rank 2 types\'. It is hoped that experimentation with this
+                     simple material, starting with the ghci examples in @Streaming.Prelude@, 
+                     will give people who are new to these concepts some 
+                     intuition about their importance. The most fundamental purpose of the
+                     library is to express elementary streaming ideas without reliance on 
+                     a complex framework, but in a way that integrates transparently with
+                     the rest of Haskell, using ideas - e.g. rank 2 types, which are here
+                     implicit or explicit in most mapping - that the user can carry elsewhere,
+                     rather than binding her intelligence to a so-called streaming IO framework (as 
+                     necessary as that is for certain purposes.)
                      .
                      See the
                      <https://hackage.haskell.org/package/streaming#readme readme> 
-                     below for an explanation, including the examples linked there. 
+                     below for further explanation, including the examples linked there. 
                      Elementary usage can be divined from the ghci examples in
                      @Streaming.Prelude@ and perhaps from this rough beginning of a
                      <https://github.com/michaelt/streaming-tutorial/blob/master/tutorial.md tutorial>.
@@ -103,74 +138,15 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      > ($$ Conduit.mapM_ Streaming.yield) . hoist lift :: Source m a -> Stream (Of a) m ()
                      .
                      These conversions should never be more expensive than a single @>->@ or @=$=@. 
+                     The simplest interoperation with regular Haskell lists is provided by, say
                      .
-                     Here is a simple example (conceptually it is a bit advanced, maybe) 
-                     that runs a single underlying stream with several
-                     streaming-io libraries at once, superimposing their effects 
-                     without any accumulation:
+                     > Streaming.each                                  :: [a] -> Stream (Of a) m ()
+                     > Streaming.toList_                              :: Stream (Of a) m r -> m [a]
                      .
-                     > module Main (main) where
-                     > import Streaming  
-                     > import Pipes 
-                     > import Data.Conduit
-                     > import qualified Streaming.Prelude as S
-                     > import qualified Data.Conduit.List as CL
-                     > import qualified Pipes.Prelude as P
-                     > import qualified System.IO.Streams as IOS
-                     > import Data.ByteString.Char8 (pack)
-                     > import Data.Function ((&))
-                     >
-                     > mkConduit  = CL.unfoldM S.uncons
-                     > mkPipe     = P.unfoldr S.next
-                     > mkIOStream = IOS.unfoldM S.uncons
-                     >
-                     > main = iostreamed where
-                     >   urstream = S.take 3 S.readLn :: Stream (Of Int) IO () 
-                       
-                     >   streamed = S.copy urstream & S.map (\n -> "streaming says: " ++ show n) 
-                     >                              & S.stdoutLn 
-                     >   piped = runEffect $ 
-                     >     mkPipe (S.copy streamed) >-> P.map (\n -> "pipes says: " ++ show n)  
-                     >                              >-> P.stdoutLn           
-                     >   conduited = 
-                     >     mkConduit (S.copy piped) $$ CL.map (\n -> "conduit says:  " ++ show n) 
-                     >                              =$ CL.mapM_ (liftIO . putStrLn)
-                     >   iostreamed = do
-                     >     str0 <- mkIOStream conduited
-                     >     str1 <- IOS.map (\n -> pack $ "io-streams says: " ++ show n ++ "\n") str0 
-                     >     IOS.supply str1 IOS.stdout
-                     .
-                     This program successively parses three @Int@s from standard input, 
-                     and /simulaneously/ passes them to (here trivial) stream-consuming 
-                     processes from four different libraries, using the @copy@ function from
-                     @Streaming.Prelude@. I mark my own input with @/<Enter/>@ below:
-                     .
-                     > >>> main
-                     > 1 <Enter>
-                     > streaming says: 1
-                     > pipes says: 1
-                     > conduit says:  1
-                     > io-streams says: 1
-                     > 2 <Enter>
-                     > streaming says: 2
-                     > pipes says: 2
-                     > conduit says:  2
-                     > io-streams says: 2
-                     > 3 <Enter>
-                     > streaming says: 3
-                     > pipes says: 3
-                     > conduit says:  3
-                     > io-streams says: 3
-                     > >>>
-                     .
-                     Of course, I could as well have passed the stream to several
-                     independent conduits; and I might have derived the original
-                     stream from a conduit @Source@ or pipes @Producer@ etc., using
-                     one of the \'conversion\' functions above. Further
-                     points of comparison with the going streaming-IO libraries
-                     are discussed in the
-                     <https://hackage.haskell.org/package/streaming#readme readme>
-                     below.
+                     The latter of course accumulates the whole list in memory, and is mostly what we are trying
+                     to avoid. Every use of @Prelude.mapM f@ should be reconceived as using the
+                     composition @Streaming.toList_ . Streaming.mapM f . Streaming.each@ with a view to
+                     considering whether the accumulation required by @Streaming.toList_@ is really necessary.
                      .
                      Here are the results of some
                      <https://gist.github.com/michaelt/f19bef01423b17f29ffd microbenchmarks>
@@ -178,12 +154,11 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      <https://github.com/ekmett/machines/blob/master/benchmarks/Benchmarks.hs benchmarks>
                      included in the machines package:
                      .
-                     <<http://i.imgur.com/sSG5MvH.png>>
+                     <<http://i.imgur.com/YbQtlXm.png>>
                      .
                      Because these are microbenchmarks for individual functions, 
                      they represent a sort of \"worst case\"; many other factors can influence
                      the speed of a complex program.
-                    
                      .
 
 
@@ -206,7 +181,7 @@ library
   exposed-modules:     Streaming,
                        Streaming.Prelude,
                        Streaming.Internal
-
+                       
     -- other-modules:
   other-extensions:    RankNTypes, CPP,
                        StandaloneDeriving, FlexibleContexts,
@@ -216,8 +191,8 @@ library
 
   build-depends:       base >=4.6 && <5
                      , mtl >=2.1 && <2.3
-                     , mmorph >=1.0 && <1.2
-                     , transformers >=0.4 && <0.5.2
+                     , mmorph >=1.0 && <1.1
+                     , transformers >=0.4 && <0.6
                      , transformers-base < 0.5
                      , resourcet > 1.1.0 && < 1.2
                      , exceptions > 0.5 && < 0.9
@@ -225,8 +200,9 @@ library
                      , time
                      , ghc-prim
                                             
-
+  hs-source-dirs:    src
   default-language:  Haskell2010
+
 
 
 

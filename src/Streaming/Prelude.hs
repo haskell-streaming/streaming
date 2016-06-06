@@ -1,9 +1,15 @@
-{-| This module is very closely modeled on Pipes.Prelude, Pipes.Group and Pipes.Parse. It
-    maybe said to give independent expression to the conception of Producer manipulation 
+{-| This names exported by this module are closely modeled on those in @Prelude@ and @Data.List@,
+    but also on
+    <http://hackage.haskell.org/package/pipes-4.1.9/docs/Pipes-Prelude.html @Pipes.Prelude@>, 
+    <http://hackage.haskell.org/package/pipes-group-1.0.3/docs/Pipes-Group.html @Pipes.Group@> 
+    and <http://hackage.haskell.org/package/pipes-parse-3.0.6/docs/Pipes-Parse.html @Pipes.Parse@>. 
+    The module may be said to give independent expression to the conception of 
+    Producer / Source / Generator manipulation 
     articulated in the latter two modules. Because we dispense with piping and 
-    conduiting, the distinction between all of these modules collapses. 
-    The leading type is chosen to permit an api that is as close as possible to that 
-    of Data.List and the Prelude. 
+    conduiting, the distinction between all of these modules collapses. Some things are
+    lost but much is gained in that everything comes much closer to ordinary 
+    beginning Haskell programming. The leading type is chosen to permit an api 
+    that is as close as possible to that of @Data.List@ and the @Prelude@. 
 
     Import qualified thus:
 

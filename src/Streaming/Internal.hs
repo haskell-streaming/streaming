@@ -310,7 +310,7 @@ instance (Functor f, MonadError e m) => MonadError e (Stream f m) where
       Effect m -> Effect $ liftM loop m `catchError` (return . f)
       Step f -> Step (fmap loop f)
   {-# INLINABLE catchError #-}
-   
+
 bracketStream :: (Functor f, MonadResource m) =>
        IO a -> (a -> IO ()) -> (a -> Stream f m b) -> Stream f m b
 bracketStream alloc free inside = do
