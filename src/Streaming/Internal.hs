@@ -214,6 +214,10 @@ instance (Applicative f, Monad m) => Alternative (Stream f m) where
   str <|> str' = zipsWith (liftA2 (,)) str str'
   {-#INLINE (<|>) #-}
 
+instance (Functor f, Monad m, Monoid w) => Monoid (Stream f m w) where
+  mempty = return mempty
+  mappend a b = a >>= \w -> fmap (w <>) b
+
 instance (Applicative f, Monad m) => MonadPlus (Stream f m) where
   mzero = empty
   mplus = (<|>)
