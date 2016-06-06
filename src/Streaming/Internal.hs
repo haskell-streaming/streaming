@@ -183,16 +183,16 @@ _bind p0 f = go p0 where
       Step fstr  -> Step (fmap go fstr)
       Effect m   -> Effect (m >>= \s -> return (go s))
       Return r  -> f r
-{-#INLINABLE[0] _bind #-}
+{-#INLINABLE _bind #-}
       
-{-# RULES
-    "_bind (Step    fstr) f" forall  fstr f .
-        _bind (Step fstr) f = Step (fmap (\p -> _bind p f) fstr);
-    "_bind (Effect      m) f" forall m    f .
-        _bind (Effect   m) f = Effect (m >>= \p -> return (_bind p f));
-    "_bind (Return     r) f" forall r    f .
-        _bind (Return  r) f = f r;
-  #-}
+-- {-# RULES
+    -- "_bind (Step    fstr) f" forall  fstr f .
+    --     _bind (Step fstr) f = Step (fmap (\p -> _bind p f) fstr);
+    -- "_bind (Effect      m) f" forall m    f .
+    --     _bind (Effect   m) f = Effect (m >>= \p -> return (_bind p f));
+    -- "_bind (Return     r) f" forall r    f .
+    --     _bind (Return  r) f = f r;
+--  #-}
   
 instance (Functor f, Monad m) => Applicative (Stream f m) where
   pure = Return
@@ -216,8 +216,10 @@ instance (Applicative f, Monad m) => Alternative (Stream f m) where
 
 instance (Functor f, Monad m, Monoid w) => Monoid (Stream f m w) where
   mempty = return mempty
+  {-#INLINE mempty #-}
   mappend a b = a >>= \w -> fmap (w <>) b
-
+  {-#INLINE mappend #-}
+  
 instance (Applicative f, Monad m) => MonadPlus (Stream f m) where
   mzero = empty
   mplus = (<|>)
