@@ -256,7 +256,7 @@ in place of the standard `FreeT` that we find in the `free` library, which is ap
 
 Rather than wrapping each step in a monadic 'layer', such a layer is put alongside separate 'pure' constructors for a functor 'layer' and a final return value. The maneuver is very friendly to the compiler, but requires a bit of subtlety to protect a sound monad instance. Just such an optimization is adopted internally by the `pipes` library. As in `pipes`, the constructors are here left in an `Internal` module; the main `Streaming` module exporting the type itself and various operations and instances.
 
-I ran a simple [benchmark](https://gist.github.com/michaelt/7f89dc8b366b30bb6acc) (adjusting a [script](https://github.com/jwiegley/streaming-tests) of John Weigly) using a very simple composition of functions:
+I ran a simple [benchmark](https://gist.github.com/michaelt/ee3710c5bab9b7d0892bd552e0eedfd9) (adjusting a [script](https://github.com/jwiegley/streaming-tests) of John Weigly) using a very simple composition of functions:
 
     toList 
     . filter (\x -> x `mod` 2 == 0) 
@@ -266,59 +266,76 @@ I ran a simple [benchmark](https://gist.github.com/michaelt/7f89dc8b366b30bb6acc
     . filter even 
     . each
 
-as it interpreted by various libraries - `streaming`, `conduit`, (Weigley's) `simple-conduit`, `io-streams` and `machines`.
+as it interpreted by various libraries - `streaming`, `conduit`, `io-streams` and `machines`.
 
-The the results were fairly pleasing:
+The results were fairly pleasing:
 
-    benchmarking basic/stream
-    time                 85.45 ms   (81.63 ms .. 89.32 ms)
-                         0.994 R²   (0.982 R² .. 0.999 R²)
-    mean                 86.53 ms   (84.16 ms .. 90.51 ms)
-    std dev              4.987 ms   (2.301 ms .. 7.906 ms)
-    variance introduced by outliers: 18% (moderately inflated)
+    benchmarking sum/streaming
+    time                 8.996 ms   (8.910 ms .. 9.068 ms)
+                         0.999 R²   (0.998 R² .. 1.000 R²)
+    mean                 9.060 ms   (9.004 ms .. 9.122 ms)
+    std dev              164.6 μs   (123.9 μs .. 251.9 μs)
 
-    benchmarking basic/conduit
-    time                 101.3 ms   (88.77 ms .. 111.3 ms)
-                         0.976 R²   (0.911 R² .. 0.996 R²)
-    mean                 95.56 ms   (84.90 ms .. 103.6 ms)
-    std dev              13.76 ms   (8.210 ms .. 21.79 ms)
-    variance introduced by outliers: 43% (moderately inflated)
+    benchmarking sum/conduit
+    time                 15.77 ms   (15.66 ms .. 15.89 ms)
+                         0.999 R²   (0.998 R² .. 1.000 R²)
+    mean                 15.78 ms   (15.70 ms .. 15.89 ms)
+    std dev              245.3 μs   (176.5 μs .. 379.7 μs)
 
-    benchmarking basic/simple-conduit
-    time                 199.2 ms   (174.1 ms .. 215.6 ms)
-                         0.993 R²   (0.978 R² .. 1.000 R²)
-    mean                 198.4 ms   (190.0 ms .. 202.2 ms)
-    std dev              7.091 ms   (1.565 ms .. 10.000 ms)
-    variance introduced by outliers: 14% (moderately inflated)
+    benchmarking sum/pipes
+    time                 57.94 ms   (57.68 ms .. 58.27 ms)
+                         1.000 R²   (1.000 R² .. 1.000 R²)
+    mean                 58.10 ms   (57.92 ms .. 58.27 ms)
+    std dev              324.2 μs   (214.1 μs .. 468.8 μs)
 
-    benchmarking basic/pipes
-    time                 211.7 ms   (180.8 ms .. 232.7 ms)
-                         0.991 R²   (0.974 R² .. 1.000 R²)
-    mean                 207.7 ms   (199.1 ms .. 218.7 ms)
-    std dev              12.34 ms   (5.989 ms .. 17.67 ms)
-    variance introduced by outliers: 15% (moderately inflated)
+    benchmarking sum/iostreams
+    time                 61.96 ms   (61.36 ms .. 62.53 ms)
+                         1.000 R²   (0.999 R² .. 1.000 R²)
+    mean                 61.80 ms   (61.54 ms .. 62.08 ms)
+    std dev              543.7 μs   (375.1 μs .. 715.7 μs)
 
-    benchmarking basic/data-list
-    time                 202.7 ms   (186.5 ms .. 225.5 ms)
-                         0.990 R²   (0.970 R² .. 1.000 R²)
-    mean                 199.3 ms   (188.4 ms .. 207.4 ms)
-    std dev              11.67 ms   (6.966 ms .. 15.11 ms)
-    variance introduced by outliers: 15% (moderately inflated)
-
-    benchmarking basic/iostreams
-    time                 265.7 ms   (247.2 ms .. 284.8 ms)
-                         0.997 R²   (0.990 R² .. 1.000 R²)
-    mean                 265.6 ms   (261.9 ms .. 272.8 ms)
-    std dev              7.094 ms   (146.8 μs .. 8.387 ms)
+    benchmarking sum/machine
+    time                 260.4 ms   (257.2 ms .. 263.6 ms)
+                         1.000 R²   (0.999 R² .. 1.000 R²)
+    mean                 259.7 ms   (258.4 ms .. 260.6 ms)
+    std dev              1.284 ms   (565.9 μs .. 1.690 ms)
     variance introduced by outliers: 16% (moderately inflated)
 
-    benchmarking basic/machines
-    time                 1.123 s    (NaN s .. 1.206 s)
-                         0.999 R²   (0.999 R² .. 1.000 R²)
-    mean                 1.134 s    (1.114 s .. 1.145 s)
-    std dev              17.29 ms   (0.0 s .. 19.07 ms)
+    benchmarking basic/streaming
+    time                 74.86 ms   (70.07 ms .. 78.78 ms)
+                         0.994 R²   (0.987 R² .. 0.999 R²)
+    mean                 78.25 ms   (75.55 ms .. 84.10 ms)
+    std dev              6.301 ms   (1.995 ms .. 10.17 ms)
     variance introduced by outliers: 19% (moderately inflated)
 
+    benchmarking basic/conduit
+    time                 90.06 ms   (66.61 ms .. 114.4 ms)
+                         0.876 R²   (0.658 R² .. 0.977 R²)
+    mean                 98.63 ms   (85.28 ms .. 116.5 ms)
+    std dev              23.06 ms   (10.61 ms .. 30.72 ms)
+    variance introduced by outliers: 65% (severely inflated)
 
+    benchmarking basic/pipes
+    time                 180.9 ms   (158.7 ms .. 201.3 ms)
+                         0.989 R²   (0.971 R² .. 1.000 R²)
+    mean                 190.5 ms   (183.0 ms .. 197.8 ms)
+    std dev              10.16 ms   (4.910 ms .. 14.86 ms)
+    variance introduced by outliers: 14% (moderately inflated)
+
+    benchmarking basic/iostreams
+    time                 269.7 ms   (243.8 ms .. 303.9 ms)
+                         0.995 R²   (0.985 R² .. 1.000 R²)
+    mean                 264.2 ms   (254.0 ms .. 272.0 ms)
+    std dev              10.87 ms   (5.762 ms .. 15.06 ms)
+    variance introduced by outliers: 16% (moderately inflated)
+
+    benchmarking basic/machine
+    time                 397.7 ms   (324.4 ms .. 504.8 ms)
+                         0.992 R²   (0.977 R² .. 1.000 R²)
+    mean                 407.7 ms   (391.1 ms .. 420.3 ms)
+    std dev              19.40 ms   (0.0 s .. 21.88 ms)
+    variance introduced by outliers: 19% (moderately inflated)
+
+![ ](http://i.imgur.com/jZSCjlJ.png)
 
 This sequence of pre-packaged combinators is, I think, as friendly as it could possibly be to the more recent conduit fusion framework. That framework of course doesn't apply to user-defined operations; there we should expect times like those shown for pipes. Since the combinators from `streaming` are defined with naive recursion, more or less as the user might, we have reason to think this result is characteristic, but much more benchmarking is needed before anything can be said with certainty.

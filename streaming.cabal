@@ -149,7 +149,7 @@ description:         @Streaming.Prelude@ exports an elementary streaming prelude
                      considering whether the accumulation required by @Streaming.toList_@ is really necessary.
                      .
                      Here are the results of some
-                     <https://gist.github.com/michaelt/f19bef01423b17f29ffd microbenchmarks>
+                     <https://gist.github.com/michaelt/96606bbf05b29bf43a05aba081dc9bd4#file-benchmachines-hs microbenchmarks>
                      based on the
                      <https://github.com/ekmett/machines/blob/master/benchmarks/Benchmarks.hs benchmarks>
                      included in the machines package:
