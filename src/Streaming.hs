@@ -1,9 +1,9 @@
 {-#LANGUAGE RankNTypes, CPP, Trustworthy #-}
-module Streaming 
+module Streaming
    (
    -- * An iterable streaming monad transformer
    -- $stream
-   Stream, 
+   Stream,
    -- * Constructing a 'Stream' on a given functor
    yields,
    effect,
@@ -16,28 +16,28 @@ module Streaming
    untilJust,
    streamBuild,
    delays,
-   
+
    -- * Transforming streams
    maps,
    mapsM,
-   mapped, 
+   mapped,
    distribute,
    groups,
-   
+
    -- * Inspecting a stream
    inspect,
-   
-   -- * Splitting and joining 'Stream's 
+
+   -- * Splitting and joining 'Stream's
    splitsAt,
    takes,
    chunksOf,
    concats,
    intercalates,
-   cutoff, 
+   cutoff,
    -- period,
    -- periods,
-   
-   
+
+
    -- * Zipping, unzipping, separating and unseparating streams
    zipsWith,
    zips,
@@ -51,7 +51,7 @@ module Streaming
    -- * Eliminating a 'Stream'
    mapsM_,
    run,
-   streamFold, 
+   streamFold,
    iterTM,
    iterT,
    destroy,
@@ -60,11 +60,11 @@ module Streaming
    Of (..),
    lazily,
    strictly,
-   
+
    -- * ResourceT help
-   
+
    bracketStream,
-   
+
    -- * re-exports
    MFunctor(..),
    MMonad(..),
@@ -82,7 +82,7 @@ module Streaming
 #if MIN_VERSION_base(4,8,0)
    Bifunctor(..),
 #endif
-   
+
    join,
    liftM,
    liftM2,
@@ -92,14 +92,14 @@ module Streaming
    (<>)
    )
    where
-import Streaming.Internal 
-import Streaming.Prelude 
+import Streaming.Internal
+import Streaming.Prelude
 import Control.Monad.Morph
 import Control.Monad
 import Data.Monoid ((<>))
 import Control.Applicative
 import Control.Monad.Trans
-import Data.Functor.Compose 
+import Data.Functor.Compose
 import Data.Functor.Sum
 import Data.Functor.Identity
 
@@ -112,19 +112,19 @@ import Data.Bifunctor
 {- $stream
 
     The 'Stream' data type can be used to represent any effectful
-    succession of steps arising in some monad. 
-    The form of the steps is specified by the first (\"functor\") 
-    parameter in @Stream f m r@. The monad of the underlying effects 
-    is expressed by the second parameter. 
+    succession of steps arising in some monad.
+    The form of the steps is specified by the first (\"functor\")
+    parameter in @Stream f m r@. The monad of the underlying effects
+    is expressed by the second parameter.
 
     This module exports combinators that pertain to that general case.
-    Some of these are quite abstract and pervade any use of the library, 
-    e.g. 
+    Some of these are quite abstract and pervade any use of the library,
+    e.g.
 
->   maps ::    (forall x . f x -> g x)     -> Stream f m r -> Stream g m r  
->   mapped ::  (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r  
+>   maps ::    (forall x . f x -> g x)     -> Stream f m r -> Stream g m r
+>   mapped ::  (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
 >   hoist ::   (forall x . m x -> n x)     -> Stream f m r -> Stream f n r -- from the MFunctor instance
->   concats :: Stream (Stream f m) m r -> Stream f m r          
+>   concats :: Stream (Stream f m) m r -> Stream f m r   
 
     (assuming here and thoughout that @m@ or @n@ satisfies a @Monad@ constraint, and
     @f@ or @g@ a @Functor@ constraint.)
@@ -135,7 +135,7 @@ import Data.Bifunctor
 >   splitsAt     :: Int -> Stream f m r -> Stream f m (Stream f m r)
 >   zipsWith     :: (forall x y. f x -> g y -> h (x, y)) -> Stream f m r -> Stream g m r -> Stream h m r
 >   intercalates :: Stream f m () -> Stream (Stream f m) m r -> Stream f m r
->   unzips       :: Stream (Compose f g) m r ->  Stream f (Stream g m) r 
+>   unzips       :: Stream (Compose f g) m r ->  Stream f (Stream g m) r
 >   separate     :: Stream (Sum f g) m r -> Stream f (Stream g) m r  -- cp. partitionEithers
 >   unseparate   :: Stream f (Stream g) m r -> Stream (Sum f g) m r
 >   groups       :: Stream (Sum f g) m r -> Stream (Sum (Stream f m) (Stream g m)) m r
@@ -143,11 +143,11 @@ import Data.Bifunctor
     One way to see that /any/ streaming library needs some such general type is
     that it is required to represent the segmentation of a stream, and to
     express the equivalents of @Prelude/Data.List@ combinators that involve
-    'lists of lists' and the like. See for example this 
-    <http://www.haskellforall.com/2013/09/perfect-streaming-using-pipes-bytestring.html post> 
-    on the correct expression of a streaming \'lines\' function. 
+    'lists of lists' and the like. See for example this
+    <http://www.haskellforall.com/2013/09/perfect-streaming-using-pipes-bytestring.html post>
+    on the correct expression of a streaming \'lines\' function.
 
-    The module @Streaming.Prelude@ exports combinators relating to 
+    The module @Streaming.Prelude@ exports combinators relating to
 
 > Stream (Of a) m r
 
@@ -155,7 +155,7 @@ import Data.Bifunctor
 
 
    This expresses the concept of a 'Producer' or 'Source' or 'Generator' and
-   easily inter-operates with types with such names in e.g. 'conduit', 
+   easily inter-operates with types with such names in e.g. 'conduit',
    'iostreams' and 'pipes'.
 -}
 

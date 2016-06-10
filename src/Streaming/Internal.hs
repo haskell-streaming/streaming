@@ -1,54 +1,54 @@
 {-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
-{-# LANGUAGE UndecidableInstances, CPP, FlexibleInstances, MultiParamTypeClasses  #-} 
+{-# LANGUAGE UndecidableInstances, CPP, FlexibleInstances, MultiParamTypeClasses  #-}
 {-#LANGUAGE Trustworthy #-}
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
     Stream (..)
-    
+  
     -- * Introducing a stream
-    , unfold 
+    , unfold
     , replicates
     , repeats
     , repeatsM
     , effect
     , wrap
     , yields
-    , streamBuild 
+    , streamBuild
     , cycles
     , delays
     , never
     , untilJust
-    
+  
     -- * Eliminating a stream
-    , intercalates 
-    , concats 
-    , iterT 
-    , iterTM 
-    , destroy 
+    , intercalates
+    , concats
+    , iterT
+    , iterTM
+    , destroy
     , streamFold
-    
+  
     -- * Inspecting a stream wrap by wrap
-    , inspect 
-    
+    , inspect
+  
     -- * Transforming streams
-    , maps 
-    , mapsM 
+    , maps
+    , mapsM
     , decompose
     , mapsM_
     , run
     , distribute
     , groups
 --    , groupInL
-    
+  
     -- *  Splitting streams
-    , chunksOf 
+    , chunksOf
     , splitsAt
     , takes
     , cutoff
     -- , period
     -- , periods
-    
+  
     -- * Zipping and unzipping streams
     , zipsWith
     , zips
@@ -57,22 +57,22 @@ module Streaming.Internal (
     , separate
     , unseparate
 
-    
+  
     -- * Assorted Data.Functor.x help
-    
+  
     , switch
-    
+  
     -- * ResourceT help
-    
+  
     , bracketStream
-    
+  
     -- *  For use in implementation
     , unexposed
     , hoistExposed
     , mapsExposed
     , mapsMExposed
     , destroyExposed
-    
+  
    ) where
 
 import Control.Monad
@@ -103,20 +103,20 @@ import Control.Monad.Trans.Control
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
-    succession of steps, where the form of the steps or 'commands' is 
-    specified by the first (functor) parameter. 
+    succession of steps, where the form of the steps or 'commands' is
+    specified by the first (functor) parameter.
 
 > data Stream f m r = Step !(f (Stream f m r)) | Effect (m (Stream f m r)) | Return r
 
-    The /producer/ concept uses the simple functor @ (a,_) @ \- or the stricter 
-    @ Of a _ @. Then the news at each step or layer is just: an individual item of type @a@. 
+    The /producer/ concept uses the simple functor @ (a,_) @ \- or the stricter
+    @ Of a _ @. Then the news at each step or layer is just: an individual item of type @a@.
     Since @Stream (Of a) m r@ is equivalent to @Pipe.Producer a m r@, much of
-    the @pipes@ @Prelude@ can easily be mirrored in a @streaming@ @Prelude@. Similarly, 
+    the @pipes@ @Prelude@ can easily be mirrored in a @streaming@ @Prelude@. Similarly,
     a simple @Consumer a m r@ or @Parser a m r@ concept arises when the base functor is
-    @ (a -> _) @ . @Stream ((->) input) m result@ consumes @input@ until it returns a 
+    @ (a -> _) @ . @Stream ((->) input) m result@ consumes @input@ until it returns a
     @result@.
 
-    To avoid breaking reasoning principles, the constructors 
+    To avoid breaking reasoning principles, the constructors
     should not be used directly. A pattern-match should go by way of 'inspect' \
     \- or, in the producer case, 'Streaming.Prelude.next'
     The constructors are exported by the 'Internal' module.
@@ -147,8 +147,8 @@ instance (Functor f, Monad m) => Functor (Stream f m) where
       Return r -> Return a
       Effect m  -> Effect (do {stream' <- m; return (loop stream')})
       Step f    -> Step (fmap loop f)
-  {-# INLINABLE (<$) #-}    
-  
+  {-# INLINABLE (<$) #-}  
+
 instance (Functor f, Monad m) => Monad (Stream f m) where
   return = Return
   {-# INLINE return #-}
@@ -156,7 +156,7 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
     loop stream = case stream of
       Return _ -> stream2
       Effect m  -> Effect (liftM loop m)
-      Step f   -> Step (fmap loop f)    
+      Step f   -> Step (fmap loop f)  
   {-# INLINABLE (>>) #-}
   -- (>>=) = _bind
   -- {-#INLINE (>>=) #-}
@@ -167,11 +167,11 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
       Step fstr -> Step (fmap loop fstr)
       Effect m   -> Effect (liftM loop m)
       Return r  -> f r
-  {-# INLINABLE (>>=) #-}         
+  {-# INLINABLE (>>=) #-}       
 
   fail = lift . fail
   {-#INLINE fail #-}
-  
+
 
 -- _bind
 --     :: (Functor f, Monad m)
@@ -196,14 +196,14 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
     -- "_bind (Return     r) f" forall r    f .
     --     _bind (Return  r) f = f r;
 --  #-}
-  
+
 instance (Functor f, Monad m) => Applicative (Stream f m) where
   pure = Return
   {-# INLINE pure #-}
-  streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)}   
-  {-# INLINE (<*>) #-}    
+  streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)} 
+  {-# INLINE (<*>) #-}  
 
-{- | The 'Alternative' instance glues streams together stepwise. 
+{- | The 'Alternative' instance glues streams together stepwise.
 
 > empty = never
 > (<|>) = zipsWith (liftA2 (,))
@@ -213,7 +213,7 @@ instance (Functor f, Monad m) => Applicative (Stream f m) where
 instance (Applicative f, Monad m) => Alternative (Stream f m) where
   empty = never
   {-#INLINE empty #-}
-  
+
   str <|> str' = zipsWith (liftA2 (,)) str str'
   {-#INLINE (<|>) #-}
 
@@ -222,22 +222,22 @@ instance (Functor f, Monad m, Monoid w) => Monoid (Stream f m w) where
   {-#INLINE mempty #-}
   mappend a b = a >>= \w -> fmap (w <>) b
   {-#INLINE mappend #-}
-  
+
 instance (Applicative f, Monad m) => MonadPlus (Stream f m) where
   mzero = empty
   mplus = (<|>)
-  
+
 instance Functor f => MonadTrans (Stream f) where
   lift = Effect . liftM Return
   {-# INLINE lift #-}
 
 instance Functor f => MFunctor (Stream f) where
   hoist trans = loop  where
-    loop stream = case stream of 
+    loop stream = case stream of
       Return r  -> Return r
       Effect m   -> Effect (trans (liftM loop m))
       Step f    -> Step (fmap loop f)
-  {-# INLINABLE hoist #-}    
+  {-# INLINABLE hoist #-}  
 
 instance Functor f => MMonad (Stream f) where
   embed phi = loop where
@@ -245,18 +245,18 @@ instance Functor f => MMonad (Stream f) where
       Return r -> Return r
       Effect  m -> phi m >>= loop
       Step   f -> Step (fmap loop f)
-  {-# INLINABLE embed #-} 
+  {-# INLINABLE embed #-}
 
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   liftIO = Effect . liftM Return . liftIO
   {-# INLINE liftIO #-}
-  
+
 instance (MonadBase b m, Functor f) => MonadBase b (Stream f m) where
   liftBase  = effect . fmap return . liftBase
   {-#INLINE liftBase #-}
-  
+
 instance (MonadThrow m, Functor f) => MonadThrow (Stream f m) where
-  throwM = lift . throwM 
+  throwM = lift . throwM
   {-#INLINE throwM #-}
 
 instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
@@ -267,10 +267,10 @@ instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
       Return  r   -> Return r
       Effect  m   -> Effect (catch (do
           p' <- m
-          return (go p'))  
+          return (go p'))
        (\e -> return (f e)) )
   {-#INLINABLE catch #-}
-       
+     
 instance (MonadResource m, Functor f) => MonadResource (Stream f m) where
   liftResourceT = lift . liftResourceT
   {-#INLINE liftResourceT #-}
@@ -327,7 +327,7 @@ bracketStream alloc free inside = do
         clean key (inside seed)
   where
     clean key = loop where
-      loop str = case str of 
+      loop str = case str of
         Return r -> Effect (release key >> return (Return r))
         Effect m -> Effect (liftM loop m)
         Step f   -> Step (fmap loop f)
@@ -349,17 +349,17 @@ destroy stream0 construct effect done = loop stream0 where
 
 {-| 'streamFold' reorders the arguments of 'destroy' to be more akin
     to @foldr@  It is more convenient to query in ghci to figure out
-    what kind of \'algebra\' you need to write. 
+    what kind of \'algebra\' you need to write.
 
->>> :t streamFold return join 
-(Monad m, Functor f) => 
+>>> :t streamFold return join
+(Monad m, Functor f) =>
      (f (m a) -> m a) -> Stream f m a -> m a        -- iterT
 
 >>> :t streamFold return (join . lift)
 (Monad m, Monad (t m), Functor f, MonadTrans t) =>
      (f (t m a) -> t m a) -> Stream f m a -> t m a  -- iterTM
 
->>> :t streamFold return effect 
+>>> :t streamFold return effect
 (Monad m, Functor f, Functor g) =>
      (f (Stream g m r) -> Stream g m r) -> Stream f m r -> Stream g m r
 
@@ -390,8 +390,8 @@ streamBuild = \phi -> phi Return Effect Step
 {-# INLINE streamBuild #-}
 
 
-{-| Inspect the first stage of a freely layered sequence. 
-    Compare @Pipes.next@ and the replica @Streaming.Prelude.next@. 
+{-| Inspect the first stage of a freely layered sequence.
+    Compare @Pipes.next@ and the replica @Streaming.Prelude.next@.
     This is the 'uncons' for the general 'unfold'.
 
 > unfold inspect = id
@@ -405,7 +405,7 @@ inspect = loop where
     Effect m  -> m >>= loop
     Step fs  -> return (Right fs)
 {-# INLINABLE inspect #-}
-    
+  
 {-| Build a @Stream@ by unfolding steps starting from a seed. See also
     the specialized 'Streaming.Prelude.unfoldr' in the prelude.
 
@@ -414,11 +414,11 @@ inspect = loop where
 > unfold (curry (:>) . Pipes.next) :: Monad m => Producer a m r -> Stream (Of a) m r
 
 -}
-unfold :: (Monad m, Functor f) 
-        => (s -> m (Either r (f s))) 
+unfold :: (Monad m, Functor f)
+        => (s -> m (Either r (f s)))
         -> s -> Stream f m r
 unfold step = loop where
-  loop s0 = Effect $ do 
+  loop s0 = Effect $ do
     e <- step s0
     case e of
       Left r -> return (Return r)
@@ -427,16 +427,16 @@ unfold step = loop where
 
 
 {- | Map layers of one functor to another with a transformation. Compare
-     hoist, which has a similar effect on the 'monadic' parameter. 
+     hoist, which has a similar effect on the 'monadic' parameter.
 
 > maps id = id
 > maps f . maps g = maps (f . g)
 
 -}
-maps :: (Monad m, Functor f) 
+maps :: (Monad m, Functor f)
      => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
 maps phi = loop where
-  loop stream = case stream of 
+  loop stream = case stream of
     Return r  -> Return r
     Effect m   -> Effect (liftM loop m)
     Step f    -> Step (phi (fmap loop f))
@@ -450,19 +450,19 @@ maps phi = loop where
 > mapsM phi = decompose . maps (Compose . phi)
 
      The streaming prelude exports the same function under the better name @mapped@,
-     which overlaps with the lens libraries. 
-  
+     which overlaps with the lens libraries.
+
 -}
 mapsM :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
 mapsM phi = loop where
-  loop stream = case stream of 
+  loop stream = case stream of
     Return r  -> Return r
     Effect m   -> Effect (liftM loop m)
     Step f    -> Effect (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsM #-}
 
 
-{-| Rearrange a succession of layers of the form @Compose m (f x)@. 
+{-| Rearrange a succession of layers of the form @Compose m (f x)@.
 
    we could as well define @decompose@ by @mapsM@:
 
@@ -481,8 +481,8 @@ mapsM phi = loop where
 -}
 decompose :: (Monad m, Functor f) => Stream (Compose m f) m r -> Stream f m r
 decompose = loop where
-  loop stream = case stream of 
-    Return r -> Return r 
+  loop stream = case stream of
+    Return r -> Return r
     Effect m ->  Effect (liftM loop m)
     Step (Compose mstr) -> Effect $ do
       str <- mstr
@@ -503,7 +503,7 @@ run = loop where
 {-| Map each layer to an effect, and run them all.
 -}
 mapsM_ :: (Functor f, Monad m) => (forall x . f x -> m x) -> Stream f m r -> m r
-mapsM_ f = run . maps f 
+mapsM_ f = run . maps f
 {-# INLINE mapsM_ #-}
 
 
@@ -515,14 +515,14 @@ intercalates :: (Monad m, Monad (t m), MonadTrans t) =>
      t m x -> Stream (t m) m r -> t m r
 intercalates sep = go0
   where
-    go0 f = case f of 
-      Return r -> return r 
-      Effect m -> lift m >>= go0 
+    go0 f = case f of
+      Return r -> return r
+      Effect m -> lift m >>= go0
       Step fstr -> do
                 f' <- fstr
                 go1 f'
-    go1 f = case f of 
-      Return r -> return r 
+    go1 f = case f of
+      Return r -> return r
       Effect m     -> lift m >>= go1
       Step fstr ->  do
                 sep
@@ -543,7 +543,7 @@ iterTM out stream = destroyExposed stream out (join . lift) return
 
 {-| Specialized fold following the usage of @Control.Monad.Trans.Free@
 
-> iterT alg = streamFold return join alg 
+> iterT alg = streamFold return join alg
 -}
 iterT ::
   (Functor f, Monad m) => (f (m a) -> m a) -> Stream f m a -> m a
@@ -573,7 +573,7 @@ concats  = loop where
 > splitAt 0 = return
 > splitAt n >=> splitAt m = splitAt (m+n)
 
-    Thus, e.g. 
+    Thus, e.g.
 
 >>> rest <- S.print $ splitsAt 2 >=> splitsAt 2 $ each [1..5]
 1
@@ -586,17 +586,17 @@ concats  = loop where
 -}
 splitsAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
 splitsAt  = loop  where
-  loop !n stream 
+  loop !n stream
     | n <= 0 = Return stream
     | otherwise = case stream of
         Return r       -> Return (Return r)
         Effect m        -> Effect (liftM (loop n) m)
-        Step fs        -> case n of 
+        Step fs        -> case n of
           0 -> Return (Step fs)
           _ -> Step (fmap (loop (n-1)) fs)
-{-# INLINABLE splitsAt #-}  
+{-# INLINABLE splitsAt #-}
 
-{- Functor-general take. 
+{- Functor-general take.
 
    @takes 3@ can take three individual values
 
@@ -624,9 +624,9 @@ c
 -}
 takes :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
 takes n = void . splitsAt n
-{-# INLINE takes #-}                        
+{-# INLINE takes #-}                      
 
-{-| Break a stream into substreams each with n functorial layers. 
+{-| Break a stream into substreams each with n functorial layers.
 
 >>>  S.print $ mapped S.sum $ chunksOf 2 $ each [1,1,1,1,1]
 2
@@ -639,26 +639,26 @@ chunksOf n0 = loop where
     Return r  -> Return r
     Effect m  -> Effect (liftM loop m)
     Step fs   -> Step (Step (fmap (fmap loop . splitsAt (n0-1)) fs))
-{-# INLINABLE chunksOf #-}          
+{-# INLINABLE chunksOf #-}        
 
-{- | Make it possible to \'run\' the underlying transformed monad. 
+{- | Make it possible to \'run\' the underlying transformed monad.
 -}
 distribute :: (Monad m, Functor f, MonadTrans t, MFunctor t, Monad (t (Stream f m)))
            => Stream f (t m) r -> t (Stream f m) r
 distribute = loop where
-  loop stream = case stream of 
+  loop stream = case stream of
     Return r     -> lift (Return r)
     Effect tmstr -> hoist lift tmstr >>= loop
     Step fstr    -> join (lift (Step (fmap (Return . loop) fstr)))
 {-#INLINABLE distribute #-}
-    
+  
 -- | Repeat a functorial layer (a \"command\" or \"instruction\") forever.
-repeats :: (Monad m, Functor f) => f () -> Stream f m r 
+repeats :: (Monad m, Functor f) => f () -> Stream f m r
 repeats f = loop where
   loop = Effect (return (Step (fmap (\_ -> loop) f)))
 
 -- | Repeat an effect containing a functorial layer, command or instruction forever.
-repeatsM :: (Monad m, Functor f) => m (f ()) -> Stream f m r 
+repeatsM :: (Monad m, Functor f) => m (f ()) -> Stream f m r
 repeatsM mf = loop where
   loop = Effect $ do
      f <- mf
@@ -666,7 +666,7 @@ repeatsM mf = loop where
 
 {- | Repeat a functorial layer, command or instruction a fixed number of times.
 
-> replicates n = takes n . repeats 
+> replicates n = takes n . repeats
 -}
 replicates :: (Monad m, Functor f) => Int -> f () -> Stream f m ()
 replicates n f = splitsAt n (repeats f) >> return ()
@@ -675,31 +675,31 @@ replicates n f = splitsAt n (repeats f) >> return ()
 
 > cycles = forever
 
->>> 
+>>>
 -}
- 
+
 cycles :: (Monad m, Functor f) =>  Stream f m () -> Stream f m r
 cycles = forever
 
 
 
 hoistExposed trans = loop where
-  loop stream = case stream of 
+  loop stream = case stream of
     Return r  -> Return r
     Effect m   -> Effect (trans (liftM loop m))
     Step f    -> Step (fmap loop f)
 
-mapsExposed :: (Monad m, Functor f) 
+mapsExposed :: (Monad m, Functor f)
      => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
 mapsExposed phi = loop where
-  loop stream = case stream of 
+  loop stream = case stream of
     Return r  -> Return r
     Effect m   -> Effect (liftM loop m)
     Step f    -> Step (phi (fmap loop f))
 {-# INLINABLE mapsExposed #-}
 
 mapsMExposed phi = loop where
-  loop stream = case stream of 
+  loop stream = case stream of
     Return r  -> Return r
     Effect m   -> Effect (liftM loop m)
     Step f    -> Effect (liftM Step (phi (fmap loop f)))
@@ -725,17 +725,17 @@ destroyExposed stream0 construct effect done = loop stream0 where
 
 
 {-| This is akin to the @observe@ of @Pipes.Internal@ . It reeffects the layering
-    in instances of @Stream f m r@ so that it replicates that of 
-    @FreeT@. 
+    in instances of @Stream f m r@ so that it replicates that of
+    @FreeT@.
 
 -}
 unexposed :: (Functor f, Monad m) => Stream f m r -> Stream f m r
 unexposed = Effect . loop where
-  loop stream = case stream of 
+  loop stream = case stream of
     Return r -> return (Return r)
     Effect  m -> m >>= loop
     Step   f -> return (Step (fmap (Effect . loop) f))
-{-# INLINABLE unexposed #-}   
+{-# INLINABLE unexposed #-} 
 
 
 {- Wrap a new layer of a stream. So, e.g.
@@ -748,12 +748,12 @@ unexposed = Effect . loop where
 > S.each :: (Monad m, Foldable t) => t a -> Stream (Of a) m ()
 > S.each = foldr (\a b -> wrap (a :> b)) (return ())
 
-   The two operations 
+   The two operations
 
 > wrap :: (Monad m, Functor f )   => f (Stream f m r) -> Stream f m r
 > effect :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
 
-   are fundamental. We can define the parallel operations @yields@ and @lift@ in 
+   are fundamental. We can define the parallel operations @yields@ and @lift@ in
    terms of them
 
 > yields :: (Monad m, Functor f )  => f r -> Stream f m r
@@ -769,7 +769,7 @@ wrap = Step
 
 {- | Wrap an effect that returns a stream
 
-> effect = join . lift 
+> effect = join . lift
 
 -}
 effect :: (Monad m, Functor f ) => m (Stream f m r) -> Stream f m r
@@ -777,8 +777,8 @@ effect = Effect
 {-#INLINE effect #-}
 
 
-{-| @yields@ is like @lift@ for items in the streamed functor. 
-    It makes a singleton or one-layer succession. 
+{-| @yields@ is like @lift@ for items in the streamed functor.
+    It makes a singleton or one-layer succession.
 
 > lift :: (Monad m, Functor f)    => m r -> Stream f m r
 > yields ::  (Monad m, Functor f) => f r -> Stream f m r
@@ -794,8 +794,8 @@ yields fr = Step (fmap Return fr)
 {-#INLINE yields #-}
 
 
-zipsWith :: (Monad m, Functor h) 
-  => (forall x y . f x -> g y -> h (x,y)) 
+zipsWith :: (Monad m, Functor h)
+  => (forall x y . f x -> g y -> h (x,y))
   -> Stream f m r -> Stream g m r -> Stream h m r
 zipsWith phi = curry loop where
   loop (s1, s2) = Effect (go s1 s2)
@@ -804,13 +804,13 @@ zipsWith phi = curry loop where
   go (Effect m) p          = m >>= (\s -> go s p)
   go q         (Effect m)  = m >>= (\s -> go q s)
   go (Step f) (Step g)    = return (Step (fmap loop (phi f g)))
-{-# INLINABLE zipsWith #-}   
-  
-zips :: (Monad m, Functor f, Functor g) 
-     => Stream f m r -> Stream g m r -> Stream (Compose f g) m r  
+{-# INLINABLE zipsWith #-} 
+
+zips :: (Monad m, Functor f, Functor g)
+     => Stream f m r -> Stream g m r -> Stream (Compose f g) m r
 zips = zipsWith go where
   go fx gy = Compose (fmap (\x -> fmap (\y -> (x,y)) gy) fx)
-{-# INLINE zips #-}   
+{-# INLINE zips #-} 
 
 
 
@@ -825,15 +825,15 @@ hello	goodbye
 world	world
 
 -}
-  
+
 interleaves
   :: (Monad m, Applicative h) =>
      Stream h m r -> Stream h m r -> Stream h m r
 interleaves = zipsWith (liftA2 (,))
-{-# INLINE interleaves #-}   
+{-# INLINE interleaves #-} 
 
 
-{-| Swap the order of functors in a sum of functors. 
+{-| Swap the order of functors in a sum of functors.
 
 
 >>> S.toListM' $ S.print $ separate $ maps S.switch $ maps (S.distinguish (=='a')) $ S.each "banana"
@@ -852,7 +852,7 @@ switch s = case s of InL a -> InR a; InR a -> InL a
 {-#INLINE switch #-}
 
 
-  
+
 {-| Given a stream on a sum of functors, make it a stream on the left functor,
     with the streaming on the other functor as the governing monad. This is
     useful for acting on one or the other functor with a fold. It generalizes
@@ -871,8 +871,8 @@ separate odd_even
 
    Or we can write them to separate files or whatever:
 
->>> runResourceT $ S.writeFile "even.txt" . S.show $ S.writeFile "odd.txt" . S.show $ S.separate odd_even 
->>> :! cat even.txt 
+>>> runResourceT $ S.writeFile "even.txt" . S.show $ S.writeFile "odd.txt" . S.show $ S.separate odd_even
+>>> :! cat even.txt
 2
 4
 6
@@ -885,50 +885,50 @@ separate odd_even
 7
 9
 
-   Of course, in the special case of @Stream (Of a) m r@, we can achieve the above 
+   Of course, in the special case of @Stream (Of a) m r@, we can achieve the above
    effects more simply by using 'Streaming.Prelude.copy'
 
 >>> S.toList . S.filter even $ S.toList . S.filter odd $ S.copy $ each [1..10::Int]
 [2,4,6,8,10] :> ([1,3,5,7,9] :> ())
 
 
-    But 'separate' and 'unseparate' are functor-general. 
+    But 'separate' and 'unseparate' are functor-general.
 
 -}
 
 separate :: (Monad m, Functor f, Functor g) => Stream (Sum f g) m r -> Stream f (Stream g m) r
-separate str = destroyExposed 
-  str 
+separate str = destroyExposed
+  str
   (\x -> case x of InL fss -> wrap fss; InR gss -> effect (yields gss))
-  (effect . lift) 
-  return 
+  (effect . lift)
+  return
 {-#INLINABLE separate #-}
 
 unseparate :: (Monad m, Functor f, Functor g) =>  Stream f (Stream g m) r -> Stream (Sum f g) m r
-unseparate str = destroyExposed 
-  str 
-  (wrap . InL) 
-  (join . maps InR) 
-  return 
+unseparate str = destroyExposed
+  str
+  (wrap . InL)
+  (join . maps InR)
+  return
 {-#INLINABLE unseparate #-}
 
 
-unzips :: (Monad m, Functor f, Functor g) => 
-   Stream (Compose f g) m r ->  Stream f (Stream g m) r 
+unzips :: (Monad m, Functor f, Functor g) =>
+   Stream (Compose f g) m r ->  Stream f (Stream g m) r
 unzips str = destroyExposed
-  str 
+  str
   (\(Compose fgstr) -> Step (fmap (Effect . yields) fgstr))
-  (Effect . lift) 
-  return 
+  (Effect . lift)
+  return
 {-#INLINABLE unzips #-}
 
 {-| Group layers in an alternating stream into adjoining sub-streams
-    of one type or another. 
+    of one type or another.
 -}
-groups :: (Monad m, Functor f, Functor g) 
-           => Stream (Sum f g) m r 
+groups :: (Monad m, Functor f, Functor g)
+           => Stream (Sum f g) m r
            -> Stream (Sum (Stream f m) (Stream g m)) m r
-groups = loop 
+groups = loop
   where
   loop str = do
     e <- lift $ inspect str
@@ -959,7 +959,7 @@ groups = loop
       Right (InL fstr) -> return (wrap (InL fstr))
       Right (InR gstr) -> wrap (fmap loop gstr)
 {-#INLINABLE groups #-}
-      
+    
 -- groupInL :: (Monad m, Functor f, Functor g)
 --                      => Stream (Sum f g) m r
 --                      -> Stream (Sum (Stream f m) g) m r
@@ -982,7 +982,7 @@ groups = loop
 --       Right (InL fstr) -> wrap (fmap loop fstr)
 --       Right (InR gstr) -> return (wrap (InR gstr))
 
-{- | 'never' interleaves the pure applicative action with the return of the monad forever. 
+{- | 'never' interleaves the pure applicative action with the return of the monad forever.
      It is the 'empty' of the 'Alternative' instance, thus
 
 > never <|> a = a
@@ -993,8 +993,8 @@ groups = loop
      @str1 \<|\> str2@ appends the elements monoidally until one of streams ends.
      Thus we have, e.g.
 
->>> S.stdoutLn $ S.take 2 $ S.stdinLn <|> S.repeat " " <|> S.stdinLn  <|> S.repeat " " <|> S.stdinLn 
-1<Enter>  
+>>> S.stdoutLn $ S.take 2 $ S.stdinLn <|> S.repeat " " <|> S.stdinLn  <|> S.repeat " " <|> S.stdinLn
+1<Enter>
 2<Enter>
 3<Enter>
 1 2 3
@@ -1003,13 +1003,13 @@ groups = loop
 6<Enter>
 4 5 6
 
-    This is equivalent to 
+    This is equivalent to
 
 >>> S.stdoutLn $ S.take 2 $ foldr (<|>) never [S.stdinLn, S.repeat " ", S.stdinLn, S.repeat " ", S.stdinLn ]
 
      Where 'f' is a monad, @(\<|\>)@ sequences the conjoined streams stepwise. See the
      definition of @paste@ <https://gist.github.com/michaelt/6c6843e6dd8030e95d58 here>,
-     where the separate steps are bytestreams corresponding to the lines of a file. 
+     where the separate steps are bytestreams corresponding to the lines of a file.
 
      Given, say,
 
@@ -1017,22 +1017,22 @@ groups = loop
 
     then @never :: Stream Branch Identity r@  is the pure infinite binary tree with
     (inaccessible) @r@s in its leaves. Given two binary trees, @tree1 \<|\> tree2@
-    intersects them, preserving the leaves that came first, 
+    intersects them, preserving the leaves that came first,
     so @tree1 \<|\> never = tree1@
 
-    @Stream Identity m r@ is an action in @m@ that is indefinitely delayed. Such an 
+    @Stream Identity m r@ is an action in @m@ that is indefinitely delayed. Such an
     action can be constructed with e.g. 'untilJust'.
 
 > untilJust :: (Monad m, Applicative f) => m (Maybe r) -> Stream f m r
 
-    Given two such items, @\<|\>@ instance races them. 
-    It is thus the iterative monad transformer specially defined in 
+    Given two such items, @\<|\>@ instance races them.
+    It is thus the iterative monad transformer specially defined in
     <https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Iter.html Control.Monad.Trans.Iter>
 
     So, for example, we might write
 
 >>> let justFour str = if length str == 4 then Just str else Nothing
->>> let four = untilJust (liftM justFour getLine) 
+>>> let four = untilJust (liftM justFour getLine)
 >>> run four
 one<Enter>
 two<Enter>
@@ -1041,21 +1041,21 @@ four<Enter>
 "four"
 
 
-    The 'Alternative' instance in 
-    <https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html Control.Monad.Trans.Free> 
+    The 'Alternative' instance in
+    <https://hackage.haskell.org/package/free-4.12.1/docs/Control-Monad-Trans-Free.html Control.Monad.Trans.Free>
     is avowedly wrong, though no explanation is given for this.
 
 
 -}
 never :: (Monad m, Applicative f) => Stream f m r
 never =  let loop = Effect $ return $ Step $ pure loop in loop
-{-#INLINABLE never #-} 
+{-#INLINABLE never #-}
 
 
 delays :: (MonadIO m, Applicative f) => Double -> Stream f m r
 delays seconds = loop where
   loop = Effect $ liftIO (threadDelay delay) >> return (Step (pure loop))
-  delay = fromInteger (truncate (1000000 * seconds)) 
+  delay = fromInteger (truncate (1000000 * seconds))
 {-#INLINABLE delays #-}
 
 -- {-| Permit streamed actions to proceed unless the clock has run out.
@@ -1131,7 +1131,7 @@ delays seconds = loop where
 --               Step f   -> Step (fmap loop f)
 --     loop str
 
-{- | Repeat a 
+{- | Repeat a
 
 -}
 
@@ -1139,15 +1139,15 @@ untilJust :: (Monad m, Applicative f) => m (Maybe r) -> Stream f m r
 untilJust act = loop where
   loop = Effect $ do
     m <- act
-    case m of 
+    case m of
       Nothing -> return $ Step $ pure loop
       Just a -> return $ Return a
-      
-      
+    
+    
 cutoff :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Maybe r)
 cutoff = loop where
   loop 0 str = return Nothing
-  loop n str = do 
+  loop n str = do
       e <- lift $ inspect str
       case e of
         Left r -> return (Just r)
