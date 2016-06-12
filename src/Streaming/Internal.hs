@@ -794,16 +794,20 @@ yields fr = Step (fmap Return fr)
 {-#INLINE yields #-}
 
 
-zipsWith :: (Monad m, Functor h)
+zipsWith :: (Monad m, Functor f, Functor g, Functor h)
   => (forall x y . f x -> g y -> h (x,y))
   -> Stream f m r -> Stream g m r -> Stream h m r
-zipsWith phi = curry loop where
-  loop (s1, s2) = Effect (go s1 s2)
-  go (Return r)  p        = return (Return r)
-  go q         (Return s) = return (Return s)
-  go (Effect m) p          = m >>= (\s -> go s p)
-  go q         (Effect m)  = m >>= (\s -> go q s)
-  go (Step f) (Step g)    = return (Step (fmap loop (phi f g)))
+zipsWith phi s t = loop (s,t) where
+    loop (s1, s2) = Effect (go s1 s2)
+    go s1 s2 = do 
+      e <- inspect s1
+      case e of
+        Left r -> return (Return r)
+        Right fstr -> do 
+          e <- inspect s2
+          case e of
+            Left r -> return (Return r)
+            Right gstr -> return $ Step $ fmap loop (phi fstr gstr)
 {-# INLINABLE zipsWith #-} 
 
 zips :: (Monad m, Functor f, Functor g)
