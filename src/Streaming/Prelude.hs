@@ -131,7 +131,7 @@ module Streaming.Prelude (
     , uncons
     , splitAt
     , split
---    , breaks
+    , breaks
     , break
     , breakWhen
     , span
@@ -542,19 +542,19 @@ breakWhen step begin done pred = loop0 begin
 -- [False]
 --
 -- -}
--- breaks
---   :: Monad m =>
---      (a -> Bool) -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
--- breaks thus  = loop  where
---   loop stream = Effect $ do
---     e <- next stream
---     return $ case e of
---       Left   r      -> Return r
---       Right (a, p') ->
---        if not (thus a)
---           then Step $ fmap loop (yield a >> break thus p')
---           else loop p'
--- {-#INLINABLE breaks #-}
+breaks
+  :: Monad m =>
+     (a -> Bool) -> Stream (Of a) m r -> Stream (Stream (Of a) m) m r
+breaks thus  = loop  where
+  loop stream = Effect $ do
+    e <- next stream
+    return $ case e of
+      Left   r      -> Return r
+      Right (a, p') ->
+       if not (thus a)
+          then Step $ fmap loop (yield a >> break thus p')
+          else loop p'
+{-#INLINABLE breaks #-}
 
 {-| Apply an action to all values, re-yielding each
 
@@ -897,7 +897,7 @@ filter  :: (Monad m) => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 filter pred = loop where
   loop str = case str of
     Return r       -> Return r
-    Effect m        -> Effect (liftM loop m)
+    Effect m       -> Effect (liftM loop m)
     Step (a :> as) -> if pred a
                          then Step (a :> loop as)
                          else loop as
@@ -912,7 +912,7 @@ filterM  :: (Monad m) => (a -> m Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 filterM pred = loop where
   loop str = case str of
     Return r       -> Return r
-    Effect m        -> Effect $ liftM loop m
+    Effect m       -> Effect $ liftM loop m
     Step (a :> as) -> Effect $ do
       bool <- pred a
       if bool

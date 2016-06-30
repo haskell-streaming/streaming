@@ -800,14 +800,12 @@ zipsWith :: (Monad m, Functor f, Functor g, Functor h)
 zipsWith phi s t = loop (s,t) where
     loop (s1, s2) = Effect (go s1 s2)
     go s1 s2 = do 
-      e <- inspect s1
-      case e of
-        Left r -> return (Return r)
-        Right fstr -> do 
-          e <- inspect s2
-          case e of
-            Left r -> return (Return r)
-            Right gstr -> return $ Step $ fmap loop (phi fstr gstr)
+      e  <- inspect s1
+      e' <- inspect s2
+      case (e,e') of
+        (Left r, _)              -> return (Return r)
+        (_, Left r)              -> return (Return r)
+        (Right fstr, Right gstr) -> return $ Step $ fmap loop (phi fstr gstr)
 {-# INLINABLE zipsWith #-} 
 
 zips :: (Monad m, Functor f, Functor g)
