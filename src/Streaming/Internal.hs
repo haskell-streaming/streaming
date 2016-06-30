@@ -837,13 +837,12 @@ interleaves = zipsWith (liftA2 (,))
 
 {-| Swap the order of functors in a sum of functors.
 
-
->>> S.toListM' $ S.print $ separate $ maps S.switch $ maps (S.distinguish (=='a')) $ S.each "banana"
+>>> S.toList $ S.print $ separate $ maps S.switch $ maps (S.distinguish (=='a')) $ S.each "banana"
 'a'
 'a'
 'a'
 "bnn" :> ()
->>> S.toListM' $ S.print $ separate $ maps (S.distinguish (=='a')) $ S.each "banana"
+>>> S.toList $ S.print $ separate $ maps (S.distinguish (=='a')) $ S.each "banana"
 'b'
 'n'
 'n'
@@ -857,8 +856,9 @@ switch s = case s of InL a -> InR a; InR a -> InL a
 
 {-| Given a stream on a sum of functors, make it a stream on the left functor,
     with the streaming on the other functor as the governing monad. This is
-    useful for acting on one or the other functor with a fold. It generalizes
-    'Data.Either.partitionEithers' massively, but actually streams properly.
+    useful for acting on one or the other functor with a fold, leaving the
+    other material for another treatment. It generalizes
+    'Data.Either.partitionEithers', but actually streams properly.
 
 >>> let odd_even = S.maps (S.distinguish even) $ S.each [1..10::Int]
 >>> :t separate odd_even
