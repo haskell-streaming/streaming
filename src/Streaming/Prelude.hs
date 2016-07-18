@@ -57,7 +57,6 @@ module Streaming.Prelude (
     -- $producers
     , yield
     , each
-    , each'
     , unfoldr
     , stdinLn
     , readLn
@@ -771,9 +770,6 @@ each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
 each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
 {-# INLINABLE each #-}
 
-each' :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
-each' = Foldable.foldr (\a p -> Effect (return (Step (a :> p)))) (Return ())
-{-# INLINABLE each' #-}
 
 -- ---------------
 -- effects
