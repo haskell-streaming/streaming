@@ -897,8 +897,9 @@ filter pred = loop where
     Step (a :> as) -> if pred a
                          then Step (a :> loop as)
                          else loop as
-{-# INLINABLE filter #-}
+{-# INLINE filter #-}  -- ~ 10% faster than INLINABLE in simple bench
 
+                         
 -- ---------------
 -- filterM
 -- ---------------
@@ -914,8 +915,7 @@ filterM pred = loop where
       if bool
         then return $ Step (a :> loop as)
         else return $ loop as
-{-# INLINABLE filterM #-}
-
+{-# INLINE filterM #-}  -- ~ 10% faster than INLINABLE in simple bench
 
 -- -- ---------------
 -- -- first
