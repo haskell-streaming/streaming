@@ -206,6 +206,7 @@ library
                      , monad-control >=0.3.1 && <1.1
                      , time
                      , ghc-prim
+                     , containers
 
   hs-source-dirs:    src
   default-language:  Haskell2010

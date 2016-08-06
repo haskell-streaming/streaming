@@ -1,8 +1,8 @@
 {-| This names exported by this module are closely modeled on those in @Prelude@ and @Data.List@,
     but also on
-    <http://hackage.haskell.org/package/pipes-4.1.9/docs/Pipes-Prelude.html @Pipes.Prelude@>,
-    <http://hackage.haskell.org/package/pipes-group-1.0.3/docs/Pipes-Group.html @Pipes.Group@>
-    and <http://hackage.haskell.org/package/pipes-parse-3.0.6/docs/Pipes-Parse.html @Pipes.Parse@>.
+    <http://hackage.haskell.org/package/pipes-4.1.9/docs/Pipes-Prelude.html Pipes.Prelude>,
+    <http://hackage.haskell.org/package/pipes-group-1.0.3/docs/Pipes-Group.html Pipes.Group>
+    and <http://hackage.haskell.org/package/pipes-parse-3.0.6/docs/Pipes-Parse.html Pipes.Parse>.
     The module may be said to give independent expression to the conception of
     Producer / Source / Generator manipulation
     articulated in the latter two modules. Because we dispense with piping and
@@ -247,6 +247,7 @@ import qualified Prelude as Prelude
 import Data.Foldable (Foldable)
 import Data.Traversable (Traversable)
 import qualified Data.Foldable as Foldable
+import qualified Data.Sequence as Seq
 import Text.Read (readMaybe)
 import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat
                       , sum, product, iterate, repeat, cycle, replicate, splitAt
@@ -2799,3 +2800,36 @@ mapMaybe phi = loop where
       Just b -> Step (b :> loop snext)
 {-#INLINABLE mapMaybe #-}
 
+{-| Transform a stream into a stream of sequences of length @n@. 
+    It follows the behavior of the slidingWindow function in 
+    <https://hackage.haskell.org/package/conduit-combinators-1.0.4/docs/Data-Conduit-Combinators.html#v:slidingWindow conduit-combinators>.
+    
+
+>>> S.print $ slidingWindow 4 $ S.each "123456"
+fromList "1234"
+fromList "2345"
+fromList "3456"
+
+
+-}
+slidingWindow :: Monad m 
+  => Int 
+  -> Stream (Of a) m b 
+  -> Stream (Of (Seq.Seq a)) m b
+slidingWindow n = setup (max 1 n :: Int) mempty 
+  where 
+    window !sequ str = do 
+      e <- lift (next str) 
+      case e of 
+        Left r -> return r
+        Right (a,rest) -> do 
+          yield (sequ Seq.|> a)
+          window (Seq.drop 1 sequ Seq.|> a) rest
+    setup 0 !sequ str = do
+       yield sequ 
+       window (Seq.drop 1 sequ) str 
+    setup n sequ str = do 
+      e <- lift $ next str 
+      case e of 
+        Left r ->  yield sequ >> return r
+        Right (x,rest) -> setup (n-1) (sequ Seq.|> x) rest
