@@ -4,7 +4,7 @@
     <http://hackage.haskell.org/package/pipes-group-1.0.3/docs/Pipes-Group.html Pipes.Group>
     and <http://hackage.haskell.org/package/pipes-parse-3.0.6/docs/Pipes-Parse.html Pipes.Parse>.
     The module may be said to give independent expression to the conception of
-    Producer / Source / Generator manipulation
+    Producer \/ Source \/ Generator manipulation
     articulated in the latter two modules. Because we dispense with piping and
     conduiting, the distinction between all of these modules collapses. Some things are
     lost but much is gained in that everything comes much closer to ordinary
@@ -98,7 +98,7 @@ module Streaming.Prelude (
     , with
     , subst
     , copy
-    , copy'
+    , duplicate
     , store
     , chain
     , sequence
@@ -121,8 +121,7 @@ module Streaming.Prelude (
     , read
     , show
     , cons
-    , duplicate
-    , duplicate'
+    , slidingWindow    
 
 
     -- * Splitting and inspecting streams of elements
@@ -137,7 +136,6 @@ module Streaming.Prelude (
     , group
     , groupBy
  --   , groupedBy
- --   , split
 
 
     -- * Sum and Compose manipulation
@@ -2672,7 +2670,6 @@ copy = Effect . return . loop where
     Return r         -> Return r
     Effect m         -> Effect (liftM loop (lift m))
     Step (a :> rest) -> Effect (Step (a :> Return (Step (a :> loop rest))))
-
 {-#INLINABLE copy#-}
 
 duplicate
@@ -2680,27 +2677,6 @@ duplicate
      Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
 duplicate = copy
 {-#INLINE duplicate #-}
-
-
-{-| @copy'@ is the same as @copy@ but reverses the order of interleaved effects.
-    The difference should not be observable at all for pure folds over the data.
-
--}
-copy'
-  :: Monad m =>
-     Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
-copy' = Effect . return . loop where
-  loop str = case str of
-    Return r         -> Return r
-    Effect m         -> Effect (liftM loop (lift m))
-    Step (a :> rest) -> Step (a :> Effect (Step (a :> Return (loop rest))))
-{-#INLINABLE copy' #-}
-
-duplicate'
-  :: Monad m =>
-     Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
-duplicate' = copy'
-{-#INLINE duplicate' #-}
 
 {-| The type
 
@@ -2758,15 +2734,6 @@ unzip = loop where
 {-#INLINABLE unzip #-}
 
 
--- "fold/map" forall step begin done f str .
--- fold step begin done (map f str) = fold (\x a -> step x $! f a) begin done str;
---
--- "fold/filter" forall step begin done pred str .
--- fold step begin done (filter pred str) = fold (\x a -> if pred a then step x a else x) begin done str;
---
--- "scan/map" forall step begin done f str .
--- scan step begin done (map f str) = scan (\x a -> step x $! f a) begin done str
---
 
 {- $maybes
     These functions discard the 'Nothing's that they encounter. They are analogous
@@ -2774,7 +2741,8 @@ unzip = loop where
 -}
 
 {-| The 'catMaybes' function takes a 'Stream' of 'Maybe's and returns
-    a 'Stream' of all of the 'Just' values.
+    a 'Stream' of all of the 'Just' values. 'concat' has the same behavior,
+    but is more general; it works for any foldable container type. 
 -}
 catMaybes :: Monad m => Stream (Of (Maybe a)) m r -> Stream (Of a) m r
 catMaybes = loop where
@@ -2789,6 +2757,7 @@ catMaybes = loop where
 {-| The 'mapMaybe' function is a version of 'map' which can throw out elements. In particular,
     the functional argument returns something of type @'Maybe' b@. If this is 'Nothing', no element
     is added on to the result 'Stream'. If it is @'Just' b@, then @b@ is included in the result 'Stream'.
+    
 -}
 mapMaybe :: Monad m => (a -> Maybe b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapMaybe phi = loop where
@@ -2800,18 +2769,18 @@ mapMaybe phi = loop where
       Just b -> Step (b :> loop snext)
 {-#INLINABLE mapMaybe #-}
 
-{-| Transform a stream into a stream of sequences of length @n@. 
-    It follows the behavior of the slidingWindow function in 
-    <https://hackage.haskell.org/package/conduit-combinators-1.0.4/docs/Data-Conduit-Combinators.html#v:slidingWindow conduit-combinators>.
-    
+{-| 'slidingWindow' accumulates the first @n@ elements of a stream, 
+     update thereafter to form a sliding window of length @n@.
+     It follows the behavior of the slidingWindow function in 
+     <https://hackage.haskell.org/package/conduit-combinators-1.0.4/docs/Data-Conduit-Combinators.html#v:slidingWindow conduit-combinators>.
 
 >>> S.print $ slidingWindow 4 $ S.each "123456"
 fromList "1234"
 fromList "2345"
 fromList "3456"
 
-
 -}
+
 slidingWindow :: Monad m 
   => Int 
   -> Stream (Of a) m b 
@@ -2833,3 +2802,4 @@ slidingWindow n = setup (max 1 n :: Int) mempty
       case e of 
         Left r ->  yield sequ >> return r
         Right (x,rest) -> setup (n-1) (sequ Seq.|> x) rest
+{-#INLINABLE slidingWindow #-}
