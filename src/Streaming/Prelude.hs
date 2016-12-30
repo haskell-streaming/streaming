@@ -7,8 +7,9 @@
     Producer \/ Source \/ Generator manipulation
     articulated in the latter two modules. Because we dispense with piping and
     conduiting, the distinction between all of these modules collapses. Some things are
-    lost but much is gained in that everything comes much closer to ordinary
-    beginning Haskell programming. The leading type is chosen to permit an api
+    lost but much is gained: on the one hand, everything comes much closer to ordinary
+    beginning Haskell programming and, on the other, acquires the plasticity of programming 
+    directly with a general free monad type. The leading type, @Stream (Of a) m r@ is chosen to permit an api
     that is as close as possible to that of @Data.List@ and the @Prelude@.
 
     Import qualified thus:
@@ -625,7 +626,7 @@ cons a str = Step (a :> str)
 
 > cycle = forever
 
->>> rest <- S.print $ S.splitAt 3 $ S.cycle (yield 0 >> yield 1)
+>>> rest <- S.print $ S.splitAt 3 $ S.cycle (yield True >> yield False)
 True
 False
 True
@@ -755,14 +756,7 @@ dropWhile pred = loop where
 1
 2
 3
->>> S.print $ mapped S.toList $ chunksOf 3 $ S.replicateM 5 getLine
-s<Enter>
-t<Enter>
-u<Enter>
-["s","t","u"]
-v<Enter>
-w<Enter>
-["v","w"]
+
 
 -}
 each :: (Monad m, Foldable.Foldable f) => f a -> Stream (Of a) m ()
@@ -1608,6 +1602,7 @@ repeat a = loop where loop = Effect (return (Step (a :> loop)))
 one<Enter>
 two<Enter>
 ["one","two"]
+
 -}
 
 repeatM :: Monad m => m a -> Stream (Of a) m r
@@ -2020,14 +2015,20 @@ toList_ = fold_ (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 
 >  mapped toList :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m
 
-    Like 'toList_', it breaks streaming; unlike 'toList_' it preserves
-    the return value and thus is frequently useful with e.g. 'mapped'
+    Like 'toList_', 'toList' breaks streaming; unlike 'toList_' it /preserves the return value/ 
+    and thus is frequently useful with e.g. 'mapped'
 
 >>> S.print $ mapped S.toList $ chunksOf 3 $ each [1..9]
 [1,2,3]
 [4,5,6]
 [7,8,9]
-
+>>> S.print $ mapped S.toList $ chunksOf 2 $ S.replicateM 4 getLine
+s<Enter>
+t<Enter>
+["s","t"]
+u<Enter>
+v<Enter>
+["u","v"] 
 -}
 toList :: Monad m => Stream (Of a) m r -> m (Of [a] r)
 toList = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
@@ -2055,19 +2056,19 @@ uncons = loop where
     The seed can of course be anything, but this is one natural way
     to consume a @pipes@ 'Pipes.Producer'. Consider:
 
->>> S.stdoutLn $ S.take 2 $ S.unfoldr P.next P.stdinLn
+>>> S.stdoutLn $ S.take 2 $ S.unfoldr Pipes.next Pipes.stdinLn
 hello<Enter>
 hello
 goodbye<Enter>
 goodbye
 
->>> S.stdoutLn $ S.unfoldr P.next (P.stdinLn P.>-> P.take 2)
+>>> S.stdoutLn $ S.unfoldr Pipes.next (Pipes.stdinLn >-> Pipes.take 2)
 hello<Enter>
 hello
 goodbye<Enter>
 goodbye
 
->>> S.effects $ S.unfoldr P.next (P.stdinLn P.>-> P.take 2 P.>-> P.stdoutLn)
+>>> S.effects $ S.unfoldr Pipes.next (Pipes.stdinLn >-> Pipes.take 2 >-> Pipes.stdoutLn)
 hello<Enter>
 hello
 goodbye<Enter>
