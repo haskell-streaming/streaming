@@ -30,35 +30,39 @@ description:         The principal module here, <http://hackage.haskell.org/pack
                      .
                      upper-cases the first two lines from stdin as they arise,
                      and sends them to stdout. And so on,
-                     with filtering, mapping, breaking, chunking and so forth: 
+                     with filtering, mapping, breaking, chunking, zipping, unzipping, replicating 
+                     and so forth: 
                      we program with streams of @Int@s or @String@s directly as
-                     if they constituted something like a list. And we everywhere
-                     oppose \"extracting a list from IO\",
+                     if they constituted something like a list. That's because they do constitute something
+                     like a list. The associated operations can mostly have the same names. 
+                     (A few, like @reverse@, must of course disappear!) And we everywhere
+                     oppose \"extracting a pure list from IO\",
                      which is the origin of typical Haskell memory catastrophes.
                      Basically any case where you are
                      tempted to use @mapM@, @replicateM@, @traverse@ or @sequence@
                      with Haskell lists, you would do better to use something like
                      @Stream (Of a) m r@. The type signatures are a little fancier, but
-                     the programs themselves are mostly the same or simpler. Thus,
+                     the programs themselves are mostly the same. /In fact, they are mostly simpler./ Thus,
                      consider the trivial demo program mentioned in
                      <http://stackoverflow.com/questions/24068399/haskell-performance-of-iorefs this SO question>
                      .
                      > main = mapM newIORef [1..10^8::Int] >>= mapM readIORef >>= mapM_ print
                      .
-                     The user is worried that this exhausts memory, and wonders about Haskell @IORefs@. 
-                     But of course it exhausts memory, and the problem is immediately cured by writing
+                     The new user notices that this exhausts memory, and worries about the efficiency of Haskell @IORefs@. 
+                     But of course it exhausts memory! Look what it says!
+                     The problem is immediately cured by writing
                      .
                      > main = S.print $ S.mapM readIORef $ S.mapM newIORef $ S.each [1..10^8::Int]
                      .
                      which really does what the other program was meant to do,
                      uses no more memory than @hello-world@, /and is simpler anyway/, since it
-                     doesn't involve \"extracting a list from IO\". Almost
+                     doesn't involve the detour of \"extracting a list from IO\". Almost
                      every use of list @mapM@, @replicateM@, @traverse@ and @sequence@ produces
                      this problem on a smaller scale. People get used to it, as if it were
                      characteristic of Haskell programs to use a lot of memory. But in truth
                      \"extracting a list or sequence from IO\" is mostly just bad practice pure and simple.
                      Of course, @mapM@, @replicateM@, @traverse@ and @sequence@ make sense for lists,
-                     under certain conditions - but @unsafePerformIO@ also makes sense under
+                     under certain conditions! But @unsafePerformIO@ also makes sense under
                      certain conditions.
                      .
                      The <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming.html Streaming> module exports the general type,
@@ -81,19 +85,17 @@ description:         The principal module here, <http://hackage.haskell.org/pack
                      .
                      to mention a few obviously desirable operations.
                      (This is explained more elaborately in the <https://hackage.haskell.org/package/streaming#readme readme> below.)
+                     .
                      One could throw of course throw something
-                     like @Stream@ on top of a prior stream concept: this is how @pipes@ and
+                     like the present @Stream@ type on top of a prior stream concept: this is how @pipes@ and
                      @pipes-group@ (which are very much our model here) use @FreeT@.
                      But once one grasps the iterable stream concept needed to express
-                     those functions -
-                     the one here given a somewhat optimized implementation as @Stream f m r@
-                     (the specific optimization again follows the model of the @pipes@ library) -
-                     then one will also see that,
+                     those functions then one will also see that,
                      with it, one is /already/ in possession of a complete
                      elementary streaming library - since one possesses @Stream ((,) a) m r@
                      or equivalently @Stream (Of a) m r@. This
-                     is the type of a \'generator\' or \'producer\' or whatever
-                     you call an effectful stream of items.
+                     is the type of a \'generator\' or \'producer\' or \'source\' or whatever
+                     you call an effectful stream of items. 
                      /The present Streaming.Prelude is thus the simplest streaming library that can replicate anything like the API of the Prelude and Data.List/.
                      .
                      The emphasis of the library is on interoperation; for
