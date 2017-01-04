@@ -1703,41 +1703,23 @@ fromList [1,2,3]
 fromList [1,2,3,4]
 
 -}
--- scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
--- scan step begin done str = Step (done begin :> loop begin str)
---   where
---   loop !acc stream = do
---     case stream of
---       Return r -> Return r
---       Effect m -> Effect (liftM (loop acc) m)
---       Step (a :> rest) ->
---         let !acc' = step acc a
---         in Step (done acc' :> loop acc' rest)
 scanM :: Monad m => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
 scanM step begin done str = Effect $ do
     x <- begin
     b <- done x
     return (Step (b :> loop x str))  
   where
-    loop !x stream = Effect $ do 
-      e <- next stream
-      case e of 
-        Left r -> return (Return r)
-        Right (a,rest) -> do
-          !x' <- step x a
-          b   <- done x'
-          return (Step (b :> loop x' rest))
-      -- case stream of
-      --   Return r -> Return r
-      --   Effect m  -> Effect (do
-      --     stream' <- m
-      --     return (loop x stream')
-      --     )
-      --   Step (a :> rest) -> Effect (do
-      --     !x' <- step x a
-      --     b   <- done x'
-      --     return (Step (b :> loop x' str))
-      --     )
+    loop !x stream = case stream of -- note we have already yielded from x
+      Return r -> Return r
+      Effect m  -> Effect (do
+        stream' <- m
+        return (loop x stream')
+        )
+      Step (a :> rest) -> Effect (do
+        x' <- step x a
+        b   <- done x'
+        return (Step (b :> loop x' rest))
+        )
 {-# INLINABLE scanM #-}
 
 {- Label each element in a stream with a value accumulated according to a fold.
