@@ -4,11 +4,14 @@ cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and general stream type.
 
-description:         The principal module here, <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming-Prelude.html Streaming.Prelude>, exports an elementary streaming prelude focused on
+description:         This package contains two modules, <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming.html Streaming> 
+                     and <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming-Prelude.html Streaming.Prelude>.
+                     The principal module, <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming-Prelude.html Streaming.Prelude>, exports an elementary streaming prelude focused on
                      a simple \"source\" or \"producer\" type, namely @Stream (Of a) m r@.
-                     @Stream (Of a) m r@ is a sort of effectful version of
-                     @([a],r)@ in which successive elements arise from some sort of monadic
-                     action. Everything in the library is organized to make
+                     This is a sort of effectful version of
+                     @([a],r)@ in which successive elements of type @a@ arise from some sort of monadic
+                     action before the succession ends with a value of type @r@. 
+                     Everything in the library is organized to make
                      programming with this type as simple as possible,
                      by the simple expedient of making it as close to @Prelude@
                      and @Data.List@ as possible. Thus for example
@@ -33,9 +36,11 @@ description:         The principal module here, <http://hackage.haskell.org/pack
                      with filtering, mapping, breaking, chunking, zipping, unzipping, replicating 
                      and so forth: 
                      we program with streams of @Int@s or @String@s directly as
-                     if they constituted something like a list. That's because they do constitute something
-                     like a list. The associated operations can mostly have the same names. 
-                     (A few, like @reverse@, must of course disappear!) And we everywhere
+                     if they constituted something like a list. That's because streams really do constitute something
+                     like a list, and the associated operations can mostly have the same names. 
+                     (A few, like @reverse@, don't stream and thus disappear; 
+                     others like @unzip@ are here given properly streaming formulation for the first time.) 
+                     And we everywhere
                      oppose \"extracting a pure list from IO\",
                      which is the origin of typical Haskell memory catastrophes.
                      Basically any case where you are

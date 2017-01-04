@@ -58,7 +58,6 @@ module Streaming.Prelude (
     -- $producers
     , yield
     , each
-    , unfoldr
     , stdinLn
     , readLn
     , fromHandle
@@ -74,6 +73,8 @@ module Streaming.Prelude (
     , enumFrom
     , enumFromThen
     , seconds
+    , unfoldr
+    
 
 
     -- * Consuming streams of elements
@@ -775,6 +776,7 @@ each = Foldable.foldr (\a p -> Step (a :> p)) (Return ())
 3
 4
 5
+
     'effects' should be understood together with 'copy' and is subject to the rules
 
 > S.effects . S.copy       = id
@@ -824,7 +826,7 @@ elem_ a' = loop False where
 -- ------
 
 {-| An infinite stream of enumerable values, starting from a given value.
-    It is the same as `S.iterate succ`.
+    It is the same as @S.iterate succ@.
    Because their return type is polymorphic, @enumFrom@ and @enumFromThen@
    (and @iterate@ are useful for example with @zip@
    and @zipWith@, which require the same return type in the zipped streams.
@@ -1344,12 +1346,12 @@ mapM f = loop where
 
 {-| Reduce a stream to its return value with a monadic action.
 
->>> S.mapM_ Prelude.print $ each [1..5]
+>>> S.mapM_ Prelude.print $ each [1..3]
 1
 2
 3
-4
-5
+
+
 >>> rest <- S.mapM_ Prelude.print $ S.splitAt 3 $ each [1..10]
 1
 2
@@ -1617,7 +1619,7 @@ repeatM ma = loop where
 -- replicate
 -- ---------------
 
--- | Repeat an element several times
+-- | Repeat an element several times.
 replicate :: Monad m => Int -> a -> Stream (Of a) m ()
 replicate n a | n <= 0 = return ()
 replicate n a = loop n where
@@ -1625,7 +1627,7 @@ replicate n a = loop n where
   loop m = Effect (return (Step (a :> loop (m-1))))
 {-# INLINABLE replicate #-}
 
-{-| Repeat an action several times, streaming the results.
+{-| Repeat an action several times, streaming its results.
 
 >>> S.print $ S.replicateM 2 getCurrentTime
 2015-08-18 00:57:36.124508 UTC
@@ -1638,7 +1640,7 @@ replicateM n ma = loop n where
   loop 0 = Return ()
   loop n = Effect $ do
     a <- ma
-    return (Step $ a :> loop (n-1))
+    return (Step (a :> loop (n-1)))
 {-# INLINABLE replicateM #-}
 
 {-| Read an @IORef (Maybe a)@ or a similar device until it reads @Nothing@.
@@ -1656,7 +1658,8 @@ reread step s = loop where
       Just a  -> return (Step (a :> loop))
 {-# INLINABLE reread #-}
 
-{-| Strict left scan, streaming, e.g. successive partial results.
+{-| Strict left scan, streaming, e.g. successive partial results. The seed 
+    is yielded first, before any action of finding the next element is performed.
 
 
 >>> S.print $ S.scan (++) "" id $ each (words "a b c d")
@@ -1676,13 +1679,15 @@ reread step s = loop where
 
 -}
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
-scan step begin done = loop begin
-  where
+scan step begin done str = Step (done begin :> loop begin str)
+  where                   
   loop !acc stream = do
     case stream of
-      Return r -> Step (done acc :> Return r)
+      Return r -> Return r
       Effect m -> Effect (liftM (loop acc) m)
-      Step (a :> rest) -> Step (done acc :> loop (step acc a) rest)
+      Step (a :> rest) -> 
+        let !acc' = step acc a 
+        in Step (done acc' :> loop acc' rest)
 {-#INLINABLE scan #-}
 
 {-| Strict left scan, accepting a monadic function. It can be used with
@@ -1698,24 +1703,41 @@ fromList [1,2,3]
 fromList [1,2,3,4]
 
 -}
+-- scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
+-- scan step begin done str = Step (done begin :> loop begin str)
+--   where
+--   loop !acc stream = do
+--     case stream of
+--       Return r -> Return r
+--       Effect m -> Effect (liftM (loop acc) m)
+--       Step (a :> rest) ->
+--         let !acc' = step acc a
+--         in Step (done acc' :> loop acc' rest)
 scanM :: Monad m => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
-scanM step begin done str = do
-    x <- lift begin
-    loop x str
+scanM step begin done str = Effect $ do
+    x <- begin
+    b <- done x
+    return (Step (b :> loop x str))  
   where
-    loop !x stream = do
-      b <- lift (done x)
-      yield b
-      case stream of
-        Return r -> Return r
-        Effect m  -> Effect (do
-          stream' <- m
-          return (loop x stream')
-          )
-        Step (a :> rest) -> Effect (do
-          x' <- step x a
-          return (loop x' rest)
-          )
+    loop !x stream = Effect $ do 
+      e <- next stream
+      case e of 
+        Left r -> return (Return r)
+        Right (a,rest) -> do
+          !x' <- step x a
+          b   <- done x'
+          return (Step (b :> loop x' rest))
+      -- case stream of
+      --   Return r -> Return r
+      --   Effect m  -> Effect (do
+      --     stream' <- m
+      --     return (loop x stream')
+      --     )
+      --   Step (a :> rest) -> Effect (do
+      --     !x' <- step x a
+      --     b   <- done x'
+      --     return (Step (b :> loop x' str))
+      --     )
 {-# INLINABLE scanM #-}
 
 {- Label each element in a stream with a value accumulated according to a fold.
@@ -1775,7 +1797,7 @@ four<Enter>
 five<Enter>
 ["one","two","three","four","five"] :> ()
 
-   This is of course does not interrupt an action that has already begun.
+   This of course does not interrupt an action that has already begun.
 
   -}
 
@@ -2051,7 +2073,8 @@ uncons = loop where
 {-# INLINABLE uncons #-}
 
 
-{-| Build a @Stream@ by unfolding steps starting from a seed.
+{-| Build a @Stream@ by unfolding steps starting from a seed. In particular note
+    that @S.unfoldr S.next = id@.
 
     The seed can of course be anything, but this is one natural way
     to consume a @pipes@ 'Pipes.Producer'. Consider:
@@ -2073,6 +2096,8 @@ hello<Enter>
 hello
 goodbye<Enter>
 goodbye
+
+    @Pipes.unfoldr S.next@ similarly unfolds a @Pipes.Producer@ from a stream.
 
 -}
 unfoldr :: Monad m
@@ -2133,18 +2158,17 @@ with s f = loop s where
 >>> stdoutLn $ yield "hello"
 hello
 
->>> S.sum $ do {yield 1; yield 2}
-3
+>>> S.sum $ do {yield 1; yield 2; yield 3}
+6
 
->>> let prompt = putStrLn "Enter a number:"
->>> let number = lift (prompt >> readLn) >>= yield :: Stream (Of Int) IO ()
+>>> let number = lift (putStrLn "Enter a number:") >> lift readLn >>= yield :: Stream (Of Int) IO ()
 >>> S.toList $ do {number; number; number}
 Enter a number:
-1
+1<Enter>
 Enter a number:
-2
+2<Enter>
 Enter a number:
-3
+3<Enter>
 [1,2,3] :> ()
 
 -}
@@ -2218,8 +2242,7 @@ zip3 = zipWith3 (,,)
 -- IO fripperies
 -- --------------
 
-{-| View standard input as a 'Stream (Of String) m r'. 'stdoutLn', by
-    contrast, renders a 'Stream (Of String) m r' to standard output. The names
+{-| View standard input as a @Stream (Of String) m r@. By contrast, 'stdoutLn' renders a @Stream (Of String) m r@ to standard output. The names
     follow @Pipes.Prelude@
 
 >>> stdoutLn stdinLn
@@ -2242,26 +2265,28 @@ stdinLn :: MonadIO m => Stream (Of String) m ()
 stdinLn = fromHandle IO.stdin
 {-# INLINABLE stdinLn #-}
 
-{-| Read values from 'IO.stdin', ignoring failed parses
+{-| Read values from 'IO.stdin', ignoring failed parses.
 
->>> S.sum_ $ S.take 2 S.readLn :: IO Int
+>>> :set -XTypeApplications
+>>> S.sum $ S.take 2 (S.readLn @IO @Int)
 10<Enter>
 12<Enter>
-22
+22 :> ()
 
->>> S.toList $ S.take 3 (S.readLn :: Stream (Of Int) IO ())
-1<Enter>
-2<Enter>
+>>> S.toList $ S.take 2 (S.readLn @IO @Int)
+10<Enter>
 1@#$%^&*\<Enter>
-3<Enter>
-[1,2,3] :> ()
+12<Enter>
+[10,12] :> ()
 
 -}
 
 readLn :: (MonadIO m, Read a) => Stream (Of a) m ()
-readLn = for stdinLn $ \str -> case readMaybe str of
-  Nothing -> return ()
-  Just n  -> yield n
+readLn = do
+  str <- liftIO getLine
+  case readMaybe str of
+    Nothing -> readLn
+    Just n  -> yield n >> readLn
 {-# INLINABLE readLn #-}
 
 
@@ -2288,7 +2313,7 @@ fromHandle h = go
 
 {-| Write a succession of strings to a handle as separate lines.
 
->>> S.toHandle IO.stdout $ each $ words "one two three"
+>>> S.toHandle IO.stdout $ each (words "one two three")
 one
 two
 three
@@ -2306,9 +2331,9 @@ toHandle handle = loop where
 {-| Print the elements of a stream as they arise.
 
 >>> S.print $ S.take 2 S.stdinLn
-hello
+hello<Enter>
 "hello"
-world
+world<Enter>
 "world"
 >>>
 
@@ -2317,14 +2342,14 @@ print :: (MonadIO m, Show a) => Stream (Of a) m r -> m r
 print = loop where
   loop stream = case stream of
     Return r         -> return r
-    Effect m          -> m >>= loop
+    Effect m         -> m >>= loop
     Step (a :> rest) -> do
       liftIO (Prelude.print a)
       loop rest
 
 
 {-| Write 'String's to 'IO.stdout' using 'putStrLn'; terminates on a broken output pipe
-    (This operation is modelled on 'Pipes.Prelude.stdoutLn').
+    (The name and implementation are modelled on the @Pipes.Prelude@ @stdoutLn@).
 
 >>> S.stdoutLn $ S.take 3 $ S.each $ words "one two three four five"
 one
@@ -2350,29 +2375,22 @@ stdoutLn = loop
 
 
 
-
 {-| Write 'String's to 'IO.stdout' using 'putStrLn'
 
-    This does not handle a broken output pipe, but has a polymorphic return
-    value, which makes this possible:
+    Unlike @stdoutLn@, @stdoutLn'@ does not handle a broken output pipe. Thus it can have a polymorphic return
+    value, rather than @()@, and this kind of \"connect and resume\" is possible:
 
 >>> rest <- S.stdoutLn' $ S.show $ S.splitAt 3 (each [1..5])
 1
 2
 3
->>> S.print rest
-4
-5
+>>> S.toList rest
+[4,5] :> ()
 
 -}
 
 stdoutLn' :: MonadIO m => Stream (Of String) m r -> m r
-stdoutLn' = loop where
-  loop stream = case stream of
-    Return r         -> return r
-    Effect m          -> m >>= loop
-    Step (s :> rest) -> liftIO (putStrLn s) >> loop rest
-{-# INLINE stdoutLn' #-}
+stdoutLn' = toHandle IO.stdout
 
 {-| Read the lines of a file as Haskell 'String's
 
@@ -2394,15 +2412,15 @@ world<Enter>
 readFile :: MonadResource m => FilePath -> Stream (Of String) m ()
 readFile f = bracketStream (IO.openFile f IO.ReadMode) (IO.hClose) fromHandle
 
-{-| Write a series of strings as lines to a file. The handle is crudely
-    managed with 'ResourceT':
+{-| Write a series of strings as lines to a file. The handle is
+    managed with 'ResourceT' (see the remarks on 'readFile'):
 
 >>> runResourceT $ S.writeFile "lines.txt" $ S.take 2 S.stdinLn
 hello<Enter>
 world<Enter>
->>> runResourceT $ S.print $ S.readFile "lines.txt"
-"hello"
-"world"
+>>> runResourceT $ S.stdoutLn $ S.readFile "lines.txt"
+hello
+world
 
 -}
 writeFile :: MonadResource m => FilePath -> Stream (Of String) m r -> m r
@@ -2573,9 +2591,9 @@ sumToCompose x = case x of
 > instance (Functor f, MonadIO m) => MonadIO (Stream f m)
 
     We thus can't be touching the elements of the stream, or the final return value.
-    It it is the same with other constraints that @Stream (Of a)@ inherits,
-    like 'MonadResource'.  Thus I can filter and write to one file, but
-    nub and write to another, or to a database or the like:
+    It is the same with other constraints that @Stream (Of a)@ inherits from the underlying monad,
+    like 'MonadResource'.  Thus I can independently filter and write to one file, but
+    nub and write to another, or interact with a database and a logfile and the like:
 
 >>> runResourceT $ (S.writeFile "hello2.txt" . S.nub) $ store (S.writeFile "hello.txt" . S.filter (/= "world")) $ each ["hello", "world", "goodbye", "world"]
 >>> :! cat hello.txt
@@ -2604,7 +2622,7 @@ store f x = f (copy x)
 one
 two
 
-    With copy, I can as well do:
+    With copy, I can do these simultaneously:
 
 >>> S.print $ S.stdoutLn $ S.copy $ each ["one","two"]
 one

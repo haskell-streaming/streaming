@@ -738,7 +738,7 @@ unexposed = Effect . loop where
 {-# INLINABLE unexposed #-} 
 
 
-{- Wrap a new layer of a stream. So, e.g.
+{-| Wrap a new layer of a stream. So, e.g.
 
 > S.cons :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
 > S.cons a str = wrap (a :> str)
