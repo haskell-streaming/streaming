@@ -906,6 +906,8 @@ separate str = destroyExposed
   return
 {-#INLINABLE separate #-}
 
+
+
 unseparate :: (Monad m, Functor f, Functor g) =>  Stream f (Stream g m) r -> Stream (Sum f g) m r
 unseparate str = destroyExposed
   str
