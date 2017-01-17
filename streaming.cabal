@@ -1,11 +1,11 @@
 name:                streaming
-version:             0.1.4.4
+version:             0.1.4.5
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and general stream type.
 
-description:         This package contains two modules, <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming.html Streaming> 
-                     and <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming-Prelude.html Streaming.Prelude>.
+description:         This package contains two modules, <http://hackage.haskell.org/package/streaming/docs/Streaming.html Streaming> 
+                     and <http://hackage.haskell.org/package/streaming/docs/Streaming-Prelude.html Streaming.Prelude>.
                      The principal module, <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming-Prelude.html Streaming.Prelude>, exports an elementary streaming prelude focused on
                      a simple \"source\" or \"producer\" type, namely @Stream (Of a) m r@.
                      This is a sort of effectful version of
