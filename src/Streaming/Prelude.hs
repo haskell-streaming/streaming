@@ -1250,11 +1250,11 @@ iterateM f = loop where
 
 last :: Monad m => Stream (Of a) m r -> m (Of (Maybe a) r)
 last = loop Nothing_ where
-  loop m str = case str of
-    Return r            -> case m of
+  loop mb str = case str of
+    Return r            -> case mb of
       Nothing_ -> return (Nothing :> r)
       Just_ a  -> return (Just a :> r)
-    Effect m            -> m >>= last
+    Effect m            -> m >>= loop mb
     Step (a :> rest)  -> loop (Just_ a) rest
 {-#INLINABLE last #-}
 
@@ -1262,11 +1262,11 @@ last = loop Nothing_ where
 
 last_ :: Monad m => Stream (Of a) m r -> m (Maybe a)
 last_ = loop Nothing_ where
-  loop m str = case str of
-    Return r            -> case m of
+  loop mb str = case str of
+    Return r            -> case mb of
       Nothing_ -> return Nothing
       Just_ a  -> return (Just a)
-    Effect m            -> m >>= last_
+    Effect m            -> m >>= loop mb
     Step (a :> rest)  -> loop (Just_ a) rest
 {-#INLINABLE last_ #-}
 
