@@ -1250,11 +1250,11 @@ iterateM f = loop where
 
 last :: Monad m => Stream (Of a) m r -> m (Of (Maybe a) r)
 last = loop Nothing_ where
-  loop mb str = case str of
-    Return r            -> case mb of
+  loop m str = case str of
+    Return r            -> case m of
       Nothing_ -> return (Nothing :> r)
       Just_ a  -> return (Just a :> r)
-    Effect m            -> m >>= loop mb
+    Effect m            -> m >>= last
     Step (a :> rest)  -> loop (Just_ a) rest
 {-#INLINABLE last #-}
 
@@ -1262,14 +1262,13 @@ last = loop Nothing_ where
 
 last_ :: Monad m => Stream (Of a) m r -> m (Maybe a)
 last_ = loop Nothing_ where
-  loop mb str = case str of
-    Return r            -> case mb of
+  loop m str = case str of
+    Return r            -> case m of
       Nothing_ -> return Nothing
       Just_ a  -> return (Just a)
-    Effect m            -> m >>= loop mb
+    Effect m            -> m >>= last_
     Step (a :> rest)  -> loop (Just_ a) rest
 {-#INLINABLE last_ #-}
-
 
 -- ---------------
 -- length
@@ -2265,11 +2264,15 @@ stdinLn = fromHandle IO.stdin
 -}
 
 readLn :: (MonadIO m, Read a) => Stream (Of a) m ()
-readLn = do
-  str <- liftIO getLine
-  case readMaybe str of
-    Nothing -> readLn
-    Just n  -> yield n >> readLn
+readLn = loop 
+  where 
+  loop = do
+    eof <- liftiIO.isEOF
+    unless eof $ do
+      str <- liftIO getLine
+      case readMaybe str of
+        Nothing -> readLn
+        Just n  -> yield n >> loop
 {-# INLINABLE readLn #-}
 
 
