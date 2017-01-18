@@ -2265,11 +2265,14 @@ stdinLn = fromHandle IO.stdin
 -}
 
 readLn :: (MonadIO m, Read a) => Stream (Of a) m ()
-readLn = do
-  str <- liftIO getLine
-  case readMaybe str of
-    Nothing -> readLn
-    Just n  -> yield n >> readLn
+readLn = loop where 
+  loop = do
+    eof <- liftIOIO.isEOF
+    unless eof $ do
+    str <- liftIO getLine
+    case readMaybe str of
+      Nothing -> readLn
+      Just n  -> yield n >> loop
 {-# INLINABLE readLn #-}
 
 
