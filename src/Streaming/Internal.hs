@@ -98,7 +98,7 @@ import Control.Monad.Base
 import Control.Monad.Trans.Resource
 import Control.Monad.Catch (MonadCatch (..))
 import Control.Monad.Trans.Control
-
+import Data.Functor.Of
 
 {- $stream
 

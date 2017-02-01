@@ -102,7 +102,7 @@ import Control.Monad.Trans
 import Data.Functor.Compose
 import Data.Functor.Sum
 import Data.Functor.Identity
-
+import Data.Functor.Of
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
 #if MIN_VERSION_base(4,8,0)

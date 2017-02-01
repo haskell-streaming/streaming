@@ -201,7 +201,8 @@ source-repository head
 library
   exposed-modules:     Streaming,
                        Streaming.Prelude,
-                       Streaming.Internal
+                       Streaming.Internal,
+                       Data.Functor.Of
 
     -- other-modules:
   other-extensions:    RankNTypes, CPP,
