@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
 {-# LANGUAGE UndecidableInstances, CPP, FlexibleInstances, MultiParamTypeClasses  #-}
-{-#LANGUAGE Trustworthy #-}
+{-#LANGUAGE Trustworthy, ScopedTypeVariables, GADTs #-}
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
@@ -96,10 +96,10 @@ import Data.Functor.Sum
 import Control.Concurrent (threadDelay)
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
-import Control.Monad.Catch (MonadCatch (..))
+import Control.Monad.Catch 
 import Control.Monad.Trans.Control
 import Data.Functor.Of
-
+import Data.IORef
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
@@ -270,7 +270,49 @@ instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
           return (go p'))
        (\e -> return (f e)) )
   {-#INLINABLE catch #-}
-     
+
+data Restore m = Unmasked | Masked (forall x . m x -> m x)
+
+liftMask
+    :: forall m f r a . (MonadIO m, MonadCatch m, f ~ (Of a))
+    => (forall s . ((forall x . m x -> m x) -> m s) -> m s)
+    -> ((forall x . Stream f m x -> Stream f m x)
+        -> Stream f m r)
+    -> Stream f m r
+liftMask maskVariant k = do
+    ioref <- liftIO $ newIORef Unmasked
+
+    let -- mask adjacent actions in base monad
+        loop :: Stream f m r -> Stream f m r
+        loop (Step f)   = Step (fmap loop f)
+        loop (Return r) = Return r
+        loop (Effect m) = Effect $ maskVariant $ \unmaskVariant -> do
+            -- stash base's unmask and merge action
+            liftIO $ writeIORef ioref $ Masked unmaskVariant
+            m >>= chunk >>= return . loop
+
+        -- unmask adjacent actions in base monad
+        unmask :: forall q. Stream f m q -> Stream f m q
+        unmask (Step f)   = Step (fmap unmask f)
+        unmask (Return q) = Return q
+        unmask (Effect m) = Effect $ do
+            -- retrieve base's unmask and apply to merged action
+            Masked unmaskVariant <- liftIO $ readIORef ioref
+            unmaskVariant (m >>= chunk >>= return . unmask)
+
+        -- merge adjacent actions in base monad
+        chunk :: forall s. Stream f m s -> m (Stream f m s)
+        chunk (Effect m) = m >>= chunk
+        chunk s          = return s
+
+    loop $ k unmask
+
+instance (MonadMask m, MonadIO m, f ~ (Of a)) => MonadMask (Stream f m) where
+    mask                = liftMask mask
+    uninterruptibleMask = liftMask uninterruptibleMask
+
+
+
 instance (MonadResource m, Functor f) => MonadResource (Stream f m) where
   liftResourceT = lift . liftResourceT
   {-#INLINE liftResourceT #-}
