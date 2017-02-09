@@ -2,6 +2,8 @@
 module Data.Functor.Of where
 import Data.Monoid
 import Control.Applicative
+import Data.Traversable (Traversable)
+import Data.Foldable (Foldable)
 #if MIN_VERSION_base(4,8,0)
 import Data.Bifunctor
 #endif

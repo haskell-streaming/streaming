@@ -62,9 +62,10 @@ module Streaming.Internal (
   
     , switch
   
-    -- * ResourceT help
+    -- * ResourceT and MonadMask help
   
     , bracketStream
+    , bracket
   
     -- *  For use in implementation
     , unexposed
@@ -96,7 +97,7 @@ import Data.Functor.Sum
 import Control.Concurrent (threadDelay)
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
-import Control.Monad.Catch 
+import Control.Monad.Catch hiding (bracket, onException)
 import Control.Monad.Trans.Control
 import Data.Functor.Of
 import Data.IORef
@@ -271,6 +272,8 @@ instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
        (\e -> return (f e)) )
   {-#INLINABLE catch #-}
 
+-- The materials for the MonadMask instance are entirely lifted from pipes-safe
+-- following remarks of Oliver Charles.
 data Restore m = Unmasked | Masked (forall x . m x -> m x)
 
 liftMask
@@ -311,8 +314,6 @@ instance (MonadMask m, MonadIO m, f ~ (Of a)) => MonadMask (Stream f m) where
     mask                = liftMask mask
     uninterruptibleMask = liftMask uninterruptibleMask
 
-
-
 instance (MonadResource m, Functor f) => MonadResource (Stream f m) where
   liftResourceT = lift . liftResourceT
   {-#INLINE liftResourceT #-}
@@ -323,25 +324,7 @@ instance (Functor f, MonadReader r m) => MonadReader r (Stream f m) where
   {-# INLINE ask #-}
   local f = hoist (local f)
   {-# INLINE local #-}
-
--- instance (Functor f, MonadWriter w m) => MonadWriter w (Stream f m) where
---   tell = lift . tell
---   {-# INLINE tell #-}
--- --   listen (FreeT m) = FreeT $ liftM concat' $ listen (fmap listen `liftM` m)
---     where
---       concat' (Pure x, w) = Pure (x, w)
---       concat' (Free y, w) = Free $ fmap (second (w <>)) <$> y
---   pass m = FreeT . pass' . runFreeT . hoist  clean $ listen m
---     where
---       clean = pass . liftM (\x -> (x, const mempty))
---       pass' = join . liftM g
---       g (Pure ((x, f), w)) = tell (f w) >> return (Pure x)
---       g (Free f)           = return . Free . fmap (FreeT . pass' . runFreeT) $ f
--- #if MIN_VERSION_mtl(2,1,1)
---   writer w = lift (writer w)
---   {-# INLINE writer #-}
--- #endif
---
+ 
 instance (Functor f, MonadState s m) => MonadState s (Stream f m) where
   get = lift get
   {-# INLINE get #-}
@@ -376,6 +359,27 @@ bracketStream alloc free inside = do
 {-#INLINABLE bracketStream #-}
 
 
+bracket
+  :: (MonadIO m, MonadMask m, MonadResource m)
+  => m b -> (b -> IO ()) -> (b -> Stream (Of a) m r) -> Stream (Of a) m r
+bracket before after action = mask $ \restore -> do
+    h <- lift before
+    r <- restore (action h) `onException` after h
+    liftIO (after h)
+    return r
+    
+onException :: (Functor f, MonadResource m) => Stream f m a -> IO () -> Stream f m a
+m1 `onException` io = do
+  key <- lift (register io)
+  clean key m1
+  where
+    clean key = loop
+      where
+        loop str =
+          case str of
+            Return r -> Effect (unprotect key >> return (Return r))
+            Effect m -> Effect (fmap loop m)
+            Step f -> Step (fmap loop f)
 {-| Map a stream directly to its church encoding; compare @Data.List.foldr@
 -}
 destroy
