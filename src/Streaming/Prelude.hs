@@ -1155,7 +1155,7 @@ head_ :: Monad m => Stream (Of a) m r -> m (Maybe a)
 head_ str = case str of
   Return r            -> return Nothing
   Effect m            -> m >>= head_
-  Step (a :> rest)    -> effects rest >> return (Just a)
+  Step (a :> rest)    -> return (Just a)
 {-#INLINABLE head_ #-}
 
 intersperse :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
