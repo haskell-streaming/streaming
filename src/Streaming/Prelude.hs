@@ -1996,10 +1996,10 @@ toList = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 > Conduit.unfoldM uncons   :: Stream (Of a) m r -> Conduit.Source m a
 
 -}
-uncons :: Monad m => Stream (Of a) m () -> m (Maybe (a, Stream (Of a) m ()))
+uncons :: Monad m => Stream (Of a) m r -> m (Maybe (a, Stream (Of a) m r))
 uncons = loop where
   loop stream = case stream of
-    Return ()        -> return Nothing
+    Return _         -> return Nothing
     Effect m          -> m >>= loop
     Step (a :> rest) -> return (Just (a,rest))
 {-# INLINABLE uncons #-}
