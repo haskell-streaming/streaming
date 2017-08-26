@@ -603,8 +603,8 @@ concats :: (Monad m, Functor f) => Stream (Stream f m) m r -> Stream f m r
 concats  = loop where
   loop stream = case stream of
     Return r -> return r
-    Effect m  -> join $ lift (liftM loop m)
-    Step fs  -> join (fmap loop fs)
+    Effect m  -> lift m >>= loop
+    Step fs  -> fs >>= loop
 {-# INLINE concats #-}
 
 {-| Split a succession of layers after some number, returning a streaming or
