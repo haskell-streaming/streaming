@@ -632,8 +632,8 @@ delay seconds = loop where
 > takeWhile' thus = S.drained . S.span thus
 
 -}
-drained :: (Monad m, Monad (t m), Functor (t m), MonadTrans t) => t m (Stream (Of a) m r) -> t m r
-drained = join . fmap (lift . effects)
+drained :: (Monad m, Monad (t m), MonadTrans t) => t m (Stream (Of a) m r) -> t m r
+drained tms = tms >>= lift . effects
 {-#INLINE drained #-}
 
 -- ---------------
