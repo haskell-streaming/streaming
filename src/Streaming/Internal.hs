@@ -443,7 +443,7 @@ streamBuild = \phi -> phi Return Effect Step
 > unfold inspect = id
 > Streaming.Prelude.unfoldr StreamingPrelude.next = id
 -}
-inspect :: (Functor f, Monad m) =>
+inspect :: Monad m =>
      Stream f m r -> m (Either r (f (Stream f m r)))
 inspect = loop where
   loop stream = case stream of
@@ -839,20 +839,94 @@ yields ::  (Monad m, Functor f) => f r -> Stream f m r
 yields fr = Step (fmap Return fr)
 {-#INLINE yields #-}
 
+{- The definition of zipsWith is equivalent to the following:
 
-zipsWith :: (Monad m, Functor f, Functor g, Functor h)
+zipsWith phi s t = loop (s,t) where
+  loop (s1, s2) = Effect (go s1 s2)
+  go s1 s2 = do
+    e  <- inspect s1
+    case e of
+      Left r -> return (Return r)
+      Right fstr -> do
+        e' <- inspect s2
+        case e' of
+          Lift r -> return (Return r)
+          Right gstr -> return $ Step $ fmap loop (phi fstr gstr)
+
+But we take advantage of purity in the streams wherever we find it
+to avoid inserting extra Effect constructors or performing any
+unnecessary monadic operations.
+
+Note that if the first stream produces Return, we don't inspect
+(and potentially run effects from) the second stream. We used to
+do that. Aside from being (arguably) a bit strange, this also runs
+into a bit of trouble with MonadPlus laws. Most MonadPlus instances
+try to satisfy either left distribution or left catch. Let's
+consider left distribution for a version that inspects both streams
+before performing case inspection:
+
+zipsWith (liftA2 (,)) (return a) b >>= k
+=
+(b >> return a) >>= k
+=
+b >> k a
+
+/=
+
+zipsWith (liftA2 (,)) (k a) (b >>= k)
+=
+zipsWith (liftA2 (,)) (return a >>= k) (b >>= k)
+
+Now let's consider left catch for the same:
+
+zipsWith (liftA2 (,)) (return a) b
+=
+b >> return a
+
+/=
+
+return a
+
+On the other hand, by ignoring the second stream when the first is
+Return, we satisfy the left catch law.
+-}
+
+zipsWith :: forall f g h m r. (Monad m, Functor h)
   => (forall x y . f x -> g y -> h (x,y))
   -> Stream f m r -> Stream g m r -> Stream h m r
-zipsWith phi s t = loop (s,t) where
-    loop (s1, s2) = Effect (go s1 s2)
-    go s1 s2 = do 
-      e  <- inspect s1
-      e' <- inspect s2
-      case (e,e') of
-        (Left r, _)              -> return (Return r)
-        (_, Left r)              -> return (Return r)
-        (Right fstr, Right gstr) -> return $ Step $ fmap loop (phi fstr gstr)
-{-# INLINABLE zipsWith #-} 
+zipsWith phi sf0 sg0 = loop (sf0, sg0)
+  where
+    loop :: (Stream f m r, Stream g m r) -> Stream h m r
+    loop (s, t) = case s of
+      Return r -> Return r
+      Step f -> go1 f t
+      Effect m -> Effect (go2 m t)
+
+    go1 :: f (Stream f m r) -> Stream g m r -> Stream h m r
+    go1 fs sg = case sg of
+      Return r -> Return r
+      Step gs -> Step $ fmap loop (phi fs gs)
+      Effect n -> Effect $
+        n >>= inspectC (return . Return) (return . Step . fmap loop . phi fs)
+
+    go2 :: m (Stream f m r) -> Stream g m r -> m (Stream h m r)
+    go2 mfs sg =
+      mfs >>= inspectC (return . Return) go
+      where
+        go fs = case sg of
+          Return r -> return (Return r)
+          Step gs -> return (Step (fmap loop (phi fs gs)))
+          Effect mgs -> mgs >>= inspectC (return . Return) (return . Step . fmap loop . phi fs)
+{-# INLINABLE zipsWith #-}
+
+-- A version of 'inspect' that takes explicit continuations.
+inspectC :: Monad m => (r -> m a) -> (f (Stream f m r) -> m a) -> Stream f m r -> m a
+inspectC f g = loop where
+  loop (Return r) = f r
+  loop (Step x) = g x
+  loop (Effect m) = m >>= loop
+{-# INLINE inspectC #-}
+
 
 zips :: (Monad m, Functor f, Functor g)
      => Stream f m r -> Stream g m r -> Stream (Compose f g) m r
@@ -863,7 +937,8 @@ zips = zipsWith go where
 
 
 {-| Interleave functor layers, with the effects of the first preceding
-    the effects of the second.
+    the effects of the second. When the first stream runs out, any remaining
+    effects in the second are ignored.
 
 > interleaves = zipsWith (liftA2 (,))
 
@@ -1098,7 +1173,9 @@ four<Enter>
 
 -}
 never :: (Monad m, Applicative f) => Stream f m r
-never =  let loop = Effect $ return $ Step $ pure loop in loop
+-- The Monad m constraint should really be an Applicative one,
+-- but we still support old versions of base.
+never =  let loop = Step $ pure (Effect (return loop)) in loop
 {-#INLINABLE never #-}
 
 
