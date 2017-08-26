@@ -19,8 +19,12 @@ module Streaming
 
    -- * Transforming streams
    maps,
+   mapsPost,
    mapsM,
+   mapsMPost,
    mapped,
+   mappedPost,
+   hoistUnexposed,
    distribute,
    groups,
 
