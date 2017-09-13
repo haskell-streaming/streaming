@@ -47,6 +47,8 @@ module Streaming
    separate,
    unseparate,
    decompose,
+   expand,
+   expandPost,
 
 
    -- * Eliminating a 'Stream'
