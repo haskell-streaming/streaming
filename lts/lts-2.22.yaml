@@ -1,0 +1,8 @@
+resolver: lts-2.22
+packages: ['..']
+extra-deps:
+  - 'transformers-0.4.1.0'
+  - 'transformers-compat-0.4.0.4'
+  - 'mtl-2.2'
+flags: {}
+extra-package-dbs: []
