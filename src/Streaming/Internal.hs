@@ -51,6 +51,7 @@ module Streaming.Internal (
   
     -- * Zipping and unzipping streams
     , zipsWith
+    , zipsWith'
     , zips
     , unzips
     , interleaves
@@ -215,7 +216,7 @@ instance (Applicative f, Monad m) => Alternative (Stream f m) where
   empty = never
   {-#INLINE empty #-}
 
-  str <|> str' = zipsWith (liftA2 (,)) str str'
+  str <|> str' = zipsWith' liftA2 str str'
   {-#INLINE (<|>) #-}
 
 instance (Functor f, Monad m, Monoid w) => Monoid (Stream f m w) where
@@ -839,99 +840,65 @@ yields ::  (Monad m, Functor f) => f r -> Stream f m r
 yields fr = Step (fmap Return fr)
 {-#INLINE yields #-}
 
-{- The definition of zipsWith is equivalent to the following:
-
-zipsWith phi s t = loop (s,t) where
-  loop (s1, s2) = Effect (go s1 s2)
-  go s1 s2 = do
-    e  <- inspect s1
-    case e of
-      Left r -> return (Return r)
-      Right fstr -> do
-        e' <- inspect s2
-        case e' of
-          Lift r -> return (Return r)
-          Right gstr -> return $ Step $ fmap loop (phi fstr gstr)
-
-But we take advantage of purity in the streams wherever we find it
-to avoid inserting extra Effect constructors or performing any
-unnecessary monadic operations.
-
+{-
 Note that if the first stream produces Return, we don't inspect
 (and potentially run effects from) the second stream. We used to
 do that. Aside from being (arguably) a bit strange, this also runs
 into a bit of trouble with MonadPlus laws. Most MonadPlus instances
-try to satisfy either left distribution or left catch. Let's
-consider left distribution for a version that inspects both streams
-before performing case inspection:
+try to satisfy either left distribution or left catch. Let's first
+consider left distribution:
 
-zipsWith (liftA2 (,)) (return a) b >>= k
+(x <|> y) >>= k = (x >>= k) <|> (y >>= k)
+
+[xy_1, xy_2, xy_3, ..., xy_o | r_xy] >>= k
 =
-(b >> return a) >>= k
-=
-b >> k a
+[x_1,  x_2,  x_3, ..., x_m | r_x] >>= k
+<|>
+[y_1,  y_2,  y_3, ..., y_n | r_y] >>= k
 
-/=
+x and y may have different lengths, and k may produce an utterly
+arbitrary stream from each result, so left distribution seems
+quite hopeless.
 
-zipsWith (liftA2 (,)) (k a) (b >>= k)
-=
-zipsWith (liftA2 (,)) (return a >>= k) (b >>= k)
+Now let's consider left catch:
 
-Now let's consider left catch for the same:
+zipsWith' liftA2 (return a) b = return a
 
-zipsWith (liftA2 (,)) (return a) b
-=
-b >> return a
-
-/=
-
-return a
-
-On the other hand, by ignoring the second stream when the first is
-Return, we satisfy the left catch law.
+To satisfy this, we can't run any effects from the second stream
+if the first is finished.
 -}
 
+-- | Zip two streams together. The 'zipsWith'' function should generally
+-- be preferred for efficiency.
 zipsWith :: forall f g h m r. (Monad m, Functor h)
   => (forall x y . f x -> g y -> h (x,y))
   -> Stream f m r -> Stream g m r -> Stream h m r
-zipsWith phi sf0 sg0 = loop (sf0, sg0)
-  where
-    loop :: (Stream f m r, Stream g m r) -> Stream h m r
-    loop (s, t) = case s of
-      Return r -> Return r
-      Step f -> go1 f t
-      Effect m -> Effect (go2 m t)
-
-    go1 :: f (Stream f m r) -> Stream g m r -> Stream h m r
-    go1 fs sg = case sg of
-      Return r -> Return r
-      Step gs -> Step $ fmap loop (phi fs gs)
-      Effect n -> Effect $
-        n >>= inspectC (return . Return) (return . Step . fmap loop . phi fs)
-
-    go2 :: m (Stream f m r) -> Stream g m r -> m (Stream h m r)
-    go2 mfs sg =
-      mfs >>= inspectC (return . Return) go
-      where
-        go fs = case sg of
-          Return r -> return (Return r)
-          Step gs -> return (Step (fmap loop (phi fs gs)))
-          Effect mgs -> mgs >>= inspectC (return . Return) (return . Step . fmap loop . phi fs)
+zipsWith phi = zipsWith' $ \xyp fx gy -> (\(x,y) -> xyp x y) <$> phi fx gy
 {-# INLINABLE zipsWith #-}
+-- Somewhat surprisingly, GHC is *much* more willing to specialize
+-- zipsWith if it's defined in terms of zipsWith'. Fortunately, zipsWith'
+-- seems like a better function anyway, so I guess that's not a big problem.
 
--- A version of 'inspect' that takes explicit continuations.
-inspectC :: Monad m => (r -> m a) -> (f (Stream f m r) -> m a) -> Stream f m r -> m a
-inspectC f g = loop where
-  loop (Return r) = f r
-  loop (Step x) = g x
-  loop (Effect m) = m >>= loop
-{-# INLINE inspectC #-}
-
+-- | Zip two streams together.
+zipsWith' :: forall f g h m r. Monad m
+  => (forall x y p . (x -> y -> p) -> f x -> g y -> h p)
+  -> Stream f m r -> Stream g m r -> Stream h m r
+zipsWith' phi = loop
+  where
+    loop :: Stream f m r -> Stream g m r -> Stream h m r
+    loop s t = case s of
+       Return r -> Return r
+       Step fs -> case t of
+         Return r -> Return r
+         Step gs -> Step $ phi loop fs gs
+         Effect n -> Effect $ liftM (loop s) n
+       Effect m -> Effect $ liftM (flip loop t) m
+{-# INLINABLE zipsWith' #-}
 
 zips :: (Monad m, Functor f, Functor g)
      => Stream f m r -> Stream g m r -> Stream (Compose f g) m r
-zips = zipsWith go where
-  go fx gy = Compose (fmap (\x -> fmap (\y -> (x,y)) gy) fx)
+zips = zipsWith' go where
+  go p fx gy = Compose (fmap (\x -> fmap (\y -> p x y) gy) fx)
 {-# INLINE zips #-} 
 
 
@@ -952,7 +919,7 @@ world	world
 interleaves
   :: (Monad m, Applicative h) =>
      Stream h m r -> Stream h m r -> Stream h m r
-interleaves = zipsWith (liftA2 (,))
+interleaves = zipsWith' liftA2
 {-# INLINE interleaves #-} 
 
 

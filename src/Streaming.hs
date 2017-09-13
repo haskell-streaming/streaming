@@ -40,6 +40,7 @@ module Streaming
 
    -- * Zipping, unzipping, separating and unseparating streams
    zipsWith,
+   zipsWith',
    zips,
    unzips,
    interleaves,
@@ -133,7 +134,10 @@ import Data.Bifunctor
 
 >   chunksOf     :: Int -> Stream f m r -> Stream (Stream f m) m r
 >   splitsAt     :: Int -> Stream f m r -> Stream f m (Stream f m r)
->   zipsWith     :: (forall x y. f x -> g y -> h (x, y)) -> Stream f m r -> Stream g m r -> Stream h m r
+>   zipsWith     :: (forall x y. f x -> g y -> h (x, y))
+                 -> Stream f m r -> Stream g m r -> Stream h m r
+>   zipsWith'    :: (forall x y p. (x -> y -> p) -> f x -> g y -> h p)
+                 -> Stream f m r -> Stream g m r -> Stream h m r
 >   intercalates :: Stream f m () -> Stream (Stream f m) m r -> Stream f m r
 >   unzips       :: Stream (Compose f g) m r ->  Stream f (Stream g m) r
 >   separate     :: Stream (Sum f g) m r -> Stream f (Stream g) m r  -- cp. partitionEithers
