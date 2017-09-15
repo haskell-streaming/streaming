@@ -646,6 +646,7 @@ intercalates sep = go0
 {-| Specialized fold following the usage of @Control.Monad.Trans.Free@
 
 > iterTM alg = streamFold return (join . lift)
+> iterTM alg = iterT alg . hoist lift
 -}
 iterTM ::
   (Functor f, Monad m, MonadTrans t,
@@ -657,6 +658,7 @@ iterTM out stream = destroyExposed stream out (join . lift) return
 {-| Specialized fold following the usage of @Control.Monad.Trans.Free@
 
 > iterT alg = streamFold return join alg
+> iterT alg = runIdentityT . iterTM (IdentityT . alg . fmap runIdentityT)
 -}
 iterT ::
   (Functor f, Monad m) => (f (m a) -> m a) -> Stream f m a -> m a

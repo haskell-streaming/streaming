@@ -170,7 +170,6 @@ import Data.Bifunctor
 -}
 
 {-| Map a stream to its church encoding; compare @Data.List.foldr@
-    This is the @safe_destroy@ exported by the @Internal@ module.
 
     Typical @FreeT@ operators can be defined in terms of @destroy@
     e.g.
