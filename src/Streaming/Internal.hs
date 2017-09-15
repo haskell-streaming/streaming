@@ -837,20 +837,16 @@ hoistExposedPost trans = loop where
     Step f -> Step (fmap loop f)
 {-# INLINABLE hoistExposedPost #-}
 
+{-# DEPRECATED mapsExposed "Use maps instead." #-}
 mapsExposed :: (Monad m, Functor f)
      => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
-mapsExposed phi = loop where
-  loop stream = case stream of
-    Return r  -> Return r
-    Effect m   -> Effect (liftM loop m)
-    Step f    -> Step (phi (fmap loop f))
+mapsExposed = maps
 {-# INLINABLE mapsExposed #-}
 
-mapsMExposed phi = loop where
-  loop stream = case stream of
-    Return r  -> Return r
-    Effect m   -> Effect (liftM loop m)
-    Step f    -> Effect (liftM Step (phi (fmap loop f)))
+{-# DEPRECATED mapsMExposed "Use mapsM instead." #-}
+mapsMExposed :: (Monad m, Functor f)
+     => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
+mapsMExposed = mapsM
 {-# INLINABLE mapsMExposed #-}
 
 {-| Map a stream directly to its church encoding; compare @Data.List.foldr@
