@@ -1,4 +1,5 @@
-{-#LANGUAGE CPP, DeriveDataTypeable, DeriveTraversable, DeriveFoldable #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, DeriveTraversable, DeriveFoldable,
+       DeriveGeneric #-}
 module Data.Functor.Of where
 import Data.Monoid
 import Control.Applicative
@@ -9,11 +10,13 @@ import Data.Bifunctor
 #endif
 import Data.Data
 import Data.Typeable
+import GHC.Generics (Generic, Generic1)
+import Data.Functor.Classes
 
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
     deriving (Data, Eq, Foldable, Ord,
-              Read, Show, Traversable, Typeable)
+              Read, Show, Traversable, Typeable, Generic, Generic1)
 infixr 5 :>
 
 instance (Monoid a, Monoid b) => Monoid (Of a b) where
@@ -55,3 +58,26 @@ instance Monoid a => Monad (Of a) where
   {-#INLINE (>>) #-}
   m :> x >>= f = let m' :> y = f x in mappend m m' :> y
   {-#INLINE (>>=) #-}
+
+instance Show a => Show1 (Of a) where
+  liftShowsPrec = liftShowsPrec2 showsPrec showList
+
+instance Show2 Of where
+  liftShowsPrec2 spa _sla spb _slb p (a :> b) =
+    showParen (p > 5) $
+    spa 6 a .
+    showString " :> " .
+    spb 6 b
+
+instance Eq a => Eq1 (Of a) where
+  liftEq = liftEq2 (==)
+
+instance Ord a => Ord1 (Of a) where
+  liftCompare = liftCompare2 compare
+
+instance Eq2 Of where
+  liftEq2 eq1 eq2 (x :> y) (z :> w) = eq1 x z && eq2 y w
+
+instance Ord2 Of where
+  liftCompare2 comp1 comp2 (x :> y) (z :> w) =
+    comp1 x z `mappend` comp2 y w

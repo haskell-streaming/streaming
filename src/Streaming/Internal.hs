@@ -93,6 +93,7 @@ import Control.Monad.Error.Class
 import Control.Monad.Cont.Class
 import Control.Applicative
 import Data.Foldable ( Foldable(..) )
+import Data.Function ( on )
 import Data.Traversable
 import Control.Monad.Morph
 import Data.Monoid (Monoid (..), (<>))
@@ -101,6 +102,7 @@ import Data.Data ( Data, Typeable )
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
 import Data.Functor.Sum
+import Data.Functor.Classes
 import Control.Concurrent (threadDelay)
 import Control.Monad.Base
 import Control.Monad.Trans.Resource
@@ -135,14 +137,95 @@ data Stream f m r = Step !(f (Stream f m r))
 #if __GLASGOW_HASKELL__ >= 710
                   deriving (Typeable)
 #endif
-deriving instance (Show r, Show (m (Stream f m r))
-                  , Show (f (Stream f m r))) => Show (Stream f m r)
-deriving instance (Eq r, Eq (m (Stream f m r))
-                  , Eq (f (Stream f m r))) => Eq (Stream f m r)
 #if __GLASGOW_HASKELL__ >= 710
 deriving instance (Typeable f, Typeable m, Data r, Data (m (Stream f m r))
                   , Data (f (Stream f m r))) => Data (Stream f m r)
 #endif
+
+-- The most obvious approach would probably be
+--
+-- s1 == s2 = eqUnexposed (unexposed s1) (unexposed s2)
+--
+-- but that seems to actually be rather hard (especially if performance
+-- matters even a little bit). Using `inspect` instead
+-- is nice and simple. The main downside is the rather weird-looking
+-- constraint it imposes. We *could* write
+--
+-- instance (Monad m, Eq r, Eq1 m, Eq1 f) => Eq (Stream f m r)
+--
+-- but there are an awful lot more Eq instances in the wild than
+-- Eq1 instances. Maybe some day soon we'll have implication constraints
+-- and everything will be beautiful.
+instance (Monad m, Eq (m (Either r (f (Stream f m r)))))
+         => Eq (Stream f m r) where
+  s1 == s2 = inspect s1 == inspect s2
+
+-- See the notes on Eq.
+instance (Monad m, Ord (m (Either r (f (Stream f m r)))))
+         => Ord (Stream f m r) where
+  compare = compare `on` inspect
+  (<) = (<) `on` inspect
+  (>) = (>) `on` inspect
+  (<=) = (<=) `on` inspect
+  (>=) = (>=) `on` inspect
+
+-- We could avoid a Show1 constraint for our Show1 instance by sneakily
+-- mapping everything to a single known type, but there's really no way
+-- to do that for Eq1 or Ord1.
+instance (Monad m, Functor f, Eq1 m, Eq1 f) => Eq1 (Stream f m) where
+  liftEq eq xs ys = liftEqExposed eq (unexposed xs) (unexposed ys)
+    where
+      liftEqExposed eq (Return x) (Return y) = eq x y
+      liftEqExposed eq (Effect m) (Effect n) = liftEq (liftEqExposed eq) m n
+      liftEqExposed eq (Step f) (Step g) = liftEq (liftEqExposed eq) f g
+      liftEqExposed _ _ _ = False
+
+instance (Monad m, Functor f, Ord1 m, Ord1 f) => Ord1 (Stream f m) where
+  liftCompare cmp xs ys = liftCmpExposed cmp (unexposed xs) (unexposed ys)
+    where
+      liftCmpExposed cmp (Return x) (Return y) = cmp x y
+      liftCmpExposed cmp (Effect m) (Effect n) = liftCompare (liftCmpExposed cmp) m n
+      liftCmpExposed cmp (Step f) (Step g) = liftCompare (liftCmpExposed cmp) f g
+      liftCmpExposed _ (Return _) _ = LT
+      liftCmpExposed _ _ (Return _) = GT
+      liftCmpExposed _ _ _ = error "liftCmpExposed: stream was exposed!"
+
+-- We could get a much less scary implementation using Show1, but
+-- Show1 instances aren't nearly as common as Show instances.
+--
+-- How does this
+-- funny-looking instance work?
+--
+-- We 'inspect' the stream to produce @m (Either r (Stream f m r))@.
+-- Then we work under @m@ to produce @m ShowSWrapper@. That's almost
+-- like producing @m String@, except that a @ShowSWrapper@ can be
+-- shown at any precedence. So the 'Show' instance for @m@ can show
+-- the contents at the correct precedence.
+instance (Monad m, Show r, Show (m ShowSWrapper), Show (f (Stream f m r)))
+         => Show (Stream f m r) where
+  showsPrec p xs = showParen (p > 10) $
+                     showString "Effect " . (showsPrec 11 $
+    flip liftM (inspect xs) $ \front ->
+      SS $ \d -> showParen (d > 10) $
+        case front of
+          Left r ->  showString "Return " . showsPrec 11 r
+          Right f -> showString "Step "   . showsPrec 11 f)
+
+instance (Monad m, Functor f, Show (m ShowSWrapper), Show (f ShowSWrapper))
+         => Show1 (Stream f m) where
+  liftShowsPrec sp sl p xs = showParen (p > 10) $
+                     showString "Effect " . (showsPrec 11 $
+    flip liftM (inspect xs) $ \front ->
+      SS $ \d -> showParen (d > 10) $
+        case front of
+          Left r ->  showString "Return " . sp 11 r
+          Right f -> showString "Step "   .
+                     showsPrec 11 (fmap (SS . (\str i -> liftShowsPrec sp sl i str)) f))
+
+newtype ShowSWrapper = SS (Int -> ShowS)
+instance Show ShowSWrapper where
+  showsPrec p (SS s) = s p
+
 instance (Functor f, Monad m) => Functor (Stream f m) where
   fmap f = loop where
     loop stream = case stream of
