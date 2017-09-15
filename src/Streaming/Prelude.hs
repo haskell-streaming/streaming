@@ -48,7 +48,8 @@
 >
 -}
 {-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable, TypeFamilies,
-             DeriveFoldable, DeriveFunctor, DeriveTraversable, CPP, Trustworthy #-}
+             DeriveFoldable, DeriveFunctor, DeriveTraversable, CPP,
+             ScopedTypeVariables, Trustworthy #-}
 
 module Streaming.Prelude (
     -- * Types
@@ -2615,6 +2616,18 @@ two
 >>>  (S.toList . mapped S.toList . chunksOf 4) $ (S.toList . mapped S.toList . chunksOf 3) $ S.copy $ (S.toList . mapped S.toList . chunksOf 2) $ S.copy $ each [1..12]
 [[1,2,3,4],[5,6,7,8],[9,10,11,12]] :> ([[1,2,3],[4,5,6],[7,8,9],[10,11,12]] :> ([[1,2],[3,4],[5,6],[7,8],[9,10],[11,12]] :> ()))
 
+
+@copy@ can be considered a special case of 'expand':
+
+@
+  copy = 'expand' $ \p (a :> as) -> a :> p (a :> as)
+@
+
+If 'Of' were an instance of 'Control.Comonad.Comonad', then one could write
+
+@
+  copy = 'expand' extend
+@
 -}
 copy
   :: Monad m =>
@@ -2678,6 +2691,12 @@ S.toList $ S.unzip $ S.each xs
 >>> S.toList $ S.toList $ S.unzip (S.each xs)
 ["1","2","3","4","5"] :> ([1,2,3,4,5] :> ())
 
+'unzip' can be considered a special case of either 'unzips' or 'expand':
+
+@
+  unzip = 'unzips' . 'maps' (\((a,b) :> x) -> Compose (a :> b :> x))
+  unzip = 'expand' $ \p ((a,b) :> abs) -> b :> p (a :> abs)
+@
 -}
 unzip :: Monad m =>  Stream (Of (a,b)) m r -> Stream (Of a) (Stream (Of b) m) r
 unzip = loop where

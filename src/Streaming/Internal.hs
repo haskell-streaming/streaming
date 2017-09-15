@@ -57,6 +57,8 @@ module Streaming.Internal (
     , interleaves
     , separate
     , unseparate
+    , expand
+    , expandPost
 
   
     -- * Assorted Data.Functor.x help
@@ -1004,6 +1006,35 @@ unseparate str = destroyExposed
   return
 {-#INLINABLE unseparate #-}
 
+-- | If 'Of' had a @Comonad@ instance, then we'd have
+--
+-- @copy = expand extend@
+--
+-- See 'expandPost' for a version that requires a @Functor g@
+-- instance instead.
+expand :: (Monad m, Functor f)
+       => (forall a b. (g a -> b) -> f a -> h b)
+       -> Stream f m r -> Stream g (Stream h m) r
+expand ext = loop where
+  loop (Return r) = Return r
+  loop (Step f) = Effect $ Step $ ext (Return . Step) (fmap loop f)
+  loop (Effect m) = Effect $ Effect $ liftM (Return . loop) m
+{-# INLINABLE expand #-}
+
+-- | If 'Of' had a @Comonad@ instance, then we'd have
+--
+-- @copy = expandPost extend@
+--
+-- See 'expand' for a version that requires a @Functor f@ instance
+-- instead.
+expandPost :: (Monad m, Functor g)
+       => (forall a b. (g a -> b) -> f a -> h b)
+       -> Stream f m r -> Stream g (Stream h m) r
+expandPost ext = loop where
+  loop (Return r) = Return r
+  loop (Step f) = Effect $ Step $ ext (Return . Step . fmap loop) f
+  loop (Effect m) = Effect $ Effect $ liftM (Return . loop) m
+{-# INLINABLE expandPost #-}
 
 unzips :: (Monad m, Functor f, Functor g) =>
    Stream (Compose f g) m r ->  Stream f (Stream g m) r
