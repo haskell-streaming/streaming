@@ -34,6 +34,9 @@ module Streaming.Internal (
     -- * Transforming streams
     , maps
     , mapsM
+    , mapsPost
+    , mapsMPost
+    , hoistUnexposed
     , decompose
     , mapsM_
     , run
@@ -73,6 +76,7 @@ module Streaming.Internal (
     -- *  For use in implementation
     , unexposed
     , hoistExposed
+    , hoistExposedPost
     , mapsExposed
     , mapsMExposed
     , destroyExposed
@@ -242,6 +246,7 @@ instance Functor f => MFunctor (Stream f) where
       Effect m   -> Effect (trans (liftM loop m))
       Step f    -> Step (fmap loop f)
   {-# INLINABLE hoist #-}  
+
 
 instance Functor f => MMonad (Stream f) where
   embed phi = loop where
@@ -492,8 +497,8 @@ maps phi = loop where
 {-# INLINABLE maps #-}
 
 
-{- | Map layers of one functor to another with a transformation involving the base monad
-     @maps@ is more fundamental than @mapsM@, which is best understood as a convenience
+{- | Map layers of one functor to another with a transformation involving the base monad.
+     'maps' is more fundamental than @mapsM@, which is best understood as a convenience
      for effecting this frequent composition:
 
 > mapsM phi = decompose . maps (Compose . phi)
@@ -510,6 +515,53 @@ mapsM phi = loop where
     Step f    -> Effect (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsM #-}
 
+{- | Map layers of one functor to another with a transformation. Compare
+     hoist, which has a similar effect on the 'monadic' parameter.
+
+> mapsPost id = id
+> mapsPost f . mapsPost g = mapsPost (f . g)
+> mapsPost f = mapsPost f
+
+
+     @mapsPost@ is essentially the same as 'maps', but it imposes a 'Functor' constraint on
+     its target functor rather than its source functor. It should be preferred if 'fmap'
+     is cheaper for the target functor than for the source functor.
+-}
+mapsPost :: forall m f g r. (Monad m, Functor g)
+         => (forall x. f x -> g x)
+         -> Stream f m r -> Stream g m r
+mapsPost phi = loop where
+  loop :: Stream f m r -> Stream g m r
+  loop stream = case stream of
+    Return r -> Return r
+    Effect m -> Effect (liftM loop m)
+    Step f -> Step $ fmap loop $ phi f
+{-# INLINABLE mapsPost #-}
+
+{- | Map layers of one functor to another with a transformation involving the base monad.
+     @mapsMPost@ is essentially the same as 'mapsM', but it imposes a 'Functor' constraint on
+     its target functor rather than its source functor. It should be preferred if 'fmap'
+     is cheaper for the target functor than for the source functor.
+
+     @mapsPost@ is more fundamental than @mapsMPost@, which is best understood as a convenience
+     for effecting this frequent composition:
+
+> mapsMPost phi = decompose . mapsPost (Compose . phi)
+
+     The streaming prelude exports the same function under the better name @mappedPost@,
+     which overlaps with the lens libraries.
+
+-}
+mapsMPost :: forall m f g r. (Monad m, Functor g)
+       => (forall x. f x -> m (g x))
+       -> Stream f m r -> Stream g m r
+mapsMPost phi = loop where
+  loop :: Stream f m r -> Stream g m r
+  loop stream = case stream of
+    Return r -> Return r
+    Effect m -> Effect (liftM loop m)
+    Step f -> Effect $ liftM (Step . fmap loop) (phi f)
+{-# INLINABLE mapsMPost #-}
 
 {-| Rearrange a succession of layers of the form @Compose m (f x)@.
 
@@ -730,13 +782,46 @@ replicates n f = splitsAt n (repeats f) >> return ()
 cycles :: (Monad m, Functor f) =>  Stream f m () -> Stream f m r
 cycles = forever
 
+-- | A less-efficient version of 'hoist' that works properly even when its
+-- argument is not a monad morphism.
+--
+-- > hoistUnexposed = hoist . unexposed
+hoistUnexposed :: (Monad m, Functor f)
+               => (forall a. m a -> n a)
+               -> Stream f m r -> Stream f n r
+hoistUnexposed trans = loop where
+  loop = Effect . trans . inspectC (return . Return) (return . Step . fmap loop)
+{-# INLINABLE hoistUnexposed #-}
 
+-- A version of 'inspect' that takes explicit continuations.
+inspectC :: Monad m => (r -> m a) -> (f (Stream f m r) -> m a) -> Stream f m r -> m a
+inspectC f g = loop where
+  loop (Return r) = f r
+  loop (Step x) = g x
+  loop (Effect m) = m >>= loop
+{-# INLINE inspectC #-}
 
+-- | The same as 'hoist', but explicitly named to indicate that it
+-- is not entirely safe. In particular, its argument must be a monad
+-- morphism.
+hoistExposed :: (Functor m, Functor f) => (forall a. m a -> n a) -> Stream f m a -> Stream f n a
 hoistExposed trans = loop where
   loop stream = case stream of
     Return r  -> Return r
-    Effect m   -> Effect (trans (liftM loop m))
+    Effect m   -> Effect (trans (fmap loop m))
     Step f    -> Step (fmap loop f)
+{-# INLINABLE hoistExposed #-}
+
+-- | The same as 'hoistExposed', but with a 'Functor' constraint on
+-- the target rather than the source. This must be used only with
+-- a monad morphism.
+hoistExposedPost :: (Functor n, Functor f) => (forall a. m a -> n a) -> Stream f m a -> Stream f n a
+hoistExposedPost trans = loop where
+  loop stream = case stream of
+    Return r -> Return r
+    Effect m -> Effect (fmap loop (trans m))
+    Step f -> Step (fmap loop f)
+{-# INLINABLE hoistExposedPost #-}
 
 mapsExposed :: (Monad m, Functor f)
      => (forall x . f x -> g x) -> Stream f m r -> Stream g m r
