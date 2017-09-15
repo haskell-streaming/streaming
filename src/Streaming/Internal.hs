@@ -388,16 +388,24 @@ m1 `onException` io = do
             Return r -> Effect (unprotect key >> return (Return r))
             Effect m -> Effect (fmap loop m)
             Step f -> Step (fmap loop f)
-{-| Map a stream directly to its church encoding; compare @Data.List.foldr@
+
+{-| Map a stream to its church encoding; compare @Data.List.foldr@.
+    'destroyExposed' may be more efficient in some cases when
+    applicable, but it is less safe.
+
+    @
+    destroy s construct eff done
+      = eff . iterT (return . construct . fmap eff) . fmap done $ s
+    @
 -}
 destroy
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroy stream0 construct effect done = loop stream0 where
+destroy stream0 construct effect done = effect (loop stream0) where
   loop stream = case stream of
-    Return r -> done r
-    Effect m  -> effect (liftM loop m)
-    Step fs  -> construct (fmap loop fs)
+    Return r -> return (done r)
+    Effect m -> m >>= loop
+    Step fs -> return (construct (fmap (effect . loop) fs))
 {-# INLINABLE destroy #-}
 
 
@@ -427,6 +435,10 @@ destroy stream0 construct effect done = loop stream0 where
      (f (Stream g m a) -> m (g (Stream g m a)))
      -> Stream f m a -> Stream g m a                 -- mapped
 
+@
+    streamFold done eff construct
+       = eff . iterT (return . construct . fmap eff) . fmap done
+@
 -}
 streamFold
   :: (Functor f, Monad m) =>
@@ -839,17 +851,21 @@ mapsMExposed phi = loop where
     Step f    -> Effect (liftM Step (phi (fmap loop f)))
 {-# INLINABLE mapsMExposed #-}
 
---     Map a stream directly to its church encoding; compare @Data.List.foldr@
---     It permits distinctions that should be hidden, as can be seen from
---     e.g.
---
--- isPure stream = destroy (const True) (const False) (const True)
---
---     and similar nonsense.  The crucial
---     constraint is that the @m x -> x@ argument is an /Eilenberg-Moore algebra/.
---     See Atkey "Reasoning about Stream Processing with Effects"
+{-| Map a stream directly to its church encoding; compare @Data.List.foldr@
+    It permits distinctions that should be hidden, as can be seen from
+    e.g.
 
+    @isPure stream = destroyExposed (const True) (const False) (const True)@
 
+    and similar nonsense.  The crucial
+    constraint is that the @m x -> x@ argument is an /Eilenberg-Moore algebra/.
+    See Atkey, "Reasoning about Stream Processing with Effects"
+
+    When in doubt, use 'destroy' instead.
+-}
+destroyExposed
+  :: (Functor f, Monad m) =>
+     Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
 destroyExposed stream0 construct effect done = loop stream0 where
   loop stream = case stream of
     Return r -> done r
