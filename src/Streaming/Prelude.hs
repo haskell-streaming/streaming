@@ -1842,9 +1842,9 @@ split t  = loop  where
 {-#INLINABLE split #-}
 
 {-| Split a succession of layers after some number, returning a streaming or
---   effectful pair. This function is the same as the 'splitsAt' exported by the
---   @Streaming@ module, but since this module is imported qualified, it can
---   usurp a Prelude name. It specializes to:
+    effectful pair. This function is the same as the 'splitsAt' exported by the
+    @Streaming@ module, but since this module is imported qualified, it can
+    usurp a Prelude name. It specializes to:
 
 >  splitAt :: (Monad m, Functor f) => Int -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
 
