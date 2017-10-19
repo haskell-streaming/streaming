@@ -62,7 +62,6 @@ module Streaming.Prelude (
     , stdinLn
     , readLn
     , fromHandle
-    , readFile
     , iterate
     , iterateM
     , repeat
@@ -73,7 +72,6 @@ module Streaming.Prelude (
     , replicateM
     , enumFrom
     , enumFromThen
-    , seconds
     , unfoldr
     
 
@@ -85,7 +83,6 @@ module Streaming.Prelude (
     , mapM_
     , print
     , toHandle
-    , writeFile
     , effects
     , erase
     , drained
@@ -267,10 +264,8 @@ import Control.Exception (throwIO, try)
 import Data.Monoid (Monoid (mappend, mempty))
 import Data.String (IsString (..))
 import Control.Concurrent (threadDelay)
-import Data.Time (getCurrentTime, diffUTCTime, picosecondsToDiffTime)
 import Data.Functor.Classes
 import Data.Functor.Compose
-import Control.Monad.Trans.Resource
 
 import GHC.Magic
 import Data.Functor.Of
@@ -1744,22 +1739,6 @@ five<Enter>
 
   -}
 
-seconds :: Stream (Of Double) IO r
-seconds = do
-    e <- lift $ next preseconds
-    case e of
-      Left r -> return r
-      Right (t, rest) -> do
-        yield 0
-        map (subtract t) rest
- where
-  preseconds :: Stream (Of Double) IO r
-  preseconds = do
-    utc <- liftIO getCurrentTime
-    map ((/1000000000) . nice utc) (repeatM getCurrentTime)
-   where
-     nice u u' = fromIntegral $ truncate (1000000000 * diffUTCTime u' u)
-
 -- ---------------
 -- sequence
 -- ---------------
@@ -2338,43 +2317,6 @@ stdoutLn = loop
 stdoutLn' :: MonadIO m => Stream (Of String) m r -> m r
 stdoutLn' = toHandle IO.stdout
 
-{-| Read the lines of a file as Haskell 'String's
-
->>> runResourceT $ S.writeFile "lines.txt" $ S.take 2 S.stdinLn
-hello<Enter>
-world<Enter>
->>> runResourceT $ S.print $ S.readFile "lines.txt"
-"hello"
-"world"
-
-    'runResourceT', as it is used here, means something like 'closing_all_handles'.
-    It makes it possible to write convenient, fairly sensible versions of
-    'readFile', 'writeFile' and 'appendFile'. @IO.withFile IO.ReadMode ...@
-    is more complicated but is generally to be preferred. Its use is explained
-    <https://www.fpcomplete.com/user/snoyberg/library-documentation/resourcet here>.
-
--}
-
-readFile :: MonadResource m => FilePath -> Stream (Of String) m ()
-readFile f = bracketStream (IO.openFile f IO.ReadMode) (IO.hClose) fromHandle
-
-{-| Write a series of strings as lines to a file. The handle is
-    managed with 'ResourceT' (see the remarks on 'readFile'):
-
->>> runResourceT $ S.writeFile "lines.txt" $ S.take 2 S.stdinLn
-hello<Enter>
-world<Enter>
->>> runResourceT $ S.stdoutLn $ S.readFile "lines.txt"
-hello
-world
-
--}
-writeFile :: MonadResource m => FilePath -> Stream (Of String) m r -> m r
-writeFile f str = do
-  (key, handle) <- allocate (IO.openFile f IO.WriteMode) (IO.hClose)
-  r <- toHandle handle str
-  release key
-  return r
 
 -- -- * Producers
 -- -- $producers

@@ -65,13 +65,7 @@ module Streaming.Internal (
 
   
     -- * Assorted Data.Functor.x help
-  
     , switch
-  
-    -- * ResourceT and MonadMask help
-  
-    , bracketStream
-    , bracket
   
     -- *  For use in implementation
     , unexposed
@@ -104,10 +98,6 @@ import Data.Functor.Compose
 import Data.Functor.Sum
 import Data.Functor.Classes
 import Control.Concurrent (threadDelay)
-import Control.Monad.Base
-import Control.Monad.Trans.Resource
-import Control.Monad.Catch hiding (bracket, onException)
-import Control.Monad.Trans.Control
 import Data.Functor.Of
 import Data.IORef
 {- $stream
@@ -343,73 +333,6 @@ instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
   liftIO = Effect . liftM Return . liftIO
   {-# INLINE liftIO #-}
 
-instance (MonadBase b m, Functor f) => MonadBase b (Stream f m) where
-  liftBase  = effect . fmap return . liftBase
-  {-#INLINE liftBase #-}
-
-instance (MonadThrow m, Functor f) => MonadThrow (Stream f m) where
-  throwM = lift . throwM
-  {-#INLINE throwM #-}
-
-instance (MonadCatch m, Functor f) => MonadCatch (Stream f m) where
-  catch str f = go str
-    where
-    go p = case p of
-      Step f      -> Step (fmap go f)
-      Return  r   -> Return r
-      Effect  m   -> Effect (catch (do
-          p' <- m
-          return (go p'))
-       (\e -> return (f e)) )
-  {-#INLINABLE catch #-}
-
--- The materials for the MonadMask instance are entirely lifted from pipes-safe
--- following remarks of Oliver Charles.
-data Restore m = Unmasked | Masked (forall x . m x -> m x)
-
-liftMask
-    :: forall m f r a . (MonadIO m, MonadCatch m, f ~ (Of a))
-    => (forall s . ((forall x . m x -> m x) -> m s) -> m s)
-    -> ((forall x . Stream f m x -> Stream f m x)
-        -> Stream f m r)
-    -> Stream f m r
-liftMask maskVariant k = do
-    ioref <- liftIO $ newIORef Unmasked
-
-    let -- mask adjacent actions in base monad
-        loop :: Stream f m r -> Stream f m r
-        loop (Step f)   = Step (fmap loop f)
-        loop (Return r) = Return r
-        loop (Effect m) = Effect $ maskVariant $ \unmaskVariant -> do
-            -- stash base's unmask and merge action
-            liftIO $ writeIORef ioref $ Masked unmaskVariant
-            m >>= chunk >>= return . loop
-
-        -- unmask adjacent actions in base monad
-        unmask :: forall q. Stream f m q -> Stream f m q
-        unmask (Step f)   = Step (fmap unmask f)
-        unmask (Return q) = Return q
-        unmask (Effect m) = Effect $ do
-            -- retrieve base's unmask and apply to merged action
-            Masked unmaskVariant <- liftIO $ readIORef ioref
-            unmaskVariant (m >>= chunk >>= return . unmask)
-
-        -- merge adjacent actions in base monad
-        chunk :: forall s. Stream f m s -> m (Stream f m s)
-        chunk (Effect m) = m >>= chunk
-        chunk s          = return s
-
-    loop $ k unmask
-
-instance (MonadMask m, MonadIO m, f ~ (Of a)) => MonadMask (Stream f m) where
-    mask                = liftMask mask
-    uninterruptibleMask = liftMask uninterruptibleMask
-
-instance (MonadResource m, Functor f) => MonadResource (Stream f m) where
-  liftResourceT = lift . liftResourceT
-  {-#INLINE liftResourceT #-}
-
-
 instance (Functor f, MonadReader r m) => MonadReader r (Stream f m) where
   ask = lift ask
   {-# INLINE ask #-}
@@ -435,42 +358,6 @@ instance (Functor f, MonadError e m) => MonadError e (Stream f m) where
       Effect m -> Effect $ liftM loop m `catchError` (return . f)
       Step f -> Step (fmap loop f)
   {-# INLINABLE catchError #-}
-
-bracketStream :: (Functor f, MonadResource m) =>
-       IO a -> (a -> IO ()) -> (a -> Stream f m b) -> Stream f m b
-bracketStream alloc free inside = do
-        (key, seed) <- lift (allocate alloc free)
-        clean key (inside seed)
-  where
-    clean key = loop where
-      loop str = case str of
-        Return r -> Effect (release key >> return (Return r))
-        Effect m -> Effect (liftM loop m)
-        Step f   -> Step (fmap loop f)
-{-#INLINABLE bracketStream #-}
-
-
-bracket
-  :: (MonadIO m, MonadMask m, MonadResource m)
-  => m b -> (b -> IO ()) -> (b -> Stream (Of a) m r) -> Stream (Of a) m r
-bracket before after action = mask $ \restore -> do
-    h <- lift before
-    r <- restore (action h) `onException` after h
-    liftIO (after h)
-    return r
-    
-onException :: (Functor f, MonadResource m) => Stream f m a -> IO () -> Stream f m a
-m1 `onException` io = do
-  key <- lift (register io)
-  clean key m1
-  where
-    clean key = loop
-      where
-        loop str =
-          case str of
-            Return r -> Effect (unprotect key >> return (Return r))
-            Effect m -> Effect (fmap loop m)
-            Step f -> Step (fmap loop f)
 
 {-| Map a stream to its church encoding; compare @Data.List.foldr@.
     'destroyExposed' may be more efficient in some cases when
