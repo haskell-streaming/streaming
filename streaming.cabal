@@ -1,5 +1,5 @@
 name:                streaming
-version:             0.1.4.5
+version:             0.2.0.0
 cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and general stream type.
@@ -186,10 +186,10 @@ description:         This package contains two modules, <http://hackage.haskell.
 license:             BSD3
 license-file:        LICENSE
 author:              michaelt
-maintainer:          what_is_it_to_do_anything@yahoo.com
+maintainer:          andrew.thaddeus@gmail.com, what_is_it_to_do_anything@yahoo.com
 stability:           Experimental
-homepage:            https://github.com/michaelt/streaming
-bug-reports:         https://github.com/michaelt/streaming/issues
+homepage:            https://github.com/haskell-streaming/streaming
+bug-reports:         https://github.com/haskell-streaming/streaming/issues
 category:            Data, Pipes, Streaming
 extra-source-files:  README.md
 
@@ -213,7 +213,7 @@ library
 
   build-depends:       base >=4.6 && <5
                      , mtl >=2.1 && <2.3
-                     , mmorph >=1.0 && <1.1
+                     , mmorph >=1.0 && <1.2
                      , transformers >=0.5 && <0.6
                      , transformers-base < 0.5
                      , exceptions > 0.5 && < 0.9
