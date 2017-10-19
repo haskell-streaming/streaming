@@ -127,10 +127,6 @@ data Stream f m r = Step !(f (Stream f m r))
 #if __GLASGOW_HASKELL__ >= 710
                   deriving (Typeable)
 #endif
-#if __GLASGOW_HASKELL__ >= 710
-deriving instance (Typeable f, Typeable m, Data r, Data (m (Stream f m r))
-                  , Data (f (Stream f m r))) => Data (Stream f m r)
-#endif
 
 -- The most obvious approach would probably be
 --
