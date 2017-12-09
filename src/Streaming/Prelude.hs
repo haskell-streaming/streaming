@@ -114,6 +114,7 @@ module Streaming.Prelude (
     , sequence
     , filter
     , filterM
+    , mapMaybeM
     , delay
     , intersperse
     , take
@@ -2725,3 +2726,16 @@ slidingWindow n = setup (max 1 n :: Int) mempty
         Left r ->  yield sequ >> return r
         Right (x,rest) -> setup (m-1) (sequ Seq.|> x) rest
 {-#INLINABLE slidingWindow #-}
+
+-- | Map monadically over a stream, producing a new stream
+--   only containing the 'Just' values.
+mapMaybeM :: Monad m => (a -> m (Maybe b)) -> Stream (Of a) m r -> Stream (Of b) m r
+mapMaybeM phi = loop where
+  loop stream = case stream of
+    Return r -> Return r
+    Effect m -> Effect (fmap loop m)
+    Step (a :> snext) -> Effect $ do
+      flip fmap (phi a) $ \x -> case x of
+        Nothing -> loop snext
+        Just b -> Step (b :> loop snext)
+{-#INLINABLE mapMaybeM #-}
