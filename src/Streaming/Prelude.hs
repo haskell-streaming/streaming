@@ -55,8 +55,9 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TypeFamilies #-}
+
+{-# OPTIONS_GHC -Wall #-}
 
 module Streaming.Prelude (
     -- * Types
@@ -238,12 +239,10 @@ module Streaming.Prelude (
 
     -- * Basic Type
     , Stream
-
   ) where
 import Streaming.Internal
 
 import Control.Monad hiding (filterM, mapM, mapM_, foldM, foldM_, replicateM, sequence)
-import Data.Data ( Data, Typeable )
 import Data.Functor.Identity
 import Data.Functor.Sum
 import Control.Monad.Trans
@@ -251,8 +250,6 @@ import Control.Applicative (Applicative (..))
 import Data.Functor (Functor (..), (<$))
 
 import qualified Prelude as Prelude
-import Data.Foldable (Foldable)
-import Data.Traversable (Traversable)
 import qualified Data.Foldable as Foldable
 import qualified Data.Sequence as Seq
 import Text.Read (readMaybe)
@@ -261,7 +258,7 @@ import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
                       , print, zipWith, zip, zipWith3, zip3, unzip, seq, show, read
                       , readLn, sequence, concat, span, break, readFile, writeFile
-                      , minimum, maximum, elem, notElem, intersperse, all, any, head
+                      , minimum, maximum, elem, notElem, all, any, head
                       , last)
 
 import qualified GHC.IO.Exception as G
@@ -269,12 +266,8 @@ import qualified System.IO as IO
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception (throwIO, try)
 import Data.Monoid (Monoid (mappend, mempty))
-import Data.String (IsString (..))
 import Control.Concurrent (threadDelay)
-import Data.Functor.Classes
 import Data.Functor.Compose
-
-import GHC.Magic
 import Data.Functor.Of
 
 -- instance (Eq a) => Eq1 (Of a) where eq1 = (==)
@@ -342,10 +335,10 @@ strictly = \(a,b) -> a :> b
  -}
 
 fst' :: Of a b -> a
-fst' (a :> b) = a
+fst' (a :> _) = a
 {-#INLINE fst' #-}
 snd' :: Of a b -> b
-snd' (a :> b) = b
+snd' (_ :> b) = b
 {-#INLINE snd' #-}
 
 {-| Map a function over the first element of an @Of@ pair
@@ -395,7 +388,7 @@ all thus = loop True where
 all_ :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m Bool
 all_ thus = loop True where
   loop b str = case str of
-    Return r -> return b
+    Return _ -> return b
     Effect m -> m >>= loop b
     Step (a :> rest) -> if thus a
       then loop True rest
@@ -418,7 +411,7 @@ any thus = loop False where
 any_ :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m Bool
 any_ thus = loop False where
   loop b str = case str of
-    Return r -> return b
+    Return _ -> return b
     Effect m -> m >>= loop b
     Step (a :> rest) -> if thus a
       then return True
@@ -439,11 +432,11 @@ any_ thus = loop False where
 
 break :: Monad m => (a -> Bool) -> Stream (Of a) m r
       -> Stream (Of a) m (Stream (Of a) m r)
-break pred = loop where
+break thePred = loop where
   loop str = case str of
     Return r         -> Return (Return r)
     Effect m          -> Effect $ fmap loop m
-    Step (a :> rest) -> if (pred a)
+    Step (a :> rest) -> if (thePred a)
       then Return (Step (a :> rest))
       else Step (a :> loop rest)
 {-# INLINABLE break #-}
@@ -468,14 +461,14 @@ break pred = loop where
 
 -}
 breakWhen :: Monad m => (x -> a -> x) -> x -> (x -> b) -> (b -> Bool) -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
-breakWhen step begin done pred = loop0 begin
+breakWhen step begin done thePred = loop0 begin
   where
     loop0 x stream = case stream of
         Return r -> return (return r)
         Effect mn  -> Effect $ fmap (loop0 x) mn
         Step (a :> rest) -> loop a (step x a) rest
     loop a !x stream = do
-      if pred (done x)
+      if thePred (done x)
         then return (yield a >> stream)
         else case stream of
           Return r -> yield a >> return (return r)
@@ -668,10 +661,10 @@ drop :: (Monad m) => Int -> Stream (Of a) m r -> Stream (Of a) m r
 drop n str | n <= 0 = str
 drop n str = loop n str where
   loop 0 stream = stream
-  loop n stream = case stream of
+  loop m stream = case stream of
       Return r       -> Return r
-      Effect ma      -> Effect (fmap (loop n) ma)
-      Step (a :> as) -> loop (n-1) as
+      Effect ma      -> Effect (fmap (loop m) ma)
+      Step (_ :> as) -> loop (m-1) as
 {-# INLINABLE drop #-}
 
 -- ---------------
@@ -692,11 +685,11 @@ four<Enter>
 
 -}
 dropWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
-dropWhile pred = loop where
+dropWhile thePred = loop where
   loop stream = case stream of
     Return r       -> Return r
     Effect ma       -> Effect (fmap loop ma)
-    Step (a :> as) -> if pred a
+    Step (a :> as) -> if thePred a
       then loop as
       else Step (a :> as)
 {-# INLINABLE dropWhile #-}
@@ -765,9 +758,9 @@ elem a' = loop False where
 
 elem_ :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m Bool
 elem_ a' = loop False where
-  loop True str = return True
+  loop True _ = return True
   loop False str = case str of
-    Return r -> return False
+    Return _ -> return False
     Effect m -> m >>= loop False
     Step (a:> rest) ->
       if a == a'
@@ -830,7 +823,7 @@ erase = loop where
   loop str = case str of
     Return r -> Return r
     Effect m -> Effect (fmap loop m)
-    Step (a:>rest) -> Step (Identity (loop rest))
+    Step (_:>rest) -> Step (Identity (loop rest))
 {-# INLINABLE erase #-}
 
 -- ---------------
@@ -839,13 +832,13 @@ erase = loop where
 
 -- | Skip elements of a stream that fail a predicate
 filter  :: (Monad m) => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
-filter pred = loop where
+filter thePred = loop where
   loop str = case str of
     Return r       -> Return r
     Effect m       -> Effect (fmap loop m)
-    Step (a :> as) -> if pred a
-                         then Step (a :> loop as)
-                         else loop as
+    Step (a :> as) -> if thePred a
+      then Step (a :> loop as)
+      else loop as
 {-# INLINE filter #-}  -- ~ 10% faster than INLINABLE in simple bench
 
                          
@@ -855,12 +848,12 @@ filter pred = loop where
 
 -- | Skip elements of a stream that fail a monadic test
 filterM  :: (Monad m) => (a -> m Bool) -> Stream (Of a) m r -> Stream (Of a) m r
-filterM pred = loop where
+filterM thePred = loop where
   loop str = case str of
     Return r       -> Return r
     Effect m       -> Effect $ fmap loop m
     Step (a :> as) -> Effect $ do
-      bool <- pred a
+      bool <- thePred a
       if bool
         then return $ Step (a :> loop as)
         else return $ loop as
@@ -939,7 +932,7 @@ filterM pred = loop where
 > Control.Foldl.purely fold :: Monad m => Fold a b -> Stream (Of a) m () -> m b
 -}
 fold_ :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m b
-fold_ step begin done = fmap (\(a:>rest) -> a) . fold step begin done
+fold_ step begin done = fmap (\(a :> _) -> a) . fold step begin done
 {-#INLINE fold_ #-}
 
 {-| Strict fold of a 'Stream' of elements that preserves the return value.
@@ -991,7 +984,7 @@ fold step begin done str =  fold_loop str begin
 foldM_
     :: Monad m
     => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> m b
-foldM_ step begin done  = fmap (\(a :> rest) -> a) . foldM step begin done
+foldM_ step begin done = fmap (\(a :> _) -> a) . foldM step begin done
 {-#INLINE foldM_ #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
@@ -1078,9 +1071,7 @@ for str0 act = loop str0 where
   loop str = case str of
     Return r         -> Return r
     Effect m          -> Effect $ fmap loop m
-    Step (a :> rest) -> do
-      act a
-      loop rest
+    Step (a :> rest) -> act a *> loop rest
 {-# INLINABLE for #-}
 
 -- -| Group layers of any functor by comparisons on a preliminary annotation
@@ -1099,11 +1090,11 @@ for str0 act = loop str0 where
 --                 fmap loop (Step $ Compose (a :> fmap (span' (equals a)) p'))
 --   span' :: (Monad m, Functor f) => (a -> Bool) -> Stream (Compose (Of a) f) m r
 --         -> Stream (Compose (Of a) f) m (Stream (Compose (Of a) f) m r)
---   span' pred = loop where
+--   span' thePred = loop where
 --     loop str = case str of
 --       Return r         -> Return (Return r)
 --       Effect m          -> Effect $ fmap loop m
---       Step s@(Compose (a :> rest)) -> case pred a  of
+--       Step s@(Compose (a :> rest)) -> case thePred a  of
 --         True  -> Step (Compose (a :> fmap loop rest))
 --         False -> Return (Step s)
 -- {-# INLINABLE groupedBy #-}
@@ -1158,9 +1149,9 @@ head str = case str of
 
 head_ :: Monad m => Stream (Of a) m r -> m (Maybe a)
 head_ str = case str of
-  Return r            -> return Nothing
-  Effect m            -> m >>= head_
-  Step (a :> rest)    -> return (Just a)
+  Return _ -> return Nothing
+  Effect m -> m >>= head_
+  Step (a :> _) -> return (Just a)
 {-#INLINABLE head_ #-}
 
 intersperse :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
@@ -1169,7 +1160,7 @@ intersperse x str = case str of
     Effect m -> Effect (fmap (intersperse x) m)
     Step (a :> rest) -> loop a rest
   where
-  loop !a str = case str of
+  loop !a theStr = case theStr of
     Return r -> Step (a :> Return r)
     Effect m -> Effect (fmap (loop a) m)
     Step (b :> rest) -> Step (a :> Step (x :> loop b rest))
@@ -1217,11 +1208,11 @@ last = loop Nothing_ where
 last_ :: Monad m => Stream (Of a) m r -> m (Maybe a)
 last_ = loop Nothing_ where
   loop mb str = case str of
-    Return r            -> case mb of
+    Return _ -> case mb of
       Nothing_ -> return Nothing
       Just_ a  -> return (Just a)
-    Effect m            -> m >>= loop mb
-    Step (a :> rest)  -> loop (Just_ a) rest
+    Effect m -> m >>= loop mb
+    Step (a :> rest) -> loop (Just_ a) rest
 {-#INLINABLE last_ #-}
 
 
@@ -1318,11 +1309,9 @@ mapM f = loop where
 mapM_ :: Monad m => (a -> m b) -> Stream (Of a) m r -> m r
 mapM_ f = loop where
   loop str = case str of
-    Return r       -> return r
-    Effect m        -> m >>= loop
-    Step (a :> as) -> do
-      f a
-      loop as
+    Return r -> return r
+    Effect m -> m >>= loop
+    Step (a :> as) -> f a *> loop as
 {-# INLINABLE mapM_ #-}
 
 
@@ -1453,9 +1442,9 @@ notElem a' = loop True where
 
 notElem_ :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m Bool
 notElem_ a' = loop True where
-  loop False str = return False
+  loop False _ = return False
   loop True str = case str of
-    Return r -> return True
+    Return _ -> return True
     Effect m -> m >>= loop True
     Step (a:> rest) ->
       if a == a'
@@ -1584,7 +1573,7 @@ repeatM ma = loop where
 
 -- | Repeat an element several times.
 replicate :: Monad m => Int -> a -> Stream (Of a) m ()
-replicate n a | n <= 0 = return ()
+replicate n _ | n <= 0 = return ()
 replicate n a = loop n where
   loop 0 = Return ()
   loop m = Effect (return (Step (a :> loop (m-1))))
@@ -1598,12 +1587,12 @@ replicate n a = loop n where
 
 -}
 replicateM :: Monad m => Int -> m a -> Stream (Of a) m ()
-replicateM n ma | n <= 0 = return ()
+replicateM n _ | n <= 0 = return ()
 replicateM n ma = loop n where
   loop 0 = Return ()
-  loop n = Effect $ do
+  loop m = Effect $ do
     a <- ma
-    return (Step (a :> loop (n-1)))
+    return (Step (a :> loop (m-1)))
 {-# INLINABLE replicateM #-}
 
 {-| Read an @IORef (Maybe a)@ or a similar device until it reads @Nothing@.
@@ -1817,11 +1806,11 @@ sum = fold (+) 0 id
 -- | Stream elements until one fails the condition, return the rest.
 span :: Monad m => (a -> Bool) -> Stream (Of a) m r
       -> Stream (Of a) m (Stream (Of a) m r)
-span pred = loop where
+span thePred = loop where
   loop str = case str of
     Return r         -> Return (Return r)
     Effect m          -> Effect $ fmap loop m
-    Step (a :> rest) -> if pred a
+    Step (a :> rest) -> if thePred a
       then Step (a :> loop rest)
       else Return (Step (a :> rest))
 {-# INLINABLE span #-}
@@ -1901,13 +1890,14 @@ import Streaming.Prelude (each, next, yield)
 -}
 
 take :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
-take n0 str | n0 <= 0 = return ()
+take n0 _ | n0 <= 0 = return ()
 take n0 str = loop n0 str where
-  loop 0 p = return ()
+  loop 0 _ = return ()
   loop n p =
-    case p of Step fas -> Step (fmap (loop (n-1)) fas)
-              Effect m -> Effect (fmap (loop n) m)
-              Return r -> Return ()
+    case p of
+      Step fas -> Step (fmap (loop (n-1)) fas)
+      Effect m -> Effect (fmap (loop n) m)
+      Return _ -> Return ()
 {-# INLINABLE take #-}
 
 -- ---------------
@@ -1930,22 +1920,22 @@ take n0 str = loop n0 str where
 
 -}
 takeWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m ()
-takeWhile pred = loop where
+takeWhile thePred = loop where
   loop str = case str of
-    Step (a :> as) -> when (pred a) (Step (a :> loop as))
-    Effect m              -> Effect (fmap loop m)
-    Return r              -> Return ()
+    Step (a :> as) -> when (thePred a) (Step (a :> loop as))
+    Effect m -> Effect (fmap loop m)
+    Return _ -> Return ()
 {-# INLINE takeWhile #-}
 
 {-| Like 'takeWhile', but takes a monadic predicate. -}
 takeWhileM :: Monad m => (a -> m Bool) -> Stream (Of a) m r -> Stream (Of a) m ()
-takeWhileM pred = loop where
+takeWhileM thePred = loop where
   loop str = case str of
     Step (a :> as) -> do
-      b <- lift (pred a)
+      b <- lift (thePred a)
       when b (Step (a :> loop as))
     Effect m -> Effect (fmap loop m)
-    Return r -> Return ()
+    Return _ -> Return ()
 {-# INLINE takeWhileM #-}
 
 
@@ -2729,9 +2719,9 @@ slidingWindow n = setup (max 1 n :: Int) mempty
     setup 0 !sequ str = do
        yield sequ 
        window (Seq.drop 1 sequ) str 
-    setup n sequ str = do 
+    setup m sequ str = do 
       e <- lift $ next str 
       case e of 
         Left r ->  yield sequ >> return r
-        Right (x,rest) -> setup (n-1) (sequ Seq.|> x) rest
+        Right (x,rest) -> setup (m-1) (sequ Seq.|> x) rest
 {-#INLINABLE slidingWindow #-}

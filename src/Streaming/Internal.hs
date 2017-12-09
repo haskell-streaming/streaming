@@ -7,8 +7,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+{-# OPTIONS_GHC -Wall #-}
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
@@ -87,27 +88,19 @@ module Streaming.Internal (
 
 import Control.Monad
 import Control.Monad.Trans
-import Control.Monad.Trans.Class
 import Control.Monad.Reader.Class
-import Control.Monad.Writer.Class
 import Control.Monad.State.Class
 import Control.Monad.Error.Class
-import Control.Monad.Cont.Class
 import Control.Applicative
-import Data.Foldable ( Foldable(..) )
 import Data.Function ( on )
-import Data.Traversable
 import Control.Monad.Morph
 import Data.Monoid (Monoid (..), (<>))
-import Data.Functor.Identity
-import Data.Data ( Data, Typeable )
+import Data.Data (Typeable)
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
 import Data.Functor.Sum
 import Data.Functor.Classes
 import Control.Concurrent (threadDelay)
-import Data.Functor.Of
-import Data.IORef
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
@@ -167,22 +160,22 @@ instance (Monad m, Ord (m (Either r (f (Stream f m r)))))
 -- mapping everything to a single known type, but there's really no way
 -- to do that for Eq1 or Ord1.
 instance (Monad m, Functor f, Eq1 m, Eq1 f) => Eq1 (Stream f m) where
-  liftEq eq xs ys = liftEqExposed eq (unexposed xs) (unexposed ys)
+  liftEq eq xs ys = liftEqExposed (unexposed xs) (unexposed ys)
     where
-      liftEqExposed eq (Return x) (Return y) = eq x y
-      liftEqExposed eq (Effect m) (Effect n) = liftEq (liftEqExposed eq) m n
-      liftEqExposed eq (Step f) (Step g) = liftEq (liftEqExposed eq) f g
-      liftEqExposed _ _ _ = False
+      liftEqExposed (Return x) (Return y) = eq x y
+      liftEqExposed (Effect m) (Effect n) = liftEq liftEqExposed m n
+      liftEqExposed (Step f) (Step g) = liftEq liftEqExposed f g
+      liftEqExposed _ _ = False
 
 instance (Monad m, Functor f, Ord1 m, Ord1 f) => Ord1 (Stream f m) where
-  liftCompare cmp xs ys = liftCmpExposed cmp (unexposed xs) (unexposed ys)
+  liftCompare cmp xs ys = liftCmpExposed (unexposed xs) (unexposed ys)
     where
-      liftCmpExposed cmp (Return x) (Return y) = cmp x y
-      liftCmpExposed cmp (Effect m) (Effect n) = liftCompare (liftCmpExposed cmp) m n
-      liftCmpExposed cmp (Step f) (Step g) = liftCompare (liftCmpExposed cmp) f g
-      liftCmpExposed _ (Return _) _ = LT
-      liftCmpExposed _ _ (Return _) = GT
-      liftCmpExposed _ _ _ = error "liftCmpExposed: stream was exposed!"
+      liftCmpExposed (Return x) (Return y) = cmp x y
+      liftCmpExposed (Effect m) (Effect n) = liftCompare liftCmpExposed m n
+      liftCmpExposed (Step f) (Step g) = liftCompare liftCmpExposed f g
+      liftCmpExposed (Return _) _ = LT
+      liftCmpExposed _ (Return _) = GT
+      liftCmpExposed _ _ = error "liftCmpExposed: stream was exposed!"
 
 -- We could get a much less scary implementation using Show1, but
 -- Show1 instances aren't nearly as common as Show instances.
@@ -225,13 +218,13 @@ instance (Functor f, Monad m) => Functor (Stream f m) where
     loop stream = case stream of
       Return r -> Return (f r)
       Effect m  -> Effect (do {stream' <- m; return (loop stream')})
-      Step f   -> Step (fmap loop f)
+      Step g -> Step (fmap loop g)
   {-# INLINABLE fmap #-}
   a <$ stream0 = loop stream0 where
     loop stream = case stream of
-      Return r -> Return a
-      Effect m  -> Effect (do {stream' <- m; return (loop stream')})
-      Step f    -> Step (fmap loop f)
+      Return _ -> Return a
+      Effect m -> Effect (do {stream' <- m; return (loop stream')})
+      Step f -> Step (fmap loop f)
   {-# INLINABLE (<$) #-}  
 
 instance (Functor f, Monad m) => Monad (Stream f m) where
@@ -357,10 +350,10 @@ instance (Functor f, MonadError e m) => MonadError e (Stream f m) where
   throwError = lift . throwError
   {-# INLINE throwError #-}
   str `catchError` f = loop str where
-    loop str = case str of
+    loop x = case x of
       Return r -> Return r
       Effect m -> Effect $ fmap loop m `catchError` (return . f)
-      Step f -> Step (fmap loop f)
+      Step g -> Step (fmap loop g)
   {-# INLINABLE catchError #-}
 
 {-| Map a stream to its church encoding; compare @Data.List.foldr@.
@@ -375,11 +368,11 @@ instance (Functor f, MonadError e m) => MonadError e (Stream f m) where
 destroy
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroy stream0 construct effect done = effect (loop stream0) where
+destroy stream0 construct theEffect done = theEffect (loop stream0) where
   loop stream = case stream of
     Return r -> return (done r)
     Effect m -> m >>= loop
-    Step fs -> return (construct (fmap (effect . loop) fs))
+    Step fs -> return (construct (fmap (theEffect . loop) fs))
 {-# INLINABLE destroy #-}
 
 
@@ -417,7 +410,7 @@ destroy stream0 construct effect done = effect (loop stream0) where
 streamFold
   :: (Functor f, Monad m) =>
      (r -> b) -> (m b -> b) ->  (f b -> b) -> Stream f m r -> b
-streamFold done effect construct stream  = destroy stream construct effect done
+streamFold done theEffect construct stream  = destroy stream construct theEffect done
 {-#INLINE streamFold #-}
 
 {- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
@@ -606,15 +599,15 @@ intercalates sep = go0
       Return r -> return r
       Effect m -> lift m >>= go0
       Step fstr -> do
-                f' <- fstr
-                go1 f'
+        f' <- fstr
+        go1 f'
     go1 f = case f of
       Return r -> return r
       Effect m     -> lift m >>= go1
       Step fstr ->  do
-                sep
-                f' <- fstr
-                go1 f'
+        _ <- sep
+        f' <- fstr
+        go1 f'
 {-# INLINABLE intercalates #-}
 
 {-| Specialized fold following the usage of @Control.Monad.Trans.Free@
@@ -792,7 +785,7 @@ inspectC f g = loop where
 -- | The same as 'hoist', but explicitly named to indicate that it
 -- is not entirely safe. In particular, its argument must be a monad
 -- morphism.
-hoistExposed :: (Functor m, Functor f) => (forall a. m a -> n a) -> Stream f m a -> Stream f n a
+hoistExposed :: (Functor m, Functor f) => (forall b. m b -> n b) -> Stream f m a -> Stream f n a
 hoistExposed trans = loop where
   loop stream = case stream of
     Return r  -> Return r
@@ -803,7 +796,7 @@ hoistExposed trans = loop where
 -- | The same as 'hoistExposed', but with a 'Functor' constraint on
 -- the target rather than the source. This must be used only with
 -- a monad morphism.
-hoistExposedPost :: (Functor n, Functor f) => (forall a. m a -> n a) -> Stream f m a -> Stream f n a
+hoistExposedPost :: (Functor n, Functor f) => (forall b. m b -> n b) -> Stream f m a -> Stream f n a
 hoistExposedPost trans = loop where
   loop stream = case stream of
     Return r -> Return r
@@ -838,10 +831,10 @@ mapsMExposed = mapsM
 destroyExposed
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroyExposed stream0 construct effect done = loop stream0 where
+destroyExposed stream0 construct theEffect done = loop stream0 where
   loop stream = case stream of
     Return r -> done r
-    Effect m  -> effect (fmap loop m)
+    Effect m  -> theEffect (fmap loop m)
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroyExposed #-}
 
@@ -1136,24 +1129,23 @@ groups = loop
 
   cleanL  :: (Monad m, Functor f, Functor g) =>
        Stream (Sum f g) m r -> Stream f m (Stream (Sum f g) m r)
-  cleanL = loop where
-    loop s = do
+  cleanL = go where
+    go s = do
      e <- lift $ inspect s
      case e of
       Left r           -> return (return r)
-      Right (InL fstr) -> wrap (fmap loop fstr)
+      Right (InL fstr) -> wrap (fmap go fstr)
       Right (InR gstr) -> return (wrap (InR gstr))
 
   cleanR  :: (Monad m, Functor f, Functor g) =>
        Stream (Sum f g) m r -> Stream g m (Stream (Sum f g) m r)
---  cleanR = fmap (maps switch) . cleanL . maps switch
-  cleanR = loop where
-    loop s = do
+  cleanR = go where
+    go s = do
      e <- lift $ inspect s
      case e of
       Left r           -> return (return r)
       Right (InL fstr) -> return (wrap (InL fstr))
-      Right (InR gstr) -> wrap (fmap loop gstr)
+      Right (InR gstr) -> wrap (fmap go gstr)
 {-#INLINABLE groups #-}
     
 -- groupInL :: (Monad m, Functor f, Functor g)
@@ -1344,7 +1336,7 @@ untilJust act = loop where
     
 cutoff :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Maybe r)
 cutoff = loop where
-  loop 0 str = return Nothing
+  loop 0 _ = return Nothing
   loop n str = do
       e <- lift $ inspect str
       case e of
