@@ -1,4 +1,6 @@
-{-#LANGUAGE RankNTypes, CPP, Trustworthy #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE Trustworthy #-}
 module Streaming
    (
    -- * An iterable streaming monad transformer

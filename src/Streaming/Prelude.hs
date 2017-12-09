@@ -47,9 +47,16 @@
 > --------------------------------------------------------------------------------------------------------------------
 >
 -}
-{-# LANGUAGE RankNTypes, BangPatterns, DeriveDataTypeable, TypeFamilies,
-             DeriveFoldable, DeriveFunctor, DeriveTraversable, CPP,
-             ScopedTypeVariables, Trustworthy #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Streaming.Prelude (
     -- * Types
