@@ -91,7 +91,7 @@ description:         This package contains two modules, <http://hackage.haskell.
                      to mention a few obviously desirable operations.
                      (This is explained more elaborately in the <https://hackage.haskell.org/package/streaming#readme readme> below.)
                      .
-                     One could throw of course throw something
+                     One could of course throw something
                      like the present @Stream@ type on top of a prior stream concept: this is how @pipes@ and
                      @pipes-group@ (which are very much our model here) use @FreeT@.
                      But once one grasps the iterable stream concept needed to express
