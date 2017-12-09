@@ -435,7 +435,7 @@ break :: Monad m => (a -> Bool) -> Stream (Of a) m r
 break pred = loop where
   loop str = case str of
     Return r         -> Return (Return r)
-    Effect m          -> Effect $ liftM loop m
+    Effect m          -> Effect $ fmap loop m
     Step (a :> rest) -> if (pred a)
       then Return (Step (a :> rest))
       else Step (a :> loop rest)
@@ -465,14 +465,14 @@ breakWhen step begin done pred = loop0 begin
   where
     loop0 x stream = case stream of
         Return r -> return (return r)
-        Effect mn  -> Effect $ liftM (loop0 x) mn
+        Effect mn  -> Effect $ fmap (loop0 x) mn
         Step (a :> rest) -> loop a (step x a) rest
     loop a !x stream = do
       if pred (done x)
         then return (yield a >> stream)
         else case stream of
           Return r -> yield a >> return (return r)
-          Effect mn  -> Effect $ liftM (loop a x) mn
+          Effect mn  -> Effect $ fmap (loop a x) mn
           Step (a' :> rest) -> do
             yield a
             loop a' (step x a') rest
@@ -518,7 +518,7 @@ chain :: Monad m => (a -> m ()) -> Stream (Of a) m r -> Stream (Of a) m r
 chain f = loop where
   loop str = case str of
     Return r -> return r
-    Effect mn  -> Effect (liftM loop mn)
+    Effect mn  -> Effect (fmap loop mn)
     Step (a :> rest) -> Effect $ do
       f a
       return (Step (a :> loop rest))
@@ -663,7 +663,7 @@ drop n str = loop n str where
   loop 0 stream = stream
   loop n stream = case stream of
       Return r       -> Return r
-      Effect ma      -> Effect (liftM (loop n) ma)
+      Effect ma      -> Effect (fmap (loop n) ma)
       Step (a :> as) -> loop (n-1) as
 {-# INLINABLE drop #-}
 
@@ -688,7 +688,7 @@ dropWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 dropWhile pred = loop where
   loop stream = case stream of
     Return r       -> Return r
-    Effect ma       -> Effect (liftM loop ma)
+    Effect ma       -> Effect (fmap loop ma)
     Step (a :> as) -> if pred a
       then loop as
       else Step (a :> as)
@@ -746,13 +746,13 @@ effects = loop where
 
 elem :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m (Of Bool r)
 elem a' = loop False where
-  loop True str = liftM (True :>) (effects str)
+  loop True str = fmap (True :>) (effects str)
   loop False str = case str of
     Return r -> return (False :> r)
     Effect m -> m >>= loop False
     Step (a:> rest) ->
       if a == a'
-        then liftM (True :>) (effects rest)
+        then fmap (True :>) (effects rest)
         else loop False rest
 {-#INLINABLE elem #-}
 
@@ -822,7 +822,7 @@ erase :: Monad m => Stream (Of a) m r -> Stream Identity m r
 erase = loop where
   loop str = case str of
     Return r -> Return r
-    Effect m -> Effect (liftM loop m)
+    Effect m -> Effect (fmap loop m)
     Step (a:>rest) -> Step (Identity (loop rest))
 {-# INLINABLE erase #-}
 
@@ -835,7 +835,7 @@ filter  :: (Monad m) => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 filter pred = loop where
   loop str = case str of
     Return r       -> Return r
-    Effect m       -> Effect (liftM loop m)
+    Effect m       -> Effect (fmap loop m)
     Step (a :> as) -> if pred a
                          then Step (a :> loop as)
                          else loop as
@@ -851,7 +851,7 @@ filterM  :: (Monad m) => (a -> m Bool) -> Stream (Of a) m r -> Stream (Of a) m r
 filterM pred = loop where
   loop str = case str of
     Return r       -> Return r
-    Effect m       -> Effect $ liftM loop m
+    Effect m       -> Effect $ fmap loop m
     Step (a :> as) -> Effect $ do
       bool <- pred a
       if bool
@@ -932,7 +932,7 @@ filterM pred = loop where
 > Control.Foldl.purely fold :: Monad m => Fold a b -> Stream (Of a) m () -> m b
 -}
 fold_ :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m b
-fold_ step begin done = liftM (\(a:>rest) -> a) . fold step begin done
+fold_ step begin done = fmap (\(a:>rest) -> a) . fold step begin done
 {-#INLINE fold_ #-}
 
 {-| Strict fold of a 'Stream' of elements that preserves the return value.
@@ -984,7 +984,7 @@ fold step begin done str =  fold_loop str begin
 foldM_
     :: Monad m
     => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> m b
-foldM_ step begin done  = liftM (\(a :> rest) -> a) . foldM step begin done
+foldM_ step begin done  = fmap (\(a :> rest) -> a) . foldM step begin done
 {-#INLINE foldM_ #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
@@ -1070,7 +1070,7 @@ for :: (Monad m, Functor f) => Stream (Of a) m r -> (a -> Stream f m x) -> Strea
 for str0 act = loop str0 where
   loop str = case str of
     Return r         -> Return r
-    Effect m          -> Effect $ liftM loop m
+    Effect m          -> Effect $ fmap loop m
     Step (a :> rest) -> do
       act a
       loop rest
@@ -1095,7 +1095,7 @@ for str0 act = loop str0 where
 --   span' pred = loop where
 --     loop str = case str of
 --       Return r         -> Return (Return r)
---       Effect m          -> Effect $ liftM loop m
+--       Effect m          -> Effect $ fmap loop m
 --       Step s@(Compose (a :> rest)) -> case pred a  of
 --         True  -> Step (Compose (a :> fmap loop rest))
 --         False -> Return (Step s)
@@ -1159,12 +1159,12 @@ head_ str = case str of
 intersperse :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
 intersperse x str = case str of
     Return r -> Return r
-    Effect m -> Effect (liftM (intersperse x) m)
+    Effect m -> Effect (fmap (intersperse x) m)
     Step (a :> rest) -> loop a rest
   where
   loop !a str = case str of
     Return r -> Step (a :> Return r)
-    Effect m -> Effect (liftM (loop a) m)
+    Effect m -> Effect (fmap (loop a) m)
     Step (b :> rest) -> Step (a :> Step (x :> loop b rest))
 {-#INLINABLE intersperse #-}
 
@@ -1261,7 +1261,7 @@ map f =  maps (\(x :> rest) -> f x :> rest)
 -- loop where  --
   -- loop stream = case stream of
   --   Return r -> Return r
-  --   Effect m -> Effect (liftM loop m)
+  --   Effect m -> Effect (fmap loop m)
   --   Step (a :> as) -> Step (f a :> loop as)
 {-# INLINABLE map #-}
 -- {-# NOINLINE [1] map #-}
@@ -1284,7 +1284,7 @@ mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapM f = loop where
   loop str = case str of
     Return r       -> Return r
-    Effect m        -> Effect (liftM loop m)
+    Effect m        -> Effect (fmap loop m)
     Step (a :> as) -> Effect $ do
       a' <- f a
       return (Step (a' :> loop as) )
@@ -1334,8 +1334,8 @@ mapM_ f = loop where
 > mapped return        = id
 > maps f . maps g      = maps (f . g)
 > mapped f . mapped g  = mapped (f <=< g)
-> maps f . mapped g    = mapped (liftM f . g)
-> mapped f . maps g    = mapped (f <=< liftM g)
+> maps f . mapped g    = mapped (fmap f . g)
+> mapped f . maps g    = mapped (f <=< fmap g)
 
      @maps@ is more fundamental than @mapped@, which is best understood as a convenience
      for effecting this frequent composition:
@@ -1414,8 +1414,8 @@ maximum_ = fold_ (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (max
 
      Similarly:
 
-> IOStreams.unfoldM (liftM (either (const Nothing) Just) . next) :: Stream (Of a) IO b -> IO (InputStream a)
-> Conduit.unfoldM (liftM (either (const Nothing) Just) . next)   :: Stream (Of a) m r -> Source a m r
+> IOStreams.unfoldM (fmap (either (const Nothing) Just) . next) :: Stream (Of a) IO b -> IO (InputStream a)
+> Conduit.unfoldM (fmap (either (const Nothing) Just) . next)   :: Stream (Of a) m r -> Source a m r
 
      But see 'uncons', which is better fitted to these @unfoldM@s
 -}
@@ -1434,13 +1434,13 @@ next = loop where
 
 notElem :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m (Of Bool r)
 notElem a' = loop True where
-  loop False str = liftM (False :>) (effects str)
+  loop False str = fmap (False :>) (effects str)
   loop True str = case str of
     Return r -> return (True:> r)
     Effect m -> m >>= loop True
     Step (a:> rest) ->
       if a == a'
-        then liftM (False :>) (effects rest)
+        then fmap (False :>) (effects rest)
         else loop True rest
 {-#INLINABLE notElem #-}
 
@@ -1465,7 +1465,7 @@ partition :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) (Strea
 partition thus = loop where
    loop str = case str of
      Return r -> Return r
-     Effect m -> Effect (liftM loop (lift m))
+     Effect m -> Effect (fmap loop (lift m))
      Step (a :> rest) -> if thus a
        then Step (a :> loop rest)
        else Effect $ do
@@ -1497,7 +1497,7 @@ partitionEithers :: Monad m => Stream (Of (Either a b)) m r -> Stream (Of a) (St
 partitionEithers =  loop where
    loop str = case str of
      Return r -> Return r
-     Effect m -> Effect (liftM loop (lift m))
+     Effect m -> Effect (fmap loop (lift m))
      Step (Left a :> rest) -> Step (a :> loop rest)
      Step (Right b :> rest) -> Effect $ do
        yield b
@@ -1640,7 +1640,7 @@ scan step begin done str = Step (done begin :> loop begin str)
   loop !acc stream = do
     case stream of
       Return r -> Return r
-      Effect m -> Effect (liftM (loop acc) m)
+      Effect m -> Effect (fmap (loop acc) m)
       Step (a :> rest) -> 
         let !acc' = step acc a 
         in Step (done acc' :> loop acc' rest)
@@ -1701,7 +1701,7 @@ scanned step begin done = loop Nothing' begin
     loop !m !x stream = do
       case stream of
         Return r -> return r
-        Effect mn  -> Effect $ liftM (loop m x) mn
+        Effect mn  -> Effect $ fmap (loop m x) mn
         Step (a :> rest) -> do
           case m of
             Nothing' -> do
@@ -1757,7 +1757,7 @@ sequence :: Monad m => Stream (Of (m a)) m r -> Stream (Of a) m r
 sequence = loop where
   loop stream = case stream of
     Return r          -> Return r
-    Effect m           -> Effect $ liftM loop m
+    Effect m           -> Effect $ fmap loop m
     Step (ma :> rest) -> Effect $ do
       a <- ma
       return (Step (a :> loop rest))
@@ -1813,7 +1813,7 @@ span :: Monad m => (a -> Bool) -> Stream (Of a) m r
 span pred = loop where
   loop str = case str of
     Return r         -> Return (Return r)
-    Effect m          -> Effect $ liftM loop m
+    Effect m          -> Effect $ fmap loop m
     Step (a :> rest) -> if pred a
       then Step (a :> loop rest)
       else Return (Step (a :> rest))
@@ -1834,7 +1834,7 @@ split :: (Eq a, Monad m) =>
 split t  = loop  where
   loop stream = case stream of
     Return r -> Return r
-    Effect m -> Effect (liftM loop m)
+    Effect m -> Effect (fmap loop m)
     Step (a :> rest) ->
          if a /= t
             then Step (fmap loop (yield a >> break (== t) rest))
@@ -1869,7 +1869,7 @@ subst :: (Monad m, Functor f) =>  (a -> f x) -> Stream (Of a) m r -> Stream f m 
 subst f s = loop s where
   loop str = case str of
     Return r         -> Return r
-    Effect m         -> Effect (liftM loop m)
+    Effect m         -> Effect (fmap loop m)
     Step (a :> rest) -> Step (loop rest <$ f a)
 {-#INLINABLE subst #-}
 -- ---------------
@@ -1899,7 +1899,7 @@ take n0 str = loop n0 str where
   loop 0 p = return ()
   loop n p =
     case p of Step fas -> Step (fmap (loop (n-1)) fas)
-              Effect m -> Effect (liftM (loop n) m)
+              Effect m -> Effect (fmap (loop n) m)
               Return r -> Return ()
 {-# INLINABLE take #-}
 
@@ -1926,7 +1926,7 @@ takeWhile :: Monad m => (a -> Bool) -> Stream (Of a) m r -> Stream (Of a) m ()
 takeWhile pred = loop where
   loop str = case str of
     Step (a :> as) -> when (pred a) (Step (a :> loop as))
-    Effect m              -> Effect (liftM loop m)
+    Effect m              -> Effect (fmap loop m)
     Return r              -> Return ()
 {-# INLINE takeWhile #-}
 
@@ -1937,7 +1937,7 @@ takeWhileM pred = loop where
     Step (a :> as) -> do
       b <- lift (pred a)
       when b (Step (a :> loop as))
-    Effect m -> Effect (liftM loop m)
+    Effect m -> Effect (fmap loop m)
     Return r -> Return ()
 {-# INLINE takeWhileM #-}
 
@@ -2067,7 +2067,7 @@ with :: (Monad m, Functor f) => Stream (Of a) m r -> (a -> f x) -> Stream f m r
 with s f = loop s where
   loop str = case str of
     Return r         -> Return r
-    Effect m         -> Effect (liftM loop m)
+    Effect m         -> Effect (fmap loop m)
     Step (a :> rest) -> Step (loop rest <$ f a)
 {-#INLINABLE with #-}
 
@@ -2117,10 +2117,10 @@ zipWith f = loop
   where
     loop str0 str1 = case str0 of
       Return r          -> Return r
-      Effect m           -> Effect $ liftM (\str -> loop str str1) m
+      Effect m           -> Effect $ fmap (\str -> loop str str1) m
       Step (a :> rest0) -> case str1 of
         Return r          -> Return r
-        Effect m           -> Effect $ liftM (loop str0) m
+        Effect m           -> Effect $ fmap (loop str0) m
         Step (b :> rest1) -> Step (f a b :>loop rest0 rest1)
 {-# INLINABLE zipWith #-}
 
@@ -2587,7 +2587,7 @@ copy
 copy = Effect . return . loop where
   loop str = case str of
     Return r         -> Return r
-    Effect m         -> Effect (liftM loop (lift m))
+    Effect m         -> Effect (fmap loop (lift m))
     Step (a :> rest) -> Effect (Step (a :> Return (Step (a :> loop rest))))
 {-#INLINABLE copy#-}
 
@@ -2654,7 +2654,7 @@ unzip :: Monad m =>  Stream (Of (a,b)) m r -> Stream (Of a) (Stream (Of b) m) r
 unzip = loop where
  loop str = case str of
    Return r -> Return r
-   Effect m -> Effect (liftM loop (lift m))
+   Effect m -> Effect (fmap loop (lift m))
    Step ((a,b):> rest) -> Step (a :> Effect (Step (b :> Return (loop rest))))
 {-#INLINABLE unzip #-}
 
@@ -2673,7 +2673,7 @@ catMaybes :: Monad m => Stream (Of (Maybe a)) m r -> Stream (Of a) m r
 catMaybes = loop where
   loop stream = case stream of
     Return r -> Return r
-    Effect m -> Effect (liftM loop m)
+    Effect m -> Effect (fmap loop m)
     Step (ma :> snext) -> case ma of
       Nothing -> loop snext
       Just a -> Step (a :> loop snext)
@@ -2688,7 +2688,7 @@ mapMaybe :: Monad m => (a -> Maybe b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapMaybe phi = loop where
   loop stream = case stream of
     Return r -> Return r
-    Effect m -> Effect (liftM loop m)
+    Effect m -> Effect (fmap loop m)
     Step (a :> snext) -> case phi a of
       Nothing -> loop snext
       Just b -> Step (b :> loop snext)
