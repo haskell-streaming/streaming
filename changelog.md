@@ -1,3 +1,7 @@
+- ???
+
+    Drop unneeded dependency on exceptions.
+
 - 0.2.0.0
 
     Made `zipsWith` and allied functions short-circuit; if the
