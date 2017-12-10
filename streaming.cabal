@@ -191,7 +191,7 @@ stability:           Experimental
 homepage:            https://github.com/haskell-streaming/streaming
 bug-reports:         https://github.com/haskell-streaming/streaming/issues
 category:            Data, Pipes, Streaming
-extra-source-files:  README.md
+extra-source-files:  README.md, changelog.md
 
 source-repository head
     type: git
