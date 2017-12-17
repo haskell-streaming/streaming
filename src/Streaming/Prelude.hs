@@ -1117,7 +1117,7 @@ for :: (Monad m, Functor f) => Stream (Of a) m r -> (a -> Stream f m x) -> Strea
 for str0 act = loop str0 where
   loop str = case str of
     Return r         -> Return r
-    Effect m          -> Effect $ fmap loop m
+    Effect m         -> Effect $ fmap loop m
     Step (a :> rest) -> act a *> loop rest
 {-# INLINABLE for #-}
 
@@ -1329,7 +1329,7 @@ mapM :: Monad m => (a -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapM f = loop where
   loop str = case str of
     Return r       -> Return r
-    Effect m        -> Effect (fmap loop m)
+    Effect m       -> Effect (fmap loop m)
     Step (a :> as) -> Effect $ do
       a' <- f a
       return (Step (a' :> loop as) )
