@@ -6,9 +6,7 @@ import Data.Semigroup (Semigroup (..))
 import Control.Applicative
 import Data.Traversable (Traversable)
 import Data.Foldable (Foldable)
-#if MIN_VERSION_base(4,8,0)
 import Data.Bifunctor
-#endif
 import Data.Data
 import Data.Typeable
 import GHC.Generics (Generic, Generic1)
