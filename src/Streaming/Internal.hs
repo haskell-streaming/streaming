@@ -98,7 +98,6 @@ import Data.Functor.Compose
 import Data.Functor.Sum
 import Data.Monoid (Monoid (..))
 import Data.Semigroup (Semigroup (..))
-import Prelude hiding (splitAt)
 
 {- $stream
 
