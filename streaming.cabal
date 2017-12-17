@@ -4,13 +4,13 @@ cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and general stream type.
 
-description:         This package contains two modules, <http://hackage.haskell.org/package/streaming/docs/Streaming.html Streaming> 
+description:         This package contains two modules, <http://hackage.haskell.org/package/streaming/docs/Streaming.html Streaming>
                      and <http://hackage.haskell.org/package/streaming/docs/Streaming-Prelude.html Streaming.Prelude>.
                      The principal module, <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming-Prelude.html Streaming.Prelude>, exports an elementary streaming prelude focused on
                      a simple \"source\" or \"producer\" type, namely @Stream (Of a) m r@.
                      This is a sort of effectful version of
                      @([a],r)@ in which successive elements of type @a@ arise from some sort of monadic
-                     action before the succession ends with a value of type @r@. 
+                     action before the succession ends with a value of type @r@.
                      Everything in the library is organized to make
                      programming with this type as simple as possible,
                      by the simple expedient of making it as close to @Prelude@
@@ -21,11 +21,11 @@ description:         This package contains two modules, <http://hackage.haskell.
                      > 1<Enter>
                      > 2<Enter>
                      > 3<Enter>
-                     > 6 :> () 
+                     > 6 :> ()
                      .
                      sums the first three valid integers from user input. Similarly,
                      .
-                     > >>> S.stdoutLn $ S.map (map toUpper) $ S.take 2 S.stdinLn 
+                     > >>> S.stdoutLn $ S.map (map toUpper) $ S.take 2 S.stdinLn
                      > hello<Enter>
                      > HELLO
                      > world!<Enter>
@@ -33,13 +33,13 @@ description:         This package contains two modules, <http://hackage.haskell.
                      .
                      upper-cases the first two lines from stdin as they arise,
                      and sends them to stdout. And so on,
-                     with filtering, mapping, breaking, chunking, zipping, unzipping, replicating 
-                     and so forth: 
+                     with filtering, mapping, breaking, chunking, zipping, unzipping, replicating
+                     and so forth:
                      we program with streams of @Int@s or @String@s directly as
                      if they constituted something like a list. That's because streams really do constitute something
-                     like a list, and the associated operations can mostly have the same names. 
-                     (A few, like @reverse@, don't stream and thus disappear; 
-                     others like @unzip@ are here given properly streaming formulation for the first time.) 
+                     like a list, and the associated operations can mostly have the same names.
+                     (A few, like @reverse@, don't stream and thus disappear;
+                     others like @unzip@ are here given properly streaming formulation for the first time.)
                      And we everywhere
                      oppose \"extracting a pure list from IO\",
                      which is the origin of typical Haskell memory catastrophes.
@@ -53,7 +53,7 @@ description:         This package contains two modules, <http://hackage.haskell.
                      .
                      > main = mapM newIORef [1..10^8::Int] >>= mapM readIORef >>= mapM_ print
                      .
-                     The new user notices that this exhausts memory, and worries about the efficiency of Haskell @IORefs@. 
+                     The new user notices that this exhausts memory, and worries about the efficiency of Haskell @IORefs@.
                      But of course it exhausts memory! Look what it says!
                      The problem is immediately cured by writing
                      .
@@ -100,7 +100,7 @@ description:         This package contains two modules, <http://hackage.haskell.
                      elementary streaming library - since one possesses @Stream ((,) a) m r@
                      or equivalently @Stream (Of a) m r@. This
                      is the type of a \'generator\' or \'producer\' or \'source\' or whatever
-                     you call an effectful stream of items. 
+                     you call an effectful stream of items.
                      /The present Streaming.Prelude is thus the simplest streaming library that can replicate anything like the API of the Prelude and Data.List/.
                      .
                      The emphasis of the library is on interoperation; for
@@ -117,7 +117,7 @@ description:         This package contains two modules, <http://hackage.haskell.
                      a complex framework, but in a way that integrates transparently with
                      the rest of Haskell, using ideas - e.g. rank 2 types, which are here
                      implicit or explicit in most mapping - that the user can carry elsewhere,
-                     rather than chaining her understanding to the curiosities of 
+                     rather than chaining her understanding to the curiosities of
                      a so-called streaming IO framework (as necessary as that is for certain purposes.)
                      .
                      See the
