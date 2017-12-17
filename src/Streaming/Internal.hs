@@ -971,9 +971,9 @@ zipsWith' phi = loop
     loop :: Stream f m r -> Stream g m r -> Stream h m r
     loop s t = case s of
        Return r -> Return r
-       Step fs -> case t of
+       Step fs  -> case t of
          Return r -> Return r
-         Step gs -> Step $ phi loop fs gs
+         Step gs  -> Step $ phi loop fs gs
          Effect n -> Effect $ fmap (loop s) n
        Effect m -> Effect $ fmap (flip loop t) m
 {-# INLINABLE zipsWith' #-}
@@ -1038,7 +1038,7 @@ separate odd_even
 
     Now, for example, it is convenient to fold on the left and right values separately:
 
->>>  S.toList $ S.toList $ separate odd_even
+>>> S.toList $ S.toList $ separate odd_even
 [2,4,6,8,10] :> ([1,3,5,7,9] :> ())
 
 

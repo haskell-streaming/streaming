@@ -374,17 +374,17 @@ False :> "hi"
  -}
 
 mapOf :: (a -> b) -> Of a r -> Of b r
-mapOf f (a:> b) = (f a :> b)
+mapOf f (a :> b) = f a :> b
 {-# INLINE mapOf #-}
 
 {-| A lens into the first element of a left-strict pair -}
 _first :: Functor f => (a -> f a') -> Of a b -> f (Of a' b)
-_first afb (a:>b) = fmap (\c -> (c:>b)) (afb a)
+_first afb (a :> b) = fmap (\c -> c :> b) (afb a)
 {-# INLINE _first #-}
 
 {-| A lens into the second element of a left-strict pair -}
 _second :: Functor f => (b -> f b') -> Of a b -> f (Of a b')
-_second afb (a:>b) = fmap (\c -> (a:>c)) (afb b)
+_second afb (a :> b) = fmap (\c -> a :> c) (afb b)
 {-# INLINABLE _second #-}
 
 all :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m (Of Bool r)
@@ -449,8 +449,8 @@ break :: Monad m => (a -> Bool) -> Stream (Of a) m r
 break thePred = loop where
   loop str = case str of
     Return r         -> Return (Return r)
-    Effect m          -> Effect $ fmap loop m
-    Step (a :> rest) -> if (thePred a)
+    Effect m         -> Effect $ fmap loop m
+    Step (a :> rest) -> if thePred a
       then Return (Step (a :> rest))
       else Step (a :> loop rest)
 {-# INLINABLE break #-}
@@ -481,7 +481,7 @@ breakWhen step begin done thePred = loop0 begin
         Return r -> return (return r)
         Effect mn  -> Effect $ fmap (loop0 x) mn
         Step (a :> rest) -> loop a (step x a) rest
-    loop a !x stream = do
+    loop a !x stream =
       if thePred (done x)
         then return (yield a >> stream)
         else case stream of
@@ -676,9 +676,6 @@ e<Enter>
 
 >>> S.toList $ concats $ maps (S.drop 4) $ chunksOf 5 $ each [1..20]
 [5,10,15,20] :> ()
-
-
-
   -}
 
 drop :: (Monad m) => Int -> Stream (Of a) m r -> Stream (Of a) m r
@@ -1292,7 +1289,7 @@ ateb
 -}
 
 map :: Monad m => (a -> b) -> Stream (Of a) m r -> Stream (Of b) m r
-map f =  maps (\(x :> rest) -> f x :> rest)
+map f = maps (\(x :> rest) -> f x :> rest)
 -- loop where  --
   -- loop stream = case stream of
   --   Return r -> Return r
@@ -1732,7 +1729,7 @@ reread step s = loop where
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 scan step begin done str = Step (done begin :> loop begin str)
   where
-  loop !acc stream = do
+  loop !acc stream =
     case stream of
       Return r -> Return r
       Effect m -> Effect (fmap (loop acc) m)
@@ -1793,11 +1790,11 @@ data Maybe' a = Just' a | Nothing'
 scanned :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of (a,b)) m r
 scanned step begin done = loop Nothing' begin
   where
-    loop !m !x stream = do
+    loop !m !x stream =
       case stream of
         Return r -> return r
         Effect mn  -> Effect $ fmap (loop m x) mn
-        Step (a :> rest) -> do
+        Step (a :> rest) ->
           case m of
             Nothing' -> do
               let !acc = step x a
@@ -2197,18 +2194,18 @@ yield a = Step (a :> Return ())
 
 -- | Zip two 'Stream's
 zip :: Monad m
-    => (Stream (Of a) m r)
-    -> (Stream (Of b) m r)
-    -> (Stream (Of (a,b)) m r)
+    => Stream (Of a) m r
+    -> Stream (Of b) m r
+    -> Stream (Of (a,b)) m r
 zip = zipWith (,)
 {-# INLINE zip #-}
 
 -- | Zip two 'Stream's using the provided combining function
 zipWith :: Monad m
     => (a -> b -> c)
-    -> (Stream (Of a) m r)
-    -> (Stream (Of b) m r)
-    -> (Stream (Of c) m r)
+    -> Stream (Of a) m r
+    -> Stream (Of b) m r
+    -> Stream (Of c) m r
 zipWith f = loop
   where
     loop str0 str1 = case str0 of
@@ -2249,10 +2246,10 @@ zipWith3 op = loop where
 
 -- | Zip three 'Stream's together
 zip3 :: Monad m
-    => (Stream (Of a) m r)
-    -> (Stream (Of b) m r)
-    -> (Stream (Of c) m r)
-    -> (Stream (Of (a,b,c)) m r)
+     => Stream (Of a) m r
+     -> Stream (Of b) m r
+     -> Stream (Of c) m r
+     -> Stream (Of (a,b,c)) m r
 zip3 = zipWith3 (,,)
 {-# INLINABLE zip3 #-}
 
@@ -2924,7 +2921,7 @@ mapMaybeM phi = loop where
   loop stream = case stream of
     Return r -> Return r
     Effect m -> Effect (fmap loop m)
-    Step (a :> snext) -> Effect $ do
+    Step (a :> snext) -> Effect $
       flip fmap (phi a) $ \x -> case x of
         Nothing -> loop snext
         Just b -> Step (b :> loop snext)
