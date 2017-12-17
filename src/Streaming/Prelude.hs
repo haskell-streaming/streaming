@@ -57,8 +57,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-{-# OPTIONS_GHC -Wall #-}
-
 module Streaming.Prelude (
     -- * Types
     Of (..)

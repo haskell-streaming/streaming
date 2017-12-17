@@ -36,7 +36,7 @@ instance (Monoid a, Monoid b) => Monoid (Of a b) where
 instance Functor (Of a) where
   fmap f (a :> x) = a :> f x
   {-#INLINE fmap #-}
-  a <$ (b :> x)   = b :> a
+  a <$ (b :> _)   = b :> a
   {-#INLINE (<$) #-}
 
 #if MIN_VERSION_base(4,8,0)
@@ -52,19 +52,19 @@ instance Bifunctor Of where
 instance Monoid a => Applicative (Of a) where
   pure x = mempty :> x
   {-#INLINE pure #-}
-  m :> f <*> m' :> x = mappend m m' :> f x
+  (m :> f) <*> (m' :> x) = mappend m m' :> f x
   {-#INLINE (<*>) #-}
-  m :> x *> m' :> y  = mappend m m' :> y
+  (m :> _) *> (m' :> y)  = mappend m m' :> y
   {-#INLINE (*>) #-}
-  m :> x <* m' :> y  = mappend m m' :> x
+  (m :> x) <* (m' :> _)  = mappend m m' :> x
   {-#INLINE (<*) #-}
 
 instance Monoid a => Monad (Of a) where
-  return x = mempty :> x
+  return = pure
   {-#INLINE return #-}
-  m :> x >> m' :> y = mappend m m' :> y
+  (m :> _) >> (m' :> y) = mappend m m' :> y
   {-#INLINE (>>) #-}
-  m :> x >>= f = let m' :> y = f x in mappend m m' :> y
+  (m :> x) >>= f = let m' :> y = f x in mappend m m' :> y
   {-#INLINE (>>=) #-}
 
 #if MIN_VERSION_base(4,9,0)

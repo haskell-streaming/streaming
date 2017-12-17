@@ -6,10 +6,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-{-# OPTIONS_GHC -Wall #-}
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
@@ -1360,4 +1358,4 @@ cutoff = loop where
       e <- lift $ inspect str
       case e of
         Left r -> return (Just r)
-        Right (frest) -> Step $ fmap (loop (n-1)) frest
+        Right frest -> Step $ fmap (loop (n-1)) frest

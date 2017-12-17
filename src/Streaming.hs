@@ -1,6 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
 
-{-# OPTIONS_GHC -Wall #-}
 module Streaming
    (
    -- * An iterable streaming monad transformer
