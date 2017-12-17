@@ -14,7 +14,7 @@ module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
     Stream (..)
-  
+
     -- * Introducing a stream
     , unfold
     , replicates
@@ -28,7 +28,7 @@ module Streaming.Internal (
     , delays
     , never
     , untilJust
-  
+
     -- * Eliminating a stream
     , intercalates
     , concats
@@ -36,10 +36,10 @@ module Streaming.Internal (
     , iterTM
     , destroy
     , streamFold
-  
+
     -- * Inspecting a stream wrap by wrap
     , inspect
-  
+
     -- * Transforming streams
     , maps
     , mapsM
@@ -52,7 +52,7 @@ module Streaming.Internal (
     , distribute
     , groups
 --    , groupInL
-  
+
     -- *  Splitting streams
     , chunksOf
     , splitsAt
@@ -60,7 +60,7 @@ module Streaming.Internal (
     , cutoff
     -- , period
     -- , periods
-  
+
     -- * Zipping and unzipping streams
     , zipsWith
     , zipsWith'
@@ -72,10 +72,10 @@ module Streaming.Internal (
     , expand
     , expandPost
 
-  
+
     -- * Assorted Data.Functor.x help
     , switch
-  
+
     -- *  For use in implementation
     , unexposed
     , hoistExposed
@@ -83,7 +83,7 @@ module Streaming.Internal (
     , mapsExposed
     , mapsMExposed
     , destroyExposed
-  
+
    ) where
 
 import Control.Applicative
@@ -158,6 +158,8 @@ instance (Monad m, Ord (m (Either r (f (Stream f m r)))))
   (<=) = (<=) `on` inspect
   (>=) = (>=) `on` inspect
 
+#if MIN_VERSION_base(4,9,0)
+
 -- We could avoid a Show1 constraint for our Show1 instance by sneakily
 -- mapping everything to a single known type, but there's really no way
 -- to do that for Eq1 or Ord1.
@@ -178,6 +180,8 @@ instance (Monad m, Functor f, Ord1 m, Ord1 f) => Ord1 (Stream f m) where
       liftCmpExposed (Return _) _ = LT
       liftCmpExposed _ (Return _) = GT
       liftCmpExposed _ _ = error "liftCmpExposed: stream was exposed!"
+
+#endif
 
 -- We could get a much less scary implementation using Show1, but
 -- Show1 instances aren't nearly as common as Show instances.
@@ -200,6 +204,8 @@ instance (Monad m, Show r, Show (m ShowSWrapper), Show (f (Stream f m r)))
           Left r ->  showString "Return " . showsPrec 11 r
           Right f -> showString "Step "   . showsPrec 11 f)
 
+#if MIN_VERSION_base(4,9,0)
+
 instance (Monad m, Functor f, Show (m ShowSWrapper), Show (f ShowSWrapper))
          => Show1 (Stream f m) where
   liftShowsPrec sp sl p xs = showParen (p > 10) $
@@ -210,6 +216,8 @@ instance (Monad m, Functor f, Show (m ShowSWrapper), Show (f ShowSWrapper))
           Left r ->  showString "Return " . sp 11 r
           Right f -> showString "Step "   .
                      showsPrec 11 (fmap (SS . (\str i -> liftShowsPrec sp sl i str)) f))
+
+#endif
 
 newtype ShowSWrapper = SS (Int -> ShowS)
 instance Show ShowSWrapper where
@@ -227,7 +235,7 @@ instance (Functor f, Monad m) => Functor (Stream f m) where
       Return _ -> Return a
       Effect m -> Effect (do {stream' <- m; return (loop stream')})
       Step f -> Step (fmap loop f)
-  {-# INLINABLE (<$) #-}  
+  {-# INLINABLE (<$) #-}
 
 instance (Functor f, Monad m) => Monad (Stream f m) where
   return = Return
@@ -243,7 +251,7 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
       Step fstr -> Step (fmap loop fstr)
       Effect m   -> Effect (fmap loop m)
       Return r  -> f r
-  {-# INLINABLE (>>=) #-}       
+  {-# INLINABLE (>>=) #-}
 
   fail = lift . fail
   {-# INLINE fail #-}
@@ -276,8 +284,8 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
 instance (Functor f, Monad m) => Applicative (Stream f m) where
   pure = Return
   {-# INLINE pure #-}
-  streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)} 
-  {-# INLINE (<*>) #-}  
+  streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)}
+  {-# INLINE (<*>) #-}
   stream1 *> stream2 = loop stream1 where
     loop stream = case stream of
       Return _ -> stream2
@@ -326,7 +334,7 @@ instance Functor f => MFunctor (Stream f) where
       Return r  -> Return r
       Effect m   -> Effect (trans (fmap loop m))
       Step f    -> Step (fmap loop f)
-  {-# INLINABLE hoist #-}  
+  {-# INLINABLE hoist #-}
 
 
 instance Functor f => MMonad (Stream f) where
@@ -346,7 +354,7 @@ instance (Functor f, MonadReader r m) => MonadReader r (Stream f m) where
   {-# INLINE ask #-}
   local f = hoist (local f)
   {-# INLINE local #-}
- 
+
 instance (Functor f, MonadState s m) => MonadState s (Stream f m) where
   get = lift get
   {-# INLINE get #-}
@@ -449,7 +457,7 @@ inspect = loop where
     Effect m  -> m >>= loop
     Step fs  -> return (Right fs)
 {-# INLINABLE inspect #-}
-  
+
 {-| Build a @Stream@ by unfolding steps starting from a seed. See also
     the specialized 'Streaming.Prelude.unfoldr' in the prelude.
 
@@ -717,7 +725,7 @@ c
 -}
 takes :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m ()
 takes n = void . splitsAt n
-{-# INLINE takes #-}                      
+{-# INLINE takes #-}
 
 {-| Break a stream into substreams each with n functorial layers.
 
@@ -732,7 +740,7 @@ chunksOf n0 = loop where
     Return r  -> Return r
     Effect m  -> Effect (fmap loop m)
     Step fs   -> Step (Step (fmap (fmap loop . splitsAt (n0-1)) fs))
-{-# INLINABLE chunksOf #-}        
+{-# INLINABLE chunksOf #-}
 
 {- | Make it possible to \'run\' the underlying transformed monad.
 -}
@@ -744,7 +752,7 @@ distribute = loop where
     Effect tmstr -> hoist lift tmstr >>= loop
     Step fstr    -> join (lift (Step (fmap (Return . loop) fstr)))
 {-# INLINABLE distribute #-}
-  
+
 -- | Repeat a functorial layer (a \"command\" or \"instruction\") forever.
 repeats :: (Monad m, Functor f) => f () -> Stream f m r
 repeats f = loop where
@@ -861,7 +869,7 @@ unexposed = Effect . loop where
     Return r -> return (Return r)
     Effect  m -> m >>= loop
     Step   f -> return (Step (fmap (Effect . loop) f))
-{-# INLINABLE unexposed #-} 
+{-# INLINABLE unexposed #-}
 
 
 {-| Wrap a new layer of a stream. So, e.g.
@@ -978,7 +986,7 @@ zips :: (Monad m, Functor f, Functor g)
      => Stream f m r -> Stream g m r -> Stream (Compose f g) m r
 zips = zipsWith' go where
   go p fx gy = Compose (fmap (\x -> fmap (\y -> p x y) gy) fx)
-{-# INLINE zips #-} 
+{-# INLINE zips #-}
 
 
 
@@ -999,7 +1007,7 @@ interleaves
   :: (Monad m, Applicative h) =>
      Stream h m r -> Stream h m r -> Stream h m r
 interleaves = zipsWith' liftA2
-{-# INLINE interleaves #-} 
+{-# INLINE interleaves #-}
 
 
 {-| Swap the order of functors in a sum of functors.
@@ -1158,7 +1166,7 @@ groups = loop
       Right (InL fstr) -> return (wrap (InL fstr))
       Right (InR gstr) -> wrap (fmap go gstr)
 {-# INLINABLE groups #-}
-    
+
 -- groupInL :: (Monad m, Functor f, Functor g)
 --                      => Stream (Sum f g) m r
 --                      -> Stream (Sum (Stream f m) g) m r
@@ -1343,8 +1351,8 @@ untilJust act = loop where
     case m of
       Nothing -> return $ Step $ pure loop
       Just a -> return $ Return a
-    
-    
+
+
 cutoff :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Maybe r)
 cutoff = loop where
   loop 0 _ = return Nothing

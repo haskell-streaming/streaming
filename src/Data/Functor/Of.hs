@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, DeriveDataTypeable, DeriveTraversable, DeriveFoldable,
        DeriveGeneric #-}
-module Data.Functor.Of where
+module Data.Functor.Of (Of(..)) where
 import Data.Monoid (Monoid (..))
 import Data.Semigroup (Semigroup (..))
 import Control.Applicative
@@ -8,9 +8,12 @@ import Data.Traversable (Traversable)
 import Data.Foldable (Foldable)
 import Data.Bifunctor
 import Data.Data
-import Data.Typeable
-import GHC.Generics (Generic, Generic1)
+#if MIN_VERSION_base(4,9,0)
 import Data.Functor.Classes
+import Data.Foldable (Foldable)
+import Data.Traversable (Traversable)
+#endif
+import GHC.Generics (Generic, Generic1)
 
 -- | A left-strict pair; the base functor for streams of individual elements.
 data Of a b = !a :> b
@@ -64,8 +67,15 @@ instance Monoid a => Monad (Of a) where
   m :> x >>= f = let m' :> y = f x in mappend m m' :> y
   {-#INLINE (>>=) #-}
 
+#if MIN_VERSION_base(4,9,0)
 instance Show a => Show1 (Of a) where
   liftShowsPrec = liftShowsPrec2 showsPrec showList
+
+instance Eq a => Eq1 (Of a) where
+  liftEq = liftEq2 (==)
+
+instance Ord a => Ord1 (Of a) where
+  liftCompare = liftCompare2 compare
 
 instance Show2 Of where
   liftShowsPrec2 spa _sla spb _slb p (a :> b) =
@@ -74,15 +84,11 @@ instance Show2 Of where
     showString " :> " .
     spb 6 b
 
-instance Eq a => Eq1 (Of a) where
-  liftEq = liftEq2 (==)
-
-instance Ord a => Ord1 (Of a) where
-  liftCompare = liftCompare2 compare
-
 instance Eq2 Of where
-  liftEq2 eq1 eq2 (x :> y) (z :> w) = eq1 x z && eq2 y w
+  liftEq2 f g (x :> y) (z :> w) = f x z && g y w
 
 instance Ord2 Of where
   liftCompare2 comp1 comp2 (x :> y) (z :> w) =
     comp1 x z `mappend` comp2 y w
+#endif
+
