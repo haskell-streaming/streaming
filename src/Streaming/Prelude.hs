@@ -1265,7 +1265,7 @@ last_ = loop Nothing_ where
 -}
 length_ :: Monad m => Stream (Of a) m r -> m Int
 length_ = fold_ (\n _ -> n + 1) 0 id
-{-# INLINE length_#-}
+{-# INLINE length_ #-}
 
 {-| Run a stream, keeping its length and its return value.
 
