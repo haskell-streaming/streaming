@@ -99,6 +99,9 @@ import Data.Functor.Sum
 import Data.Monoid (Monoid (..))
 import Data.Semigroup (Semigroup (..))
 
+-- $setup
+-- >>> import Streaming.Prelude as S
+
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful

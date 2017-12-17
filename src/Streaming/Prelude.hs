@@ -284,6 +284,19 @@ import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat
                       , last, foldMap)
 
 
+
+-- $setup
+-- >>> import Control.Applicative
+-- >>> import qualified Control.Foldl as L
+-- >>> import Data.Bifunctor (first)
+-- >>> import Data.Function ((&))
+-- >>> import Data.IORef
+-- >>> import Data.Vector (Vector)
+-- >>> import qualified Streaming.Prelude as S
+-- >>> import qualified System.IO
+-- >>> import Text.Read (readEither)
+
+
 -- instance (Eq a) => Eq1 (Of a) where eq1 = (==)
 -- instance (Ord a) => Ord1 (Of a) where compare1 = compare
 -- instance (Read a) => Read1 (Of a) where readsPrec1 = readsPrec
@@ -460,7 +473,7 @@ break thePred = loop where
    and the element that breaks it will be put after the break.
    This function is easiest to use with 'Control.Foldl.purely'
 
->>>  rest <- each [1..10] & L.purely S.breakWhen L.sum (>10) & S.print
+>>> rest <- each [1..10] & L.purely S.breakWhen L.sum (>10) & S.print
 1
 2
 3
@@ -918,8 +931,8 @@ filterM thePred = loop where
 {- $folds
     Use these to fold the elements of a 'Stream'.
 
->>> S.fold_ (+) 0 id $ S.each [1..0]
-50
+>>> S.fold_ (+) 0 id $ S.each [1..10]
+55
 
     The general folds 'fold', fold_', 'foldM' and 'foldM_' are arranged
     for use with @Control.Foldl@ 'Control.Foldl.purely' and 'Control.Foldl.impurely'
@@ -1028,7 +1041,7 @@ foldM_ step begin done = fmap (\(a :> _) -> a) . foldM step begin done
    Thus to accumulate the elements of a stream as a vector, together with a random
    element we might write:
 
->>>  L.impurely S.foldM (liftA2 (,) L.vector L.random) $ each [1..10::Int] :: IO (Of (U.Vector Int,Maybe Int) ())
+>>> L.impurely S.foldM (liftA2 (,) L.vectorM L.random) $ each [1..10::Int] :: IO (Of (Vector Int, Maybe Int) ())
 ([1,2,3,4,5,6,7,8,9,10],Just 9) :> ()
 
 -}
@@ -1256,7 +1269,7 @@ last_ = loop Nothing_ where
 
 {-| Run a stream, remembering only its length:
 
->>> S.length $ S.each [1..10]
+>>> runIdentity $ S.length_ (S.each [1..10] :: Stream (Of Int) Identity ())
 10
 
 -}
@@ -1407,7 +1420,7 @@ foldMap_ f = fold_ (\ !acc a -> mappend acc (f a)) mempty id
 
 {-| Fold streamed items into their monoidal sum
 
->>> S.mconcat $ S.take 2 $ S.map (Data.Monoid.Last . Just) (S.stdinLn)
+>>> S.mconcat $ S.take 2 $ S.map (Data.Monoid.Last . Just) S.stdinLn
 first<Enter>
 last<Enter>
 Last {getLast = Just "last"} :> ()
@@ -1648,7 +1661,7 @@ repeat a = loop where loop = Effect (return (Step (a :> loop)))
 
 {-| Repeat a monadic action /ad inf./, streaming its results.
 
->>>  S.toList $ S.take 2 $ repeatM getLine
+>>> S.toList $ S.take 2 $ repeatM getLine
 one<Enter>
 two<Enter>
 ["one","two"]
@@ -1742,13 +1755,13 @@ scan step begin done str = Step (done begin :> loop begin str)
     'FoldM's from @Control.Foldl@ using 'impurely'. Here we yield
     a succession of vectors each recording
 
->>> let v =  L.impurely scanM L.vector $ each [1..4::Int] :: Stream (Of (U.Vector Int)) IO ()
+>>> let v = L.impurely scanM L.vectorM $ each [1..4::Int] :: Stream (Of (Vector Int)) IO ()
 >>> S.print v
-fromList []
-fromList [1]
-fromList [1,2]
-fromList [1,2,3]
-fromList [1,2,3,4]
+[]
+[1]
+[1,2]
+[1,2,3]
+[1,2,3,4]
 
 -}
 scanM :: Monad m => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> Stream (Of b) m r
@@ -1880,15 +1893,16 @@ sum_ = fold_ (+) 0 id
 55 :> ()
 
 >>> (n :> rest)  <- S.sum $ S.splitAt 3 $ each [1..10]
->>> print n
+>>> System.IO.print n
 6
 >>> (m :> rest') <- S.sum $ S.splitAt 3 rest
->>> print m
+>>> System.IO.print m
 15
 >>> S.print rest'
 7
 8
 9
+10
 
 -}
 sum :: (Monad m, Num a) => Stream (Of a) m r -> m (Of a r)
@@ -2059,6 +2073,7 @@ toList_ = fold_ (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 [1,2,3]
 [4,5,6]
 [7,8,9]
+
 >>> S.print $ mapped S.toList $ chunksOf 2 $ S.replicateM 4 getLine
 s<Enter>
 t<Enter>
@@ -2094,7 +2109,7 @@ uncons = loop where
     The seed can of course be anything, but this is one natural way
     to consume a @pipes@ 'Pipes.Producer'. Consider:
 
->>> S.stdoutLn $ S.take 2 $ S.unfoldr Pipes.next Pipes.stdinLn
+> S.stdoutLn $ S.take 2 $ S.unfoldr Pipes.next Pipes.stdinLn
 hello<Enter>
 hello
 goodbye<Enter>
@@ -2149,7 +2164,7 @@ untilRight act = Effect loop where
 > with = flip subst
 > subst = flip with
 
->>> with (each [1..3]) (yield . show) & intercalates (yield "--") & S.stdoutLn
+>>> with (each [1..3]) (yield . Prelude.show) & intercalates (yield "--") & S.stdoutLn
 1
 --
 2
@@ -2174,7 +2189,7 @@ with s f = loop s where
 hello
 
 >>> S.sum $ do {yield 1; yield 2; yield 3}
-6
+6 :> ()
 
 >>> let number = lift (putStrLn "Enter a number:") >> lift readLn >>= yield :: Stream (Of Int) IO ()
 >>> S.toList $ do {number; number; number}
@@ -2312,7 +2327,7 @@ readLn = loop where
 
     Terminates on end of input
 
->>> IO.withFile "/usr/share/dict/words" IO.ReadMode $ S.stdoutLn . S.take 3 . S.drop 50000 .  S.fromHandle
+>>> IO.withFile "/usr/share/dict/words" IO.ReadMode $ S.stdoutLn . S.take 3 . S.drop 50000 . S.fromHandle
 deflagrator
 deflate
 deflation
@@ -2353,7 +2368,6 @@ hello<Enter>
 "hello"
 world<Enter>
 "world"
->>>
 
 -}
 print :: (MonadIO m, Show a) => Stream (Of a) m r -> m r
@@ -2561,7 +2575,7 @@ sumToCompose x = case x of
    simultaneously, and in constant memory -- as they would be if,
    say, you linked them together with @Control.Fold@:
 
->>> L.impurely S.foldM (liftA3 (\a b c -> (b,c)) (L.sink print) (L.generalize L.sum) (L.generalize L.product)) $ each [1..4]
+>>> L.impurely S.foldM (liftA3 (\a b c -> (b, c)) (L.sink Prelude.print) (L.generalize L.sum) (L.generalize L.product)) $ each [1..4]
 1
 2
 3
@@ -2632,10 +2646,10 @@ two
     With copy, I can do these simultaneously:
 
 >>> S.print $ S.stdoutLn $ S.copy $ each ["one","two"]
-one
 "one"
-two
+one
 "two"
+two
 
     'copy' should be understood together with 'effects' and is subject to the rules
 
@@ -2661,7 +2675,7 @@ two
     using 'Control.Foldl.handles' on an appropriate lens. Some such
     manipulations are simpler and more 'Data.List'-like, using 'copy':
 
->>> L.purely S.fold (liftA2 (,) (L.handles (filtered odd) L.sum) (L.handles (filtered even) L.product)) $ each [1..10]
+>>> L.purely S.fold (liftA2 (,) (L.handles (L.filtered odd) L.sum) (L.handles (L.filtered even) L.product)) $ each [1..10]
 (25,3840) :> ()
 
      becomes
@@ -2730,7 +2744,7 @@ duplicate = copy
    This @unzip@ does
    stream, though of course you can spoil this by using e.g. 'toList':
 
->>> let xs =  map (\x-> (x,show x)) [1..5::Int]
+>>> let xs = Prelude.map (\x -> (x, Prelude.show x)) [1..5 :: Int]
 
 >>> S.toList $ S.toList $ S.unzip (S.each xs)
 ["1","2","3","4","5"] :> ([1,2,3,4,5] :> ())
