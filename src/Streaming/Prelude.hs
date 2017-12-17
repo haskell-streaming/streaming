@@ -47,15 +47,11 @@
 > --------------------------------------------------------------------------------------------------------------------
 >
 -}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Streaming.Prelude (
     -- * Types
