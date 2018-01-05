@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP, DeriveDataTypeable, DeriveTraversable, DeriveFoldable,
        DeriveGeneric #-}
 module Data.Functor.Of where
-import Data.Monoid
+import Data.Monoid (Monoid (..))
 import Data.Semigroup (Semigroup (..))
 import Control.Applicative
 import Data.Traversable (Traversable)
