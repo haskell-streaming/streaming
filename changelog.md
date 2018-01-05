@@ -1,5 +1,7 @@
 - ???
 
+    Add `Semigroup` instances for `Of` and `Stream`.
+
     Drop unneeded dependency on exceptions.
 
 - 0.2.0.0

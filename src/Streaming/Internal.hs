@@ -94,7 +94,8 @@ import Control.Monad.Error.Class
 import Control.Applicative
 import Data.Function ( on )
 import Control.Monad.Morph
-import Data.Monoid (Monoid (..), (<>))
+import Data.Monoid (Monoid (..))
+import Data.Semigroup (Semigroup (..))
 import Data.Data (Typeable)
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
@@ -295,11 +296,17 @@ instance (Applicative f, Monad m) => Alternative (Stream f m) where
   str <|> str' = zipsWith' liftA2 str str'
   {-#INLINE (<|>) #-}
 
+instance (Functor f, Monad m, Semigroup w) => Semigroup (Stream f m w) where
+  a <> b = a >>= \w -> fmap (w <>) b
+  {-#INLINE (<>) #-}
+
 instance (Functor f, Monad m, Monoid w) => Monoid (Stream f m w) where
   mempty = return mempty
   {-#INLINE mempty #-}
-  mappend a b = a >>= \w -> fmap (w <>) b
+#if !(MIN_VERSION_base(4,11,0))
+  mappend a b = a >>= \w -> fmap (w `mappend`) b
   {-#INLINE mappend #-}
+#endif
 
 instance (Applicative f, Monad m) => MonadPlus (Stream f m) where
   mzero = empty
