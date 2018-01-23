@@ -1,4 +1,11 @@
-- ???
+- 0.2.0.0
+
+    Remove `bracketStream`, `MonadCatch` instance, and everything
+    dealing with `ResourceT`. All of these things of sort of
+    broken for `Stream` since there is no guarantee of linear
+    consumption (functions like `take` can prevent finalizers
+    from running). The `streaming-with` library is not recommended
+    to get this kind of behavior.
 
     Made `zipsWith` and allied functions short-circuit; if the
     first stream is empty, ignore the second one.
