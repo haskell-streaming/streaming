@@ -1,4 +1,6 @@
-{-#LANGUAGE RankNTypes, CPP, Trustworthy #-}
+{-# LANGUAGE RankNTypes #-}
+
+{-# OPTIONS_GHC -Wall #-}
 module Streaming
    (
    -- * An iterable streaming monad transformer
@@ -77,9 +79,7 @@ module Streaming
    Sum(..),
    Identity(..),
    Alternative((<|>)),
-#if MIN_VERSION_base(4,8,0)
    Bifunctor(..),
-#endif
 
    join,
    liftM,
@@ -100,11 +100,8 @@ import Control.Monad.Trans
 import Data.Functor.Compose
 import Data.Functor.Sum
 import Data.Functor.Identity
-import Data.Functor.Of
-import Control.Monad.Base
-#if MIN_VERSION_base(4,8,0)
 import Data.Bifunctor
-#endif
+
 
 {- $stream
 

@@ -1,7 +1,8 @@
 {-# LANGUAGE CPP, DeriveDataTypeable, DeriveTraversable, DeriveFoldable,
        DeriveGeneric #-}
 module Data.Functor.Of where
-import Data.Monoid
+import Data.Monoid (Monoid (..))
+import Data.Semigroup (Semigroup (..))
 import Control.Applicative
 import Data.Traversable (Traversable)
 import Data.Foldable (Foldable)
@@ -19,11 +20,17 @@ data Of a b = !a :> b
               Read, Show, Traversable, Typeable, Generic, Generic1)
 infixr 5 :>
 
+instance (Semigroup a, Semigroup b) => Semigroup (Of a b) where
+  (m :> w) <> (m' :> w') = (m <> m') :> (w <> w')
+  {-#INLINE (<>) #-}
+
 instance (Monoid a, Monoid b) => Monoid (Of a b) where
   mempty = mempty :> mempty
   {-#INLINE mempty #-}
+#if !(MIN_VERSION_base(4,11,0))
   mappend (m :> w) (m' :> w') = mappend m m' :> mappend w w'
   {-#INLINE mappend #-}
+#endif
 
 instance Functor (Of a) where
   fmap f (a :> x) = a :> f x

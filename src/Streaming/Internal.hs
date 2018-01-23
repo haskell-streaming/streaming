@@ -1,6 +1,15 @@
-{-# LANGUAGE RankNTypes, StandaloneDeriving,DeriveDataTypeable, BangPatterns #-}
-{-# LANGUAGE UndecidableInstances, CPP, FlexibleInstances, MultiParamTypeClasses  #-}
-{-#LANGUAGE Trustworthy, ScopedTypeVariables, GADTs #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
+
+{-# OPTIONS_GHC -Wall #-}
 module Streaming.Internal (
     -- * The free monad transformer
     -- $stream
@@ -79,27 +88,20 @@ module Streaming.Internal (
 
 import Control.Monad
 import Control.Monad.Trans
-import Control.Monad.Trans.Class
 import Control.Monad.Reader.Class
-import Control.Monad.Writer.Class
 import Control.Monad.State.Class
 import Control.Monad.Error.Class
-import Control.Monad.Cont.Class
 import Control.Applicative
-import Data.Foldable ( Foldable(..) )
 import Data.Function ( on )
-import Data.Traversable
 import Control.Monad.Morph
-import Data.Monoid (Monoid (..), (<>))
-import Data.Functor.Identity
-import Data.Data ( Data, Typeable )
+import Data.Monoid (Monoid (..))
+import Data.Semigroup (Semigroup (..))
+import Data.Data (Typeable)
 import Prelude hiding (splitAt)
 import Data.Functor.Compose
 import Data.Functor.Sum
 import Data.Functor.Classes
 import Control.Concurrent (threadDelay)
-import Data.Functor.Of
-import Data.IORef
 {- $stream
 
     The 'Stream' data type is equivalent to @FreeT@ and can represent any effectful
@@ -126,10 +128,6 @@ data Stream f m r = Step !(f (Stream f m r))
                   | Return r
 #if __GLASGOW_HASKELL__ >= 710
                   deriving (Typeable)
-#endif
-#if __GLASGOW_HASKELL__ >= 710
-deriving instance (Typeable f, Typeable m, Data r, Data (m (Stream f m r))
-                  , Data (f (Stream f m r))) => Data (Stream f m r)
 #endif
 
 -- The most obvious approach would probably be
@@ -163,22 +161,22 @@ instance (Monad m, Ord (m (Either r (f (Stream f m r)))))
 -- mapping everything to a single known type, but there's really no way
 -- to do that for Eq1 or Ord1.
 instance (Monad m, Functor f, Eq1 m, Eq1 f) => Eq1 (Stream f m) where
-  liftEq eq xs ys = liftEqExposed eq (unexposed xs) (unexposed ys)
+  liftEq eq xs ys = liftEqExposed (unexposed xs) (unexposed ys)
     where
-      liftEqExposed eq (Return x) (Return y) = eq x y
-      liftEqExposed eq (Effect m) (Effect n) = liftEq (liftEqExposed eq) m n
-      liftEqExposed eq (Step f) (Step g) = liftEq (liftEqExposed eq) f g
-      liftEqExposed _ _ _ = False
+      liftEqExposed (Return x) (Return y) = eq x y
+      liftEqExposed (Effect m) (Effect n) = liftEq liftEqExposed m n
+      liftEqExposed (Step f) (Step g) = liftEq liftEqExposed f g
+      liftEqExposed _ _ = False
 
 instance (Monad m, Functor f, Ord1 m, Ord1 f) => Ord1 (Stream f m) where
-  liftCompare cmp xs ys = liftCmpExposed cmp (unexposed xs) (unexposed ys)
+  liftCompare cmp xs ys = liftCmpExposed (unexposed xs) (unexposed ys)
     where
-      liftCmpExposed cmp (Return x) (Return y) = cmp x y
-      liftCmpExposed cmp (Effect m) (Effect n) = liftCompare (liftCmpExposed cmp) m n
-      liftCmpExposed cmp (Step f) (Step g) = liftCompare (liftCmpExposed cmp) f g
-      liftCmpExposed _ (Return _) _ = LT
-      liftCmpExposed _ _ (Return _) = GT
-      liftCmpExposed _ _ _ = error "liftCmpExposed: stream was exposed!"
+      liftCmpExposed (Return x) (Return y) = cmp x y
+      liftCmpExposed (Effect m) (Effect n) = liftCompare liftCmpExposed m n
+      liftCmpExposed (Step f) (Step g) = liftCompare liftCmpExposed f g
+      liftCmpExposed (Return _) _ = LT
+      liftCmpExposed _ (Return _) = GT
+      liftCmpExposed _ _ = error "liftCmpExposed: stream was exposed!"
 
 -- We could get a much less scary implementation using Show1, but
 -- Show1 instances aren't nearly as common as Show instances.
@@ -195,7 +193,7 @@ instance (Monad m, Show r, Show (m ShowSWrapper), Show (f (Stream f m r)))
          => Show (Stream f m r) where
   showsPrec p xs = showParen (p > 10) $
                      showString "Effect " . (showsPrec 11 $
-    flip liftM (inspect xs) $ \front ->
+    flip fmap (inspect xs) $ \front ->
       SS $ \d -> showParen (d > 10) $
         case front of
           Left r ->  showString "Return " . showsPrec 11 r
@@ -205,7 +203,7 @@ instance (Monad m, Functor f, Show (m ShowSWrapper), Show (f ShowSWrapper))
          => Show1 (Stream f m) where
   liftShowsPrec sp sl p xs = showParen (p > 10) $
                      showString "Effect " . (showsPrec 11 $
-    flip liftM (inspect xs) $ \front ->
+    flip fmap (inspect xs) $ \front ->
       SS $ \d -> showParen (d > 10) $
         case front of
           Left r ->  showString "Return " . sp 11 r
@@ -221,13 +219,13 @@ instance (Functor f, Monad m) => Functor (Stream f m) where
     loop stream = case stream of
       Return r -> Return (f r)
       Effect m  -> Effect (do {stream' <- m; return (loop stream')})
-      Step f   -> Step (fmap loop f)
+      Step g -> Step (fmap loop g)
   {-# INLINABLE fmap #-}
   a <$ stream0 = loop stream0 where
     loop stream = case stream of
-      Return r -> Return a
-      Effect m  -> Effect (do {stream' <- m; return (loop stream')})
-      Step f    -> Step (fmap loop f)
+      Return _ -> Return a
+      Effect m -> Effect (do {stream' <- m; return (loop stream')})
+      Step f -> Step (fmap loop f)
   {-# INLINABLE (<$) #-}  
 
 instance (Functor f, Monad m) => Monad (Stream f m) where
@@ -236,7 +234,7 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
   stream1 >> stream2 = loop stream1 where
     loop stream = case stream of
       Return _ -> stream2
-      Effect m  -> Effect (liftM loop m)
+      Effect m  -> Effect (fmap loop m)
       Step f   -> Step (fmap loop f)  
   {-# INLINABLE (>>) #-}
   -- (>>=) = _bind
@@ -246,7 +244,7 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
     loop stream where
     loop stream0 = case stream0 of
       Step fstr -> Step (fmap loop fstr)
-      Effect m   -> Effect (liftM loop m)
+      Effect m   -> Effect (fmap loop m)
       Return r  -> f r
   {-# INLINABLE (>>=) #-}       
 
@@ -298,25 +296,31 @@ instance (Applicative f, Monad m) => Alternative (Stream f m) where
   str <|> str' = zipsWith' liftA2 str str'
   {-#INLINE (<|>) #-}
 
+instance (Functor f, Monad m, Semigroup w) => Semigroup (Stream f m w) where
+  a <> b = a >>= \w -> fmap (w <>) b
+  {-#INLINE (<>) #-}
+
 instance (Functor f, Monad m, Monoid w) => Monoid (Stream f m w) where
   mempty = return mempty
   {-#INLINE mempty #-}
-  mappend a b = a >>= \w -> fmap (w <>) b
+#if !(MIN_VERSION_base(4,11,0))
+  mappend a b = a >>= \w -> fmap (w `mappend`) b
   {-#INLINE mappend #-}
+#endif
 
 instance (Applicative f, Monad m) => MonadPlus (Stream f m) where
   mzero = empty
   mplus = (<|>)
 
 instance Functor f => MonadTrans (Stream f) where
-  lift = Effect . liftM Return
+  lift = Effect . fmap Return
   {-# INLINE lift #-}
 
 instance Functor f => MFunctor (Stream f) where
   hoist trans = loop  where
     loop stream = case stream of
       Return r  -> Return r
-      Effect m   -> Effect (trans (liftM loop m))
+      Effect m   -> Effect (trans (fmap loop m))
       Step f    -> Step (fmap loop f)
   {-# INLINABLE hoist #-}  
 
@@ -330,7 +334,7 @@ instance Functor f => MMonad (Stream f) where
   {-# INLINABLE embed #-}
 
 instance (MonadIO m, Functor f) => MonadIO (Stream f m) where
-  liftIO = Effect . liftM Return . liftIO
+  liftIO = Effect . fmap Return . liftIO
   {-# INLINE liftIO #-}
 
 instance (Functor f, MonadReader r m) => MonadReader r (Stream f m) where
@@ -353,10 +357,10 @@ instance (Functor f, MonadError e m) => MonadError e (Stream f m) where
   throwError = lift . throwError
   {-# INLINE throwError #-}
   str `catchError` f = loop str where
-    loop str = case str of
+    loop x = case x of
       Return r -> Return r
-      Effect m -> Effect $ liftM loop m `catchError` (return . f)
-      Step f -> Step (fmap loop f)
+      Effect m -> Effect $ fmap loop m `catchError` (return . f)
+      Step g -> Step (fmap loop g)
   {-# INLINABLE catchError #-}
 
 {-| Map a stream to its church encoding; compare @Data.List.foldr@.
@@ -371,11 +375,11 @@ instance (Functor f, MonadError e m) => MonadError e (Stream f m) where
 destroy
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroy stream0 construct effect done = effect (loop stream0) where
+destroy stream0 construct theEffect done = theEffect (loop stream0) where
   loop stream = case stream of
     Return r -> return (done r)
     Effect m -> m >>= loop
-    Step fs -> return (construct (fmap (effect . loop) fs))
+    Step fs -> return (construct (fmap (theEffect . loop) fs))
 {-# INLINABLE destroy #-}
 
 
@@ -400,7 +404,7 @@ destroy stream0 construct effect done = effect (loop stream0) where
      (f (Stream g m a) -> g (Stream g m a))
      -> Stream f m a -> Stream g m a                 -- maps
 
->>> :t \f -> streamFold return effect (effect . liftM wrap . f)
+>>> :t \f -> streamFold return effect (effect . fmap wrap . f)
 (Monad m, Functor f, Functor g) =>
      (f (Stream g m a) -> m (g (Stream g m a)))
      -> Stream f m a -> Stream g m a                 -- mapped
@@ -413,7 +417,7 @@ destroy stream0 construct effect done = effect (loop stream0) where
 streamFold
   :: (Functor f, Monad m) =>
      (r -> b) -> (m b -> b) ->  (f b -> b) -> Stream f m r -> b
-streamFold done effect construct stream  = destroy stream construct effect done
+streamFold done theEffect construct stream  = destroy stream construct theEffect done
 {-#INLINE streamFold #-}
 
 {- | Reflect a church-encoded stream; cp. @GHC.Exts.build@
@@ -474,7 +478,7 @@ maps :: (Monad m, Functor f)
 maps phi = loop where
   loop stream = case stream of
     Return r  -> Return r
-    Effect m   -> Effect (liftM loop m)
+    Effect m   -> Effect (fmap loop m)
     Step f    -> Step (phi (fmap loop f))
 {-# INLINABLE maps #-}
 
@@ -493,8 +497,8 @@ mapsM :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> 
 mapsM phi = loop where
   loop stream = case stream of
     Return r  -> Return r
-    Effect m   -> Effect (liftM loop m)
-    Step f    -> Effect (liftM Step (phi (fmap loop f)))
+    Effect m   -> Effect (fmap loop m)
+    Step f    -> Effect (fmap Step (phi (fmap loop f)))
 {-# INLINABLE mapsM #-}
 
 {- | Map layers of one functor to another with a transformation. Compare
@@ -516,7 +520,7 @@ mapsPost phi = loop where
   loop :: Stream f m r -> Stream g m r
   loop stream = case stream of
     Return r -> Return r
-    Effect m -> Effect (liftM loop m)
+    Effect m -> Effect (fmap loop m)
     Step f -> Step $ fmap loop $ phi f
 {-# INLINABLE mapsPost #-}
 
@@ -541,8 +545,8 @@ mapsMPost phi = loop where
   loop :: Stream f m r -> Stream g m r
   loop stream = case stream of
     Return r -> Return r
-    Effect m -> Effect (liftM loop m)
-    Step f -> Effect $ liftM (Step . fmap loop) (phi f)
+    Effect m -> Effect (fmap loop m)
+    Step f -> Effect $ fmap (Step . fmap loop) (phi f)
 {-# INLINABLE mapsMPost #-}
 
 {-| Rearrange a succession of layers of the form @Compose m (f x)@.
@@ -566,7 +570,7 @@ decompose :: (Monad m, Functor f) => Stream (Compose m f) m r -> Stream f m r
 decompose = loop where
   loop stream = case stream of
     Return r -> Return r
-    Effect m ->  Effect (liftM loop m)
+    Effect m ->  Effect (fmap loop m)
     Step (Compose mstr) -> Effect $ do
       str <- mstr
       return (Step (fmap loop str))
@@ -602,15 +606,15 @@ intercalates sep = go0
       Return r -> return r
       Effect m -> lift m >>= go0
       Step fstr -> do
-                f' <- fstr
-                go1 f'
+        f' <- fstr
+        go1 f'
     go1 f = case f of
       Return r -> return r
       Effect m     -> lift m >>= go1
       Step fstr ->  do
-                sep
-                f' <- fstr
-                go1 f'
+        _ <- sep
+        f' <- fstr
+        go1 f'
 {-# INLINABLE intercalates #-}
 
 {-| Specialized fold following the usage of @Control.Monad.Trans.Free@
@@ -675,7 +679,7 @@ splitsAt  = loop  where
     | n <= 0 = Return stream
     | otherwise = case stream of
         Return r       -> Return (Return r)
-        Effect m        -> Effect (liftM (loop n) m)
+        Effect m        -> Effect (fmap (loop n) m)
         Step fs        -> case n of
           0 -> Return (Step fs)
           _ -> Step (fmap (loop (n-1)) fs)
@@ -722,7 +726,7 @@ chunksOf :: (Monad m, Functor f) => Int -> Stream f m r -> Stream (Stream f m) m
 chunksOf n0 = loop where
   loop stream = case stream of
     Return r  -> Return r
-    Effect m  -> Effect (liftM loop m)
+    Effect m  -> Effect (fmap loop m)
     Step fs   -> Step (Step (fmap (fmap loop . splitsAt (n0-1)) fs))
 {-# INLINABLE chunksOf #-}        
 
@@ -788,7 +792,7 @@ inspectC f g = loop where
 -- | The same as 'hoist', but explicitly named to indicate that it
 -- is not entirely safe. In particular, its argument must be a monad
 -- morphism.
-hoistExposed :: (Functor m, Functor f) => (forall a. m a -> n a) -> Stream f m a -> Stream f n a
+hoistExposed :: (Functor m, Functor f) => (forall b. m b -> n b) -> Stream f m a -> Stream f n a
 hoistExposed trans = loop where
   loop stream = case stream of
     Return r  -> Return r
@@ -799,7 +803,7 @@ hoistExposed trans = loop where
 -- | The same as 'hoistExposed', but with a 'Functor' constraint on
 -- the target rather than the source. This must be used only with
 -- a monad morphism.
-hoistExposedPost :: (Functor n, Functor f) => (forall a. m a -> n a) -> Stream f m a -> Stream f n a
+hoistExposedPost :: (Functor n, Functor f) => (forall b. m b -> n b) -> Stream f m a -> Stream f n a
 hoistExposedPost trans = loop where
   loop stream = case stream of
     Return r -> Return r
@@ -834,10 +838,10 @@ mapsMExposed = mapsM
 destroyExposed
   :: (Functor f, Monad m) =>
      Stream f m r -> (f b -> b) -> (m b -> b) -> (r -> b) -> b
-destroyExposed stream0 construct effect done = loop stream0 where
+destroyExposed stream0 construct theEffect done = loop stream0 where
   loop stream = case stream of
     Return r -> done r
-    Effect m  -> effect (liftM loop m)
+    Effect m  -> theEffect (fmap loop m)
     Step fs  -> construct (fmap loop fs)
 {-# INLINABLE destroyExposed #-}
 
@@ -962,8 +966,8 @@ zipsWith' phi = loop
        Step fs -> case t of
          Return r -> Return r
          Step gs -> Step $ phi loop fs gs
-         Effect n -> Effect $ liftM (loop s) n
-       Effect m -> Effect $ liftM (flip loop t) m
+         Effect n -> Effect $ fmap (loop s) n
+       Effect m -> Effect $ fmap (flip loop t) m
 {-# INLINABLE zipsWith' #-}
 
 zips :: (Monad m, Functor f, Functor g)
@@ -1087,7 +1091,7 @@ expand :: (Monad m, Functor f)
 expand ext = loop where
   loop (Return r) = Return r
   loop (Step f) = Effect $ Step $ ext (Return . Step) (fmap loop f)
-  loop (Effect m) = Effect $ Effect $ liftM (Return . loop) m
+  loop (Effect m) = Effect $ Effect $ fmap (Return . loop) m
 {-# INLINABLE expand #-}
 
 -- | If 'Of' had a @Comonad@ instance, then we'd have
@@ -1102,7 +1106,7 @@ expandPost :: (Monad m, Functor g)
 expandPost ext = loop where
   loop (Return r) = Return r
   loop (Step f) = Effect $ Step $ ext (Return . Step . fmap loop) f
-  loop (Effect m) = Effect $ Effect $ liftM (Return . loop) m
+  loop (Effect m) = Effect $ Effect $ fmap (Return . loop) m
 {-# INLINABLE expandPost #-}
 
 unzips :: (Monad m, Functor f, Functor g) =>
@@ -1132,24 +1136,23 @@ groups = loop
 
   cleanL  :: (Monad m, Functor f, Functor g) =>
        Stream (Sum f g) m r -> Stream f m (Stream (Sum f g) m r)
-  cleanL = loop where
-    loop s = do
+  cleanL = go where
+    go s = do
      e <- lift $ inspect s
      case e of
       Left r           -> return (return r)
-      Right (InL fstr) -> wrap (fmap loop fstr)
+      Right (InL fstr) -> wrap (fmap go fstr)
       Right (InR gstr) -> return (wrap (InR gstr))
 
   cleanR  :: (Monad m, Functor f, Functor g) =>
        Stream (Sum f g) m r -> Stream g m (Stream (Sum f g) m r)
---  cleanR = fmap (maps switch) . cleanL . maps switch
-  cleanR = loop where
-    loop s = do
+  cleanR = go where
+    go s = do
      e <- lift $ inspect s
      case e of
       Left r           -> return (return r)
       Right (InL fstr) -> return (wrap (InL fstr))
-      Right (InR gstr) -> wrap (fmap loop gstr)
+      Right (InR gstr) -> wrap (fmap go gstr)
 {-#INLINABLE groups #-}
     
 -- groupInL :: (Monad m, Functor f, Functor g)
@@ -1224,7 +1227,7 @@ groups = loop
     So, for example, we might write
 
 >>> let justFour str = if length str == 4 then Just str else Nothing
->>> let four = untilJust (liftM justFour getLine)
+>>> let four = untilJust (fmap justFour getLine)
 >>> run four
 one<Enter>
 two<Enter>
@@ -1264,7 +1267,7 @@ delays seconds = loop where
 --             then return s
 --             else case s of
 --               Return r -> Return (Return r)
---               Effect m -> Effect (liftM loop m)
+--               Effect m -> Effect (fmap loop m)
 --               Step f   -> Step (fmap loop f)
 --     loop str
 --   where
@@ -1289,7 +1292,7 @@ delays seconds = loop where
 --       then loop (addUTCTime cutoff utc) stream
 --       else case stream of
 --         Return r  -> Return r
---         Effect m  -> Effect $ liftM (loop final) m
+--         Effect m  -> Effect $ fmap (loop final) m
 --         Step fstr -> Step $ fmap (periods seconds) (cutoff_ final (Step fstr))
 --
 --         -- do
@@ -1299,7 +1302,7 @@ delays seconds = loop where
 --         --           then return s
 --         --           else case s of
 --         --             Return r -> Return (Return r)
---         --             Effect m -> Effect (liftM sloop m)
+--         --             Effect m -> Effect (fmap sloop m)
 --         --             Step f   -> Step (fmap sloop f)
 --         --   Step (Step (fmap (fmap (periods seconds) . sloop) fstr))
 --           -- str <- m
@@ -1321,7 +1324,7 @@ delays seconds = loop where
 --             then Return s
 --             else case s of
 --               Return r -> Return (Return r)
---               Effect m -> Effect (liftM loop m)
+--               Effect m -> Effect (fmap loop m)
 --               Step f   -> Step (fmap loop f)
 --     loop str
 
@@ -1340,7 +1343,7 @@ untilJust act = loop where
     
 cutoff :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Maybe r)
 cutoff = loop where
-  loop 0 str = return Nothing
+  loop 0 _ = return Nothing
   loop n str = do
       e <- lift $ inspect str
       case e of

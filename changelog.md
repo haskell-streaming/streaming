@@ -7,6 +7,12 @@
     from running). The `streaming-with` library is not recommended
     to get this kind of behavior.
 
+    Add `Semigroup` instances for `Of` and `Stream`.
+
+    Drop unneeded dependency on exceptions.
+
+- 0.2.0.0
+
     Made `zipsWith` and allied functions short-circuit; if the
     first stream is empty, ignore the second one.
 
@@ -23,6 +29,8 @@
     and `Show2` instances for `Of`.
 
     Bump the lower bound on `transformers` to 0.5.
+
+    Break compatibility with pre-AMP base. Prefer `fmap` to `liftM`.
 
 - 0.1.3.0 
 
