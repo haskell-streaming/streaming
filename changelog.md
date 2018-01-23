@@ -4,7 +4,7 @@
     dealing with `ResourceT`. All of these things of sort of
     broken for `Stream` since there is no guarantee of linear
     consumption (functions like `take` can prevent finalizers
-    from running). The `streaming-with` library is not recommended
+    from running). The `streaming-with` library is recommended
     to get this kind of behavior.
 
     Add `Semigroup` instances for `Of` and `Stream`.
