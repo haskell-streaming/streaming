@@ -1,5 +1,4 @@
-streaming
-=========
+# streaming [![Hackage version](https://img.shields.io/hackage/v/streaming.svg?label=Hackage)](https://hackage.haskell.org/package/streaming)
 
 Contents
 --------
