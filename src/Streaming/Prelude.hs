@@ -8,7 +8,7 @@
     articulated in the latter two modules. Because we dispense with piping and
     conduiting, the distinction between all of these modules collapses. Some things are
     lost but much is gained: on the one hand, everything comes much closer to ordinary
-    beginning Haskell programming and, on the other, acquires the plasticity of programming 
+    beginning Haskell programming and, on the other, acquires the plasticity of programming
     directly with a general free monad type. The leading type, @Stream (Of a) m r@ is chosen to permit an api
     that is as close as possible to that of @Data.List@ and the @Prelude@.
 
@@ -81,7 +81,7 @@ module Streaming.Prelude (
     , enumFrom
     , enumFromThen
     , unfoldr
-    
+
 
 
     -- * Consuming streams of elements
@@ -132,7 +132,7 @@ module Streaming.Prelude (
     , read
     , show
     , cons
-    , slidingWindow    
+    , slidingWindow
 
 
     -- * Splitting and inspecting streams of elements
@@ -842,7 +842,7 @@ filter thePred = loop where
       else loop as
 {-# INLINE filter #-}  -- ~ 10% faster than INLINABLE in simple bench
 
-                         
+
 -- ---------------
 -- filterM
 -- ---------------
@@ -1611,7 +1611,7 @@ reread step s = loop where
       Just a  -> return (Step (a :> loop))
 {-# INLINABLE reread #-}
 
-{-| Strict left scan, streaming, e.g. successive partial results. The seed 
+{-| Strict left scan, streaming, e.g. successive partial results. The seed
     is yielded first, before any action of finding the next element is performed.
 
 
@@ -1633,13 +1633,13 @@ reread step s = loop where
 -}
 scan :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> Stream (Of b) m r
 scan step begin done str = Step (done begin :> loop begin str)
-  where                   
+  where
   loop !acc stream = do
     case stream of
       Return r -> Return r
       Effect m -> Effect (fmap (loop acc) m)
-      Step (a :> rest) -> 
-        let !acc' = step acc a 
+      Step (a :> rest) ->
+        let !acc' = step acc a
         in Step (done acc' :> loop acc' rest)
 {-#INLINABLE scan #-}
 
@@ -1660,7 +1660,7 @@ scanM :: Monad m => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r ->
 scanM step begin done str = Effect $ do
     x <- begin
     b <- done x
-    return (Step (b :> loop x str))  
+    return (Step (b :> loop x str))
   where
     loop !x stream = case stream of -- note we have already yielded from x
       Return r -> Return r
@@ -1957,7 +1957,7 @@ toList_ = fold_ (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 
 >  mapped toList :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m
 
-    Like 'toList_', 'toList' breaks streaming; unlike 'toList_' it /preserves the return value/ 
+    Like 'toList_', 'toList' breaks streaming; unlike 'toList_' it /preserves the return value/
     and thus is frequently useful with e.g. 'mapped'
 
 >>> S.print $ mapped S.toList $ chunksOf 3 $ each [1..9]
@@ -1970,7 +1970,7 @@ t<Enter>
 ["s","t"]
 u<Enter>
 v<Enter>
-["u","v"] 
+["u","v"]
 -}
 toList :: Monad m => Stream (Of a) m r -> m (Of [a] r)
 toList = fold (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
@@ -2202,7 +2202,7 @@ stdinLn = fromHandle IO.stdin
 -}
 
 readLn :: (MonadIO m, Read a) => Stream (Of a) m ()
-readLn = loop where 
+readLn = loop where
   loop = do
     eof <- liftIO IO.isEOF
     unless eof $ do
@@ -2665,7 +2665,7 @@ unzip = loop where
 
 {-| The 'catMaybes' function takes a 'Stream' of 'Maybe's and returns
     a 'Stream' of all of the 'Just' values. 'concat' has the same behavior,
-    but is more general; it works for any foldable container type. 
+    but is more general; it works for any foldable container type.
 -}
 catMaybes :: Monad m => Stream (Of (Maybe a)) m r -> Stream (Of a) m r
 catMaybes = loop where
@@ -2680,7 +2680,7 @@ catMaybes = loop where
 {-| The 'mapMaybe' function is a version of 'map' which can throw out elements. In particular,
     the functional argument returns something of type @'Maybe' b@. If this is 'Nothing', no element
     is added on to the result 'Stream'. If it is @'Just' b@, then @b@ is included in the result 'Stream'.
-    
+
 -}
 mapMaybe :: Monad m => (a -> Maybe b) -> Stream (Of a) m r -> Stream (Of b) m r
 mapMaybe phi = loop where
@@ -2692,9 +2692,9 @@ mapMaybe phi = loop where
       Just b -> Step (b :> loop snext)
 {-#INLINABLE mapMaybe #-}
 
-{-| 'slidingWindow' accumulates the first @n@ elements of a stream, 
+{-| 'slidingWindow' accumulates the first @n@ elements of a stream,
      update thereafter to form a sliding window of length @n@.
-     It follows the behavior of the slidingWindow function in 
+     It follows the behavior of the slidingWindow function in
      <https://hackage.haskell.org/package/conduit-combinators-1.0.4/docs/Data-Conduit-Combinators.html#v:slidingWindow conduit-combinators>.
 
 >>> S.print $ slidingWindow 4 $ S.each "123456"
@@ -2704,25 +2704,25 @@ fromList "3456"
 
 -}
 
-slidingWindow :: Monad m 
-  => Int 
-  -> Stream (Of a) m b 
+slidingWindow :: Monad m
+  => Int
+  -> Stream (Of a) m b
   -> Stream (Of (Seq.Seq a)) m b
-slidingWindow n = setup (max 1 n :: Int) mempty 
-  where 
-    window !sequ str = do 
-      e <- lift (next str) 
-      case e of 
+slidingWindow n = setup (max 1 n :: Int) mempty
+  where
+    window !sequ str = do
+      e <- lift (next str)
+      case e of
         Left r -> return r
-        Right (a,rest) -> do 
+        Right (a,rest) -> do
           yield (sequ Seq.|> a)
           window (Seq.drop 1 sequ Seq.|> a) rest
     setup 0 !sequ str = do
-       yield sequ 
-       window (Seq.drop 1 sequ) str 
-    setup m sequ str = do 
-      e <- lift $ next str 
-      case e of 
+       yield sequ
+       window (Seq.drop 1 sequ) str
+    setup m sequ str = do
+      e <- lift $ next str
+      case e of
         Left r ->  yield sequ >> return r
         Right (x,rest) -> setup (m-1) (sequ Seq.|> x) rest
 {-#INLINABLE slidingWindow #-}

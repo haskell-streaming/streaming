@@ -55,7 +55,7 @@ module Streaming
    decompose,
    expand,
    expandPost,
-
+   merge,
 
    -- * Eliminating a 'Stream'
    mapsM_,
@@ -118,7 +118,7 @@ import Data.Bifunctor
 >   maps ::    (forall x . f x -> g x)     -> Stream f m r -> Stream g m r
 >   mapped ::  (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
 >   hoist ::   (forall x . m x -> n x)     -> Stream f m r -> Stream f n r -- from the MFunctor instance
->   concats :: Stream (Stream f m) m r -> Stream f m r   
+>   concats :: Stream (Stream f m) m r -> Stream f m r
 
     (assuming here and thoughout that @m@ or @n@ satisfies a @Monad@ constraint, and
     @f@ or @g@ a @Functor@ constraint.)
