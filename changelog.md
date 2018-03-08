@@ -1,3 +1,7 @@
+- 0.2.1.0
+
+    Adding `Semigroup` instances for GHC 8.4.
+
 - 0.2.0.0
 
     Remove `bracketStream`, `MonadCatch` instance, and everything
