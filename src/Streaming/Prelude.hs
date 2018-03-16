@@ -1948,7 +1948,7 @@ takeWhileM thePred = loop where
     is a leading cause of space leaks.
 
 -}
-toList_ :: Monad m => Stream (Of a) m () -> m [a]
+toList_ :: Monad m => Stream (Of a) m r -> m [a]
 toList_ = fold_ (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 {-# INLINE toList_ #-}
 
