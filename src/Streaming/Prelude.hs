@@ -112,6 +112,10 @@ module Streaming.Prelude (
     , store
     , chain
     , sequence
+    , nubOrd
+    , nubOrdOn
+    , nubInt
+    , nubIntOn
     , filter
     , filterM
     , mapMaybeM
@@ -270,6 +274,8 @@ import Data.Monoid (Monoid (mappend, mempty))
 import Control.Concurrent (threadDelay)
 import Data.Functor.Compose
 import Data.Functor.Of
+import qualified Data.Set as Set
+import qualified Data.IntSet as IntSet
 
 -- instance (Eq a) => Eq1 (Of a) where eq1 = (==)
 -- instance (Ord a) => Ord1 (Of a) where compare1 = compare
@@ -525,7 +531,7 @@ chain f = loop where
       return (Step (a :> loop rest))
 {-# INLINABLE chain #-}
 
-{-| Make a stream of traversable containers into a stream of their separate elements.
+{-| Make a stream of foldable containers into a stream of their separate elements.
     This is just
 
 > concat str = for str each
@@ -1452,6 +1458,51 @@ notElem_ a' = loop True where
         then return False
         else loop True rest
 {-#INLINABLE notElem_ #-}
+
+
+{-| Remove repeated elements from a Stream. 'nubOrd' of course accumulates a 'Data.Set.Set' of
+    elements that have already been seen and should thus be used with care.
+
+>>> S.toList_ $ S.nubOrd $ S.take 5 S.readLn :: IO ([Int])
+1<Enter>
+2<Enter>
+3<Enter>
+1<Enter>
+2<Enter>
+[1,2,3]
+
+-}
+
+nubOrd :: (Monad m, Ord a) => Stream (Of a) m r -> Stream (Of a) m r
+nubOrd = nubOrdOn id
+{-# INLINE nubOrd #-}
+
+{-|  Use 'nubOrdOn' to have a custom ordering function for your elements. -}
+nubOrdOn :: (Monad m, Ord b) => (a -> b) -> Stream (Of a) m r -> Stream (Of a) m r
+nubOrdOn f xs = loop mempty xs where
+  loop !set stream = case stream of
+    Return r         -> Return r
+    Effect m         -> Effect (liftM (loop set) m)
+    Step (a :> rest) -> let !fa = f a in
+      if Set.member fa set
+         then loop set rest
+         else Step (a :> loop (Set.insert fa set) rest)
+
+{-| More efficient versions of above when working with 'Int's that use 'Data.IntSet.IntSet'. -}
+
+nubInt :: Monad m => Stream (Of Int) m r -> Stream (Of Int) m r
+nubInt = nubIntOn id
+{-# INLINE nubInt #-}
+
+nubIntOn :: Monad m => (a -> Int) -> Stream (Of a) m r -> Stream (Of a) m r
+nubIntOn f xs = loop mempty xs where
+  loop !set stream = case stream of
+    Return r         -> Return r
+    Effect m         -> Effect (liftM (loop set) m)
+    Step (a :> rest) -> let !fa = f a in
+      if IntSet.member fa set
+         then loop set rest
+         else Step (a :> loop (IntSet.insert fa set) rest)
 
 
 {-|
@@ -2481,7 +2532,7 @@ sumToCompose x = case x of
     like 'MonadResource'.  Thus I can independently filter and write to one file, but
     nub and write to another, or interact with a database and a logfile and the like:
 
->>> runResourceT $ (S.writeFile "hello2.txt" . S.nub) $ store (S.writeFile "hello.txt" . S.filter (/= "world")) $ each ["hello", "world", "goodbye", "world"]
+>>> runResourceT $ (S.writeFile "hello2.txt" . S.nubOrd) $ store (S.writeFile "hello.txt" . S.filter (/= "world")) $ each ["hello", "world", "goodbye", "world"]
 >>> :! cat hello.txt
 hello
 goodbye
