@@ -1479,11 +1479,7 @@ nubOrd = nubOrdOn id
 
 {-|  Use 'nubOrdOn' to have a custom ordering function for your elements. -}
 nubOrdOn :: (Monad m, Ord b) => (a -> b) -> Stream (Of a) m r -> Stream (Of a) m r
-nubOrdOn f = \xs -> nubOrdOnExcluding f mempty xs
-{-# INLINE nubOrdOn #-}
-
-nubOrdOnExcluding :: (Monad m, Ord b) => (a -> b) -> Set.Set b -> Stream (Of a) m r -> Stream (Of a) m r
-nubOrdOnExcluding f = loop where
+nubOrdOn f xs = loop mempty xs where
   loop !set stream = case stream of
     Return r         -> Return r
     Effect m         -> Effect (liftM (loop set) m)
@@ -1499,11 +1495,7 @@ nubInt = nubIntOn id
 {-# INLINE nubInt #-}
 
 nubIntOn :: Monad m => (a -> Int) -> Stream (Of a) m r -> Stream (Of a) m r
-nubIntOn f = \xs -> nubIntOnExcluding f mempty xs
-{-# INLINE nubIntOn #-}
-
-nubIntOnExcluding :: Monad m => (a -> Int) -> IntSet.IntSet -> Stream (Of a) m r -> Stream (Of a) m r
-nubIntOnExcluding f = loop where
+nubIntOn f xs = loop mempty xs where
   loop !set stream = case stream of
     Return r         -> Return r
     Effect m         -> Effect (liftM (loop set) m)
