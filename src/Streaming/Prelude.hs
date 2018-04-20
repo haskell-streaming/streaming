@@ -557,8 +557,18 @@ chain f = loop where
 -}
 
 concat :: (Monad m, Foldable.Foldable f) => Stream (Of (f a)) m r -> Stream (Of a) m r
-concat str = for str each
-{-# INLINE concat #-}
+concat = loop
+  where
+    loop str = case str of
+        Return r -> Return r
+        Effect m -> Effect (fmap loop m)
+        Step (lst :> as) ->
+          let inner [] = loop as
+              inner (x:rest) = Step (x :> inner rest)
+          in inner (Foldable.toList lst)
+{-# INLINABLE concat #-}
+-- The above hand-written loop is ~20% faster than the 'for' implementation
+-- concat str = for str each
 
 {-| The natural @cons@ for a @Stream (Of a)@.
 
