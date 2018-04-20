@@ -231,12 +231,8 @@ instance (Functor f, Monad m) => Functor (Stream f m) where
 instance (Functor f, Monad m) => Monad (Stream f m) where
   return = Return
   {-# INLINE return #-}
-  stream1 >> stream2 = loop stream1 where
-    loop stream = case stream of
-      Return _ -> stream2
-      Effect m  -> Effect (fmap loop m)
-      Step f   -> Step (fmap loop f)  
-  {-# INLINABLE (>>) #-}
+  (>>) = (*>)
+  {-# INLINE (>>) #-}
   -- (>>=) = _bind
   -- {-#INLINE (>>=) #-}
   --
@@ -281,6 +277,13 @@ instance (Functor f, Monad m) => Applicative (Stream f m) where
   {-# INLINE pure #-}
   streamf <*> streamx = do {f <- streamf; x <- streamx; return (f x)} 
   {-# INLINE (<*>) #-}  
+  stream1 *> stream2 = loop stream1 where
+    loop stream = case stream of
+      Return _ -> stream2
+      Effect m  -> Effect (fmap loop m)
+      Step f   -> Step (fmap loop f)
+  {-# INLINABLE (*>) #-}
+
 
 {- | The 'Alternative' instance glues streams together stepwise.
 
