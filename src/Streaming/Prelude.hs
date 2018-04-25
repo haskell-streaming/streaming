@@ -2158,7 +2158,7 @@ yield :: Monad m => a -> Stream (Of a) m ()
 yield a = Step (a :> Return ())
 {-# INLINE yield #-}
 
--- | Zip two 'Streams's
+-- | Zip two 'Stream's
 zip :: Monad m
     => (Stream (Of a) m r)
     -> (Stream (Of b) m r)
@@ -2166,7 +2166,7 @@ zip :: Monad m
 zip = zipWith (,)
 {-# INLINE zip #-}
 
--- | Zip two 'Streams's using the provided combining function
+-- | Zip two 'Stream's using the provided combining function
 zipWith :: Monad m
     => (a -> b -> c)
     -> (Stream (Of a) m r)
@@ -2210,7 +2210,7 @@ zipWith3 op = loop where
 {-# INLINABLE zipWith3 #-}
 
 
--- | Zip three streams together
+-- | Zip three 'Stream's together
 zip3 :: Monad m
     => (Stream (Of a) m r)
     -> (Stream (Of b) m r)
