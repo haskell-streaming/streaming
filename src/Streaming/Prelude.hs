@@ -2765,10 +2765,10 @@ mergeBy :: Monad m
 mergeBy cmp = loop
   where
     loop str0 str1 = case str0 of
-      Return r          -> Return r
+      Return _          -> str1 -- rest of right stream when left is done
       Effect m          -> Effect $ fmap (\ str -> loop str str1) m
       Step (a :> rest0) -> case str1 of
-        Return r          -> Return r
+        Return _          -> str0 -- rest of left stream when right is done
         Effect m          -> Effect $ fmap (loop str0) m
         Step (b :> rest1) -> case cmp a b of
           LT -> Step (a :> loop rest0 str1)
