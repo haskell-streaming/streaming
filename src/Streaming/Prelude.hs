@@ -225,6 +225,13 @@ module Streaming.Prelude (
     , partitionEithers
     , partition
 
+    -- * Merging streams
+    -- $merging
+
+    , merge
+    , mergeOn
+    , mergeBy
+    
     -- * Maybes
     -- $maybes
     , catMaybes
@@ -276,6 +283,7 @@ import Data.Functor.Compose
 import Data.Functor.Of
 import qualified Data.Set as Set
 import qualified Data.IntSet as IntSet
+import Data.Ord (Ordering (..), comparing)
 
 -- instance (Eq a) => Eq1 (Of a) where eq1 = (==)
 -- instance (Ord a) => Ord1 (Of a) where compare1 = compare
@@ -2718,6 +2726,72 @@ unzip = loop where
 {-#INLINABLE unzip #-}
 
 
+
+{- $merging
+   These functions combine two sorted streams of orderable elements
+   into one sorted stream. The elements of the merged stream are
+   guaranteed to be in a sorted order if the two input streams are
+   also sorted.
+
+   The merge operation is /left-biased/: when merging two elements
+   that compare as equal, the left element is chosen first.
+-}
+
+{- | Merge two streams of elements ordered with their 'Ord' instance.
+
+   The return values of both streams are returned.
+
+>>> S.print $ merge (each [1,3,5]) (each [2,4])
+1
+2
+3
+4
+5
+((), ())
+
+-}
+merge :: (Monad m, Ord a)
+  => Stream (Of a) m r
+  -> Stream (Of a) m s
+  -> Stream (Of a) m (r, s)
+merge = mergeBy compare
+{-# INLINE merge #-}
+
+{- | Merge two streams, ordering them by applying the given function to
+   each element before comparing.
+
+   The return values of both streams are returned.
+-}
+mergeOn :: (Monad m, Ord b)
+  => (a -> b)
+  -> Stream (Of a) m r
+  -> Stream (Of a) m s
+  -> Stream (Of a) m (r, s)
+mergeOn f = mergeBy (comparing f)
+{-# INLINE mergeOn #-}
+
+{- | Merge two streams, ordering the elements using the given comparison function.
+
+   The return values of both streams are returned.
+-}
+mergeBy :: Monad m
+  => (a -> a -> Ordering)
+  -> Stream (Of a) m r
+  -> Stream (Of a) m s
+  -> Stream (Of a) m (r, s)
+mergeBy cmp = loop
+  where
+    loop str0 str1 = case str0 of
+      Return r0         -> (\ r1 -> (r0, r1)) <$> str1
+      Effect m          -> Effect $ fmap (\ str -> loop str str1) m
+      Step (a :> rest0) -> case str1 of
+        Return r1         -> (\ r0 -> (r0, r1)) <$> str0
+        Effect m          -> Effect $ fmap (loop str0) m
+        Step (b :> rest1) -> case cmp a b of
+          LT -> Step (a :> loop rest0 str1)
+          EQ -> Step (a :> loop rest0 str1) -- left-biased
+          GT -> Step (b :> loop str0 rest1)
+{-# INLINABLE mergeBy #-}        
 
 {- $maybes
     These functions discard the 'Nothing's that they encounter. They are analogous
