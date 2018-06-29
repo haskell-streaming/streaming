@@ -2740,6 +2740,15 @@ unzip = loop where
 {- | Merge two streams of elements ordered with their 'Ord' instance.
 
    The return values of both streams are returned.
+
+>>> S.print $ merge (each [1,3,5]) (each [2,4])
+1
+2
+3
+4
+5
+((), ())
+
 -}
 merge :: (Monad m, Ord a)
   => Stream (Of a) m r
