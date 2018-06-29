@@ -2738,37 +2738,45 @@ unzip = loop where
 -}
 
 {- | Merge two streams of elements ordered with their 'Ord' instance.
+
+   The return values of both streams are returned.
 -}
 merge :: (Monad m, Ord a)
   => Stream (Of a) m r
-  -> Stream (Of a) m r
-  -> Stream (Of a) m r
+  -> Stream (Of a) m s
+  -> Stream (Of a) m (r, s)
 merge = mergeBy compare
 {-# INLINE merge #-}
 
 {- | Merge two streams, ordering them by applying the given function to
-   each element before comparing. -}
+   each element before comparing.
+
+   The return values of both streams are returned.
+-}
 mergeOn :: (Monad m, Ord b)
   => (a -> b)
   -> Stream (Of a) m r
-  -> Stream (Of a) m r
-  -> Stream (Of a) m r
+  -> Stream (Of a) m s
+  -> Stream (Of a) m (r, s)
 mergeOn f = mergeBy (comparing f)
 {-# INLINE mergeOn #-}
 
-{- | Merge two streams, ordering the elements using the given comparison function. -}
+{- | Merge two streams, ordering the elements using the given comparison function.
+
+   The return values of both streams are returned.
+-}
 mergeBy :: Monad m
   => (a -> a -> Ordering)
   -> Stream (Of a) m r
-  -> Stream (Of a) m r
-  -> Stream (Of a) m r
+  -> Stream (Of a) m s
+  -> Stream (Of a) m (r, s)
 mergeBy cmp = loop
   where
     loop str0 str1 = case str0 of
-      Return _          -> str1 -- rest of right stream when left is done
+      Return r0         -> (\ r1 -> (r0, r1)) <$> str1
       Effect m          -> Effect $ fmap (\ str -> loop str str1) m
       Step (a :> rest0) -> case str1 of
-        Return _          -> str0 -- rest of left stream when right is done
+        Return r1         -> (\ r0 -> (r0, r1)) <$> str0
         Effect m          -> Effect $ fmap (loop str0) m
         Step (b :> rest1) -> case cmp a b of
           LT -> Step (a :> loop rest0 str1)
