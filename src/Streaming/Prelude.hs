@@ -70,6 +70,7 @@ module Streaming.Prelude (
     , stdinLn
     , readLn
     , fromHandle
+    , readFile 
     , iterate
     , iterateM
     , repeat
@@ -91,6 +92,7 @@ module Streaming.Prelude (
     , mapM_
     , print
     , toHandle
+    , writeFile 
     , effects
     , erase
     , drained
@@ -2365,7 +2367,33 @@ stdoutLn = loop
            Right () -> loop rest
 {-# INLINABLE stdoutLn #-}
 
+{-| Read the lines of a file, using a function of the type: \'@'Stream' ('Of' 'String') 'IO' () -> 'IO' a@\'
+    to turn the stream into a value of type \''IO' a\'.
 
+>>> S.writeFile "lines.txt" $ S.take 2 S.stdinLn
+hello<Enter>
+world<Enter>
+>>> S.print $ S.readFile "lines.txt"
+"hello"
+"world"
+
+-}
+readFile :: FilePath -> (Stream (Of String) IO () -> IO a) -> IO a
+readFile f s = IO.withFile f IO.ReadMode $ \h -> s (fromHandle h)
+
+{-| Write a series of 'String's as lines to a file.
+
+>>> S.writeFile "lines.txt" $ S.take 2 S.stdinLn
+hello<Enter>
+world<Enter>
+
+>>> S.stdoutLn $ S.readFile "lines.txt"
+hello
+world
+
+-}
+writeFile :: FilePath -> Stream (Of String) IO r -> IO r
+writeFile f = IO.withFile f IO.WriteMode . flip toHandle
 
 {-| Write 'String's to 'IO.stdout' using 'putStrLn'
 
