@@ -2373,7 +2373,7 @@ stdoutLn = loop
 >>> S.writeFile "lines.txt" $ S.take 2 S.stdinLn
 hello<Enter>
 world<Enter>
->>> S.print $ S.readFile "lines.txt"
+>>> S.readFile "lines.txt" S.print
 "hello"
 "world"
 
