@@ -2879,7 +2879,7 @@ slidingWindow n = setup (max 1 n :: Int) mempty
         Left r -> return r
         Right (a,rest) -> do 
           yield (sequ Seq.|> a)
-          window (Seq.drop 1 sequ Seq.|> a) rest
+          window (Seq.drop 1 $ sequ Seq.|> a) rest
     setup 0 !sequ str = do
        yield sequ 
        window (Seq.drop 1 sequ) str 
