@@ -172,6 +172,8 @@ module Streaming.Prelude (
     , fold_
     , foldM
     , foldM_
+    , foldMap
+    , foldMap_
     , all
     , all_
     , any
@@ -273,7 +275,7 @@ import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat
                       , print, zipWith, zip, zipWith3, zip3, unzip, seq, show, read
                       , readLn, sequence, concat, span, break, readFile, writeFile
                       , minimum, maximum, elem, notElem, all, any, head
-                      , last)
+                      , last, foldMap)
 
 import qualified GHC.IO.Exception as G
 import qualified System.IO as IO
@@ -1389,9 +1391,18 @@ last<Enter>
 Last {getLast = Just "last"} :> ()
 
  -}
+
+foldMap :: (Monad m, Monoid w) => (a -> w) -> Stream (Of a) m r -> m (Of w r)
+foldMap f = fold (\acc a -> let !fa = f $! a in mappend acc fa) mempty id
+{-# INLINE foldMap #-}
+
+foldMap_ :: (Monad m, Monoid w) => (a -> w) -> Stream (Of a) m r -> m w
+foldMap_ f = fold_ (\acc a -> let !fa = f $! a in mappend acc fa) mempty id
+{-# INLINE foldMap_ #-}
+
 mconcat :: (Monad m, Monoid w) => Stream (Of w) m r -> m (Of w r)
 mconcat = fold mappend mempty id
-{-#INLINE mconcat #-}
+{-# INLINE mconcat #-}
 
 data Maybe_ a = Just_ !a | Nothing_
 mconcat_ :: (Monad m, Monoid w) => Stream (Of w) m r -> m w
@@ -1401,7 +1412,7 @@ minimum :: (Monad m, Ord a) => Stream (Of a) m r -> m (Of (Maybe a) r)
 minimum = fold (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (min a a'))
                Nothing_
                (\m -> case m of Nothing_ -> Nothing; Just_ r -> Just r)
-{-#INLINE minimum #-}
+{-# INLINE minimum #-}
 
 minimum_ :: (Monad m, Ord a) => Stream (Of a) m r -> m (Maybe a)
 minimum_ = fold_ (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (min a a'))
