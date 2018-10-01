@@ -1383,6 +1383,23 @@ mappedPost :: (Monad m, Functor g) => (forall x . f x -> m (g x)) -> Stream f m 
 mappedPost = mapsMPost
 {-# INLINE mappedPost #-}
 
+{-| Map each element of the stream to a monoid, and take the monoidal sum of the results.
+
+>>> S.foldMap Sum $ S.take 2 (S.stdinLn)
+1<Enter>
+2<Enter>
+3<Enter>
+Sum {getSum = 6} :> ()
+
+ -}
+foldMap :: (Monad m, Monoid w) => (a -> w) -> Stream (Of a) m r -> m (Of w r)
+foldMap f = fold (\ !acc a -> mappend acc (f a)) mempty id
+{-# INLINE foldMap #-}
+
+foldMap_ :: (Monad m, Monoid w) => (a -> w) -> Stream (Of a) m r -> m w
+foldMap_ f = fold_ (\ !acc a -> mappend acc (f a)) mempty id
+{-# INLINE foldMap_ #-}
+
 {-| Fold streamed items into their monoidal sum
 
 >>> S.mconcat $ S.take 2 $ S.map (Data.Monoid.Last . Just) (S.stdinLn)
@@ -1391,15 +1408,6 @@ last<Enter>
 Last {getLast = Just "last"} :> ()
 
  -}
-
-foldMap :: (Monad m, Monoid w) => (a -> w) -> Stream (Of a) m r -> m (Of w r)
-foldMap f = fold (\acc a -> let !fa = f $! a in mappend acc fa) mempty id
-{-# INLINE foldMap #-}
-
-foldMap_ :: (Monad m, Monoid w) => (a -> w) -> Stream (Of a) m r -> m w
-foldMap_ f = fold_ (\acc a -> let !fa = f $! a in mappend acc fa) mempty id
-{-# INLINE foldMap_ #-}
-
 mconcat :: (Monad m, Monoid w) => Stream (Of w) m r -> m (Of w r)
 mconcat = fold mappend mempty id
 {-# INLINE mconcat #-}
