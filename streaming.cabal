@@ -202,6 +202,7 @@ library
       Streaming
     , Streaming.Prelude
     , Streaming.Internal
+    , Streaming.ListT
     , Data.Functor.Of
   other-extensions:
       RankNTypes
