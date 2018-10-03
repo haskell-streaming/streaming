@@ -1,6 +1,23 @@
 - ???
 
-    Added `nubOrd` and friends.
+    Added `nubOrd`, `nubInt`, `nubOrdOn`, `nubIntOn`.
+
+    Fix performance regression in `for`.
+    
+    Add `foldMap` and `foldMap_`.
+    
+    Fix the behaviour of `slidingWindow 1`.
+    
+    Reintroduce `readFile` and `writeFile`, using plain `System.IO`
+    instead of `ResourceT` machinery.
+
+    Add `merge`, `mergeOn`, and `mergeBy`.
+
+    Improve performance of `concat`.
+
+    Improve performance of (`*>`), getting rid of the default implementation.
+
+    Generalise type signature of `toList_`.
 
 - 0.2.1.0
 
