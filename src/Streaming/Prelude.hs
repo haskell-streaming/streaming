@@ -47,15 +47,19 @@
 > --------------------------------------------------------------------------------------------------------------------
 >
 -}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -255,20 +259,43 @@ module Streaming.Prelude (
 
     -- * Basic Type
     , Stream
+
+    -- * ListT
+    , ListT(..)
+    , runListT
   ) where
+
 import Streaming.Internal
 
+import Control.Applicative (Applicative (..), Alternative (..))
+import Control.Concurrent (threadDelay)
+import Control.Exception (throwIO, try)
 import Control.Monad hiding (filterM, mapM, mapM_, foldM, foldM_, replicateM, sequence)
-import Data.Functor.Identity
-import Data.Functor.Sum
+import Control.Monad.Error.Class
+import Control.Monad.Morph
+import Control.Monad.Reader.Class
+import Control.Monad.State.Class
 import Control.Monad.Trans
-import Control.Applicative (Applicative (..))
+import Control.Monad.Writer.Class
+import Control.Monad.Zip (MonadZip (..))
 import Data.Functor (Functor (..), (<$))
-
-import qualified Prelude as Prelude
-import qualified Data.Foldable as Foldable
-import qualified Data.Sequence as Seq
+import Data.Functor.Compose
+import Data.Functor.Identity
+import Data.Functor.Of
+import Data.Functor.Sum
+import Data.Monoid (Monoid (mappend, mempty))
+import Data.Ord (Ordering (..), comparing)
+import Data.Semigroup (Semigroup((<>)))
+import Foreign.C.Error (Errno(Errno), ePIPE)
 import Text.Read (readMaybe)
+import qualified Data.Foldable as Foldable
+import qualified Data.IntSet as IntSet
+import qualified Data.Sequence as Seq
+import qualified Data.Set as Set
+import qualified GHC.IO.Exception as G
+import qualified Prelude as Prelude
+import qualified System.IO as IO
+
 import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat
                       , sum, product, iterate, repeat, cycle, replicate, splitAt
                       , takeWhile, enumFrom, enumFromTo, enumFromThen, length
@@ -277,17 +304,6 @@ import Prelude hiding (map, mapM, mapM_, filter, drop, dropWhile, take, mconcat
                       , minimum, maximum, elem, notElem, all, any, head
                       , last, foldMap)
 
-import qualified GHC.IO.Exception as G
-import qualified System.IO as IO
-import Foreign.C.Error (Errno(Errno), ePIPE)
-import Control.Exception (throwIO, try)
-import Data.Monoid (Monoid (mappend, mempty))
-import Control.Concurrent (threadDelay)
-import Data.Functor.Compose
-import Data.Functor.Of
-import qualified Data.Set as Set
-import qualified Data.IntSet as IntSet
-import Data.Ord (Ordering (..), comparing)
 
 -- instance (Eq a) => Eq1 (Of a) where eq1 = (==)
 -- instance (Ord a) => Ord1 (Of a) where compare1 = compare
@@ -355,10 +371,10 @@ strictly = \(a,b) -> a :> b
 
 fst' :: Of a b -> a
 fst' (a :> _) = a
-{-#INLINE fst' #-}
+{-# INLINE fst' #-}
 snd' :: Of a b -> b
 snd' (_ :> b) = b
-{-#INLINE snd' #-}
+{-# INLINE snd' #-}
 
 {-| Map a function over the first element of an @Of@ pair
 
@@ -380,7 +396,7 @@ False :> "hi"
 
 mapOf :: (a -> b) -> Of a r -> Of b r
 mapOf f (a:> b) = (f a :> b)
-{-#INLINE mapOf #-}
+{-# INLINE mapOf #-}
 
 {-| A lens into the first element of a left-strict pair -}
 _first :: Functor f => (a -> f a') -> Of a b -> f (Of a' b)
@@ -390,7 +406,7 @@ _first afb (a:>b) = fmap (\c -> (c:>b)) (afb a)
 {-| A lens into the second element of a left-strict pair -}
 _second :: Functor f => (b -> f b') -> Of a b -> f (Of a b')
 _second afb (a:>b) = fmap (\c -> (a:>c)) (afb b)
-{-#INLINABLE _second #-}
+{-# INLINABLE _second #-}
 
 all :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m (Of Bool r)
 all thus = loop True where
@@ -402,7 +418,7 @@ all thus = loop True where
       else do
         r <- effects rest
         return (False :> r)
-{-#INLINABLE all #-}
+{-# INLINABLE all #-}
 
 all_ :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m Bool
 all_ thus = loop True where
@@ -412,7 +428,7 @@ all_ thus = loop True where
     Step (a :> rest) -> if thus a
       then loop True rest
       else return False
-{-#INLINABLE all_ #-}
+{-# INLINABLE all_ #-}
 
 
 any :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m (Of Bool r)
@@ -425,7 +441,7 @@ any thus = loop False where
         r <- effects rest
         return (True :> r)
       else loop False rest
-{-#INLINABLE any #-}
+{-# INLINABLE any #-}
 
 any_ :: Monad m => (a -> Bool) -> Stream (Of a) m r -> m Bool
 any_ thus = loop False where
@@ -435,7 +451,7 @@ any_ thus = loop False where
     Step (a :> rest) -> if thus a
       then return True
       else loop False rest
-{-#INLINABLE any_ #-}
+{-# INLINABLE any_ #-}
 
 {-| Break a sequence upon meeting element falls under a predicate,
     keeping it and the rest of the stream as the return value.
@@ -520,7 +536,7 @@ breaks thus  = loop  where
        if not (thus a)
           then Step $ fmap loop (yield a >> break thus p')
           else loop p'
-{-#INLINABLE breaks #-}
+{-# INLINABLE breaks #-}
 
 {-| Apply an action to all values, re-yielding each
 
@@ -616,7 +632,7 @@ False
 
 cycle :: (Monad m, Functor f) => Stream f m r -> Stream f m s
 cycle str = loop where loop = str >> loop
-{-#INLINABLE cycle #-}
+{-# INLINABLE cycle #-}
 
 
 {-| Interpolate a delay of n seconds between yields.
@@ -632,7 +648,7 @@ delay seconds = loop where
         yield a
         liftIO $ threadDelay pico
         loop rest
-{-#INLINABLE delay #-}
+{-# INLINABLE delay #-}
 
 
 
@@ -661,7 +677,7 @@ delay seconds = loop where
 -}
 drained :: (Monad m, Monad (t m), MonadTrans t) => t m (Stream (Of a) m r) -> t m r
 drained tms = tms >>= lift . effects
-{-#INLINE drained #-}
+{-# INLINE drained #-}
 
 -- ---------------
 -- drop
@@ -767,7 +783,7 @@ effects = loop where
     Return r         -> return r
     Effect m         -> m >>= loop
     Step (_ :> rest) -> loop rest
-{-#INLINABLE effects #-}
+{-# INLINABLE effects #-}
 
 {-| Exhaust a stream remembering only whether @a@ was an element.
 
@@ -783,7 +799,7 @@ elem a' = loop False where
       if a == a'
         then fmap (True :>) (effects rest)
         else loop False rest
-{-#INLINABLE elem #-}
+{-# INLINABLE elem #-}
 
 elem_ :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m Bool
 elem_ a' = loop False where
@@ -795,7 +811,7 @@ elem_ a' = loop False where
       if a == a'
         then return True
         else loop False rest
-{-#INLINABLE elem_ #-}
+{-# INLINABLE elem_ #-}
 
 -- -----
 -- enumFrom
@@ -962,7 +978,7 @@ filterM thePred = loop where
 -}
 fold_ :: Monad m => (x -> a -> x) -> x -> (x -> b) -> Stream (Of a) m r -> m b
 fold_ step begin done = fmap (\(a :> _) -> a) . fold step begin done
-{-#INLINE fold_ #-}
+{-# INLINE fold_ #-}
 
 {-| Strict fold of a 'Stream' of elements that preserves the return value.
     The third parameter will often be 'id' where a fold is written by hand:
@@ -1014,7 +1030,7 @@ foldM_
     :: Monad m
     => (x -> a -> m x) -> m x -> (x -> m b) -> Stream (Of a) m r -> m b
 foldM_ step begin done = fmap (\(a :> _) -> a) . foldM step begin done
-{-#INLINE foldM_ #-}
+{-# INLINE foldM_ #-}
 
 {-| Strict, monadic fold of the elements of a 'Stream (Of a)'
 
@@ -1055,7 +1071,7 @@ foldM step begin done str = do
 --       b <- done x'
 --       return (b :> r)
 --   where seq = Prelude.seq
--- {-#INLINE foldM #-}
+-- {-# INLINE foldM #-}
 
 {-| A natural right fold for consuming a stream of elements.
     See also the more general 'iterTM' in the 'Streaming' module
@@ -1166,7 +1182,7 @@ groupBy equals = loop  where
 -}
 group :: (Monad m, Eq a) => Stream (Of a) m r -> Stream (Stream (Of a) m) m r
 group = groupBy (==)
-{-#INLINE group #-}
+{-# INLINE group #-}
 
 
 head :: Monad m => Stream (Of a) m r -> m (Of (Maybe a) r)
@@ -1174,14 +1190,14 @@ head str = case str of
   Return r            -> return (Nothing :> r)
   Effect m            -> m >>= head
   Step (a :> rest)    -> effects rest >>= \r -> return (Just a :> r)
-{-#INLINABLE head #-}
+{-# INLINABLE head #-}
 
 head_ :: Monad m => Stream (Of a) m r -> m (Maybe a)
 head_ str = case str of
   Return _ -> return Nothing
   Effect m -> m >>= head_
   Step (a :> _) -> return (Just a)
-{-#INLINABLE head_ #-}
+{-# INLINABLE head_ #-}
 
 intersperse :: Monad m => a -> Stream (Of a) m r -> Stream (Of a) m r
 intersperse x str = case str of
@@ -1193,7 +1209,7 @@ intersperse x str = case str of
     Return r -> Step (a :> Return r)
     Effect m -> Effect (fmap (loop a) m)
     Step (b :> rest) -> Step (a :> Step (x :> loop b rest))
-{-#INLINABLE intersperse #-}
+{-# INLINABLE intersperse #-}
 
 
 
@@ -1230,7 +1246,7 @@ last = loop Nothing_ where
       Just_ a  -> return (Just a :> r)
     Effect m            -> m >>= loop mb
     Step (a :> rest)  -> loop (Just_ a) rest
-{-#INLINABLE last #-}
+{-# INLINABLE last #-}
 
 
 
@@ -1242,7 +1258,7 @@ last_ = loop Nothing_ where
       Just_ a  -> return (Just a)
     Effect m -> m >>= loop mb
     Step (a :> rest) -> loop (Just_ a) rest
-{-#INLINABLE last_ #-}
+{-# INLINABLE last_ #-}
 
 
 -- ---------------
@@ -1257,7 +1273,7 @@ last_ = loop Nothing_ where
 -}
 length_ :: Monad m => Stream (Of a) m r -> m Int
 length_ = fold_ (\n _ -> n + 1) 0 id
-{-#INLINE length_#-}
+{-# INLINE length_#-}
 
 {-| Run a stream, keeping its length and its return value.
 
@@ -1271,7 +1287,7 @@ length_ = fold_ (\n _ -> n + 1) 0 id
 
 length :: Monad m => Stream (Of a) m r -> m (Of Int r)
 length = fold (\n _ -> n + 1) 0 id
-{-#INLINE length #-}
+{-# INLINE length #-}
 -- ---------------
 -- map
 -- ---------------
@@ -1372,7 +1388,7 @@ mapM_ f = loop where
 
 mapped :: (Monad m, Functor f) => (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
 mapped = mapsM
-{-#INLINE mapped #-}
+{-# INLINE mapped #-}
 
 {-| A version of 'mapped' that imposes a 'Functor' constraint on the target functor rather
     than the source functor. This version should be preferred if 'fmap' on the target
@@ -1426,19 +1442,19 @@ minimum_ :: (Monad m, Ord a) => Stream (Of a) m r -> m (Maybe a)
 minimum_ = fold_ (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (min a a'))
                  Nothing_
                  (\m -> case m of Nothing_ -> Nothing; Just_ r -> Just r)
-{-#INLINE minimum_ #-}
+{-# INLINE minimum_ #-}
 
 maximum :: (Monad m, Ord a) => Stream (Of a) m r -> m (Of (Maybe a) r)
 maximum = fold (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (max a a'))
                Nothing_
                (\m -> case m of Nothing_ -> Nothing; Just_ r -> Just r)
-{-#INLINE maximum #-}
+{-# INLINE maximum #-}
 
 maximum_ :: (Monad m, Ord a) => Stream (Of a) m r -> m (Maybe a)
 maximum_ = fold_ (\m a -> case m of Nothing_ -> Just_ a ; Just_ a' -> Just_ (max a a'))
                  Nothing_
                  (\m -> case m of Nothing_ -> Nothing; Just_ r -> Just r)
-{-#INLINE maximum_ #-}
+{-# INLINE maximum_ #-}
 
 {-| The standard way of inspecting the first item in a stream of elements, if the
      stream is still \'running\'. The @Right@ case contains a
@@ -1484,7 +1500,7 @@ notElem a' = loop True where
       if a == a'
         then fmap (False :>) (effects rest)
         else loop True rest
-{-#INLINABLE notElem #-}
+{-# INLINABLE notElem #-}
 
 notElem_ :: (Monad m, Eq a) => a -> Stream (Of a) m r -> m Bool
 notElem_ a' = loop True where
@@ -1496,7 +1512,7 @@ notElem_ a' = loop True where
       if a == a'
         then return False
         else loop True rest
-{-#INLINABLE notElem_ #-}
+{-# INLINABLE notElem_ #-}
 
 
 {-| Remove repeated elements from a Stream. 'nubOrd' of course accumulates a 'Data.Set.Set' of
@@ -1731,7 +1747,7 @@ scan step begin done str = Step (done begin :> loop begin str)
       Step (a :> rest) -> 
         let !acc' = step acc a 
         in Step (done acc' :> loop acc' rest)
-{-#INLINABLE scan #-}
+{-# INLINABLE scan #-}
 
 {-| Strict left scan, accepting a monadic function. It can be used with
     'FoldM's from @Control.Foldl@ using 'impurely'. Here we yield
@@ -1926,7 +1942,7 @@ split t  = loop  where
          if a /= t
             then Step (fmap loop (yield a >> break (== t) rest))
             else loop rest
-{-#INLINABLE split #-}
+{-# INLINABLE split #-}
 
 {-| Split a succession of layers after some number, returning a streaming or
     effectful pair. This function is the same as the 'splitsAt' exported by the
@@ -1958,7 +1974,7 @@ subst f s = loop s where
     Return r         -> Return r
     Effect m         -> Effect (fmap loop m)
     Step (a :> rest) -> Step (loop rest <$ f a)
-{-#INLINABLE subst #-}
+{-# INLINABLE subst #-}
 -- ---------------
 -- take
 -- ---------------
@@ -2130,7 +2146,7 @@ untilRight act = Effect loop where
     case e of
       Right r -> return (Return r)
       Left a -> return (Step (a :> Effect loop))
-{-#INLINABLE untilRight #-}
+{-# INLINABLE untilRight #-}
 
 -- ---------------------------------------
 -- with
@@ -2157,7 +2173,7 @@ with s f = loop s where
     Return r         -> Return r
     Effect m         -> Effect (fmap loop m)
     Step (a :> rest) -> Step (loop rest <$ f a)
-{-#INLINABLE with #-}
+{-# INLINABLE with #-}
 
 -- ---------------------------------------
 -- yield
@@ -2506,31 +2522,31 @@ stdoutLn' = toHandle IO.stdout
 
 distinguish :: (a -> Bool) -> Of a r -> Sum (Of a) (Of a) r
 distinguish predicate (a :> b) = if predicate a then InR (a :> b) else InL (a :> b)
-{-#INLINE distinguish #-}
+{-# INLINE distinguish #-}
 
 sumToEither ::Sum (Of a) (Of b) r ->  Of (Either a b) r
 sumToEither s = case s of
   InL (a :> r) -> Left a :> r
   InR (b :> r) -> Right b :> r
-{-#INLINE sumToEither #-}
+{-# INLINE sumToEither #-}
 
 eitherToSum :: Of (Either a b) r -> Sum (Of a) (Of b) r
 eitherToSum s = case s of
   Left a :> r  -> InL (a :> r)
   Right b :> r -> InR (b :> r)
-{-#INLINE eitherToSum #-}
+{-# INLINE eitherToSum #-}
 
 composeToSum ::  Compose (Of Bool) f r -> Sum f f r
 composeToSum x = case x of
   Compose (True :> f) -> InR f
   Compose (False :> f) -> InL f
-{-#INLINE composeToSum #-}
+{-# INLINE composeToSum #-}
 
 sumToCompose :: Sum f f r -> Compose (Of Bool) f r
 sumToCompose x = case x of
   InR f -> Compose (True :> f)
   InL f -> Compose (False :> f)
-{-#INLINE sumToCompose #-}
+{-# INLINE sumToCompose #-}
 
 {-| Store the result of any suitable fold over a stream, keeping the stream for
     further manipulation. @store f = f . copy@ :
@@ -2612,7 +2628,7 @@ store
   :: Monad m =>
      (Stream (Of a) (Stream (Of a) m) r -> t) -> Stream (Of a) m r -> t
 store f x = f (copy x)
-{-#INLINE store #-}
+{-# INLINE store #-}
 
 {-| Duplicate the content of stream, so that it can be acted on twice in different ways,
     but without breaking streaming. Thus, with @each [1,2]@ I might do:
@@ -2703,13 +2719,13 @@ copy = Effect . return . loop where
     Return r         -> Return r
     Effect m         -> Effect (fmap loop (lift m))
     Step (a :> rest) -> Effect (Step (a :> Return (Step (a :> loop rest))))
-{-#INLINABLE copy#-}
+{-# INLINABLE copy#-}
 
 duplicate
   :: Monad m =>
      Stream (Of a) m r -> Stream (Of a) (Stream (Of a) m) r
 duplicate = copy
-{-#INLINE duplicate #-}
+{-# INLINE duplicate #-}
 
 {-| The type
 
@@ -2770,7 +2786,7 @@ unzip = loop where
    Return r -> Return r
    Effect m -> Effect (fmap loop (lift m))
    Step ((a,b):> rest) -> Step (a :> Effect (Step (b :> Return (loop rest))))
-{-#INLINABLE unzip #-}
+{-# INLINABLE unzip #-}
 
 
 
@@ -2857,7 +2873,7 @@ catMaybes = loop where
     Step (ma :> snext) -> case ma of
       Nothing -> loop snext
       Just a -> Step (a :> loop snext)
-{-#INLINABLE catMaybes #-}
+{-# INLINABLE catMaybes #-}
 
 {-| The 'mapMaybe' function is a version of 'map' which can throw out elements. In particular,
     the functional argument returns something of type @'Maybe' b@. If this is 'Nothing', no element
@@ -2872,7 +2888,7 @@ mapMaybe phi = loop where
     Step (a :> snext) -> case phi a of
       Nothing -> loop snext
       Just b -> Step (b :> loop snext)
-{-#INLINABLE mapMaybe #-}
+{-# INLINABLE mapMaybe #-}
 
 {-| 'slidingWindow' accumulates the first @n@ elements of a stream, 
      update thereafter to form a sliding window of length @n@.
@@ -2907,7 +2923,7 @@ slidingWindow n = setup (max 1 n :: Int) mempty
       case e of 
         Left r ->  yield sequ >> return r
         Right (x,rest) -> setup (m-1) (sequ Seq.|> x) rest
-{-#INLINABLE slidingWindow #-}
+{-# INLINABLE slidingWindow #-}
 
 -- | Map monadically over a stream, producing a new stream
 --   only containing the 'Just' values.
@@ -2920,4 +2936,177 @@ mapMaybeM phi = loop where
       flip fmap (phi a) $ \x -> case x of
         Nothing -> loop snext
         Just b -> Step (b :> loop snext)
-{-#INLINABLE mapMaybeM #-}
+{-# INLINABLE mapMaybeM #-}
+
+{-| The list monad transformer.
+
+    'pure' and 'return' correspond to 'yield', yielding a single value.
+
+    ('>>=') corresponds to 'for', calling the second computation once for
+    each time the first computation 'yield's.
+-}
+newtype ListT m a = Select { enumerate :: Stream (Of a) m () }
+
+instance Monad m => Functor (ListT m) where
+  fmap f p = Select (for (enumerate p) (\a -> yield (f a)))
+  {-# INLINE fmap #-}
+
+instance Monad m => Applicative (ListT m) where
+  pure a = Select (yield a)
+  {-# INLINE pure #-}
+  mf <*> mx = Select (
+    for (enumerate mf) (\f ->
+    for (enumerate mx) (\x ->
+    yield (f x) ) ) )
+
+instance Monad m => Monad (ListT m) where
+  return = pure
+  {-# INLINE return #-}
+  m >>= f = Select (for (enumerate m) (\a -> enumerate (f a)))
+  {-# INLINE (>>=) #-}
+
+instance Foldable m => Foldable (ListT m) where
+  foldMap f = go . enumerate
+    where
+      go p = case p of
+        Return () -> mempty
+        Effect m -> Foldable.foldMap go m
+        Step (a :> rest) -> f a `mappend` go rest
+  {-# INLINE foldMap #-}
+
+instance (Monad m, Traversable m) => Traversable (ListT m) where
+  traverse k (Select p) = fmap Select (traverse_ p)
+    where
+      traverse_ (Return ()) = pure (Return ())
+      traverse_ (Effect m)  = fmap Effect (traverse traverse_ m)
+      traverse_ (Step (a :> rest)) = (\a_ rest_ -> Step (a_ :> rest_)) <$> k a <*> traverse_ rest
+
+instance MonadTrans ListT where
+  lift m = Select (do
+    a <- lift m
+    yield a )
+
+instance MonadIO m => MonadIO (ListT m) where
+  liftIO m = lift (liftIO m)
+  {-# INLINE liftIO #-}
+
+instance Monad m => Alternative (ListT m) where
+  empty = Select (pure ())
+  {-# INLINE empty #-}
+  p1 <|> p2 = Select (do
+    enumerate p1
+    enumerate p2 )
+
+instance Monad m => MonadPlus (ListT m) where
+  mzero = empty
+  {-# INLINE mzero #-}
+  mplus = (<|>)
+  {-# INLINE mplus #-}
+
+instance MFunctor ListT where
+  hoist morph = Select . hoist morph . enumerate
+  {-# INLINE hoist #-}
+
+instance MMonad ListT where
+  embed f (Select p0) = Select (loop p0)
+    where
+      loop (Return ()) = Return ()
+      loop (Effect m)  = for (enumerate (fmap loop (f m))) id
+      loop (Step (a :> rest)) = Step (a :> loop rest)
+  {-# INLINE embed #-}
+
+instance Monad m => Semigroup (ListT m a) where
+  (<>) = (<|>)
+  {-# INLINE (<>) #-}
+
+instance Monad m => Monoid (ListT m a) where
+  mempty = empty
+  {-# INLINE mempty #-}
+#if !(MIN_VERSION_base(4,11,0))
+  mappend = (<|>)
+  {-# INLINE mappend #-}
+#endif
+
+instance (MonadState s m) => MonadState s (ListT m) where
+  get = lift get
+  {-# INLINE get #-}
+
+  put s = lift (put s)
+  {-# INLINE put #-}
+
+  state f = lift (state f)
+  {-# INLINE state #-}
+
+instance (MonadWriter w m) => MonadWriter w (ListT m) where
+  writer = lift . writer
+  {-# INLINE writer #-}
+
+  tell w = lift (tell w)
+  {-# INLINE tell #-}
+
+  --listen :: ListT m a -> ListT m (a, w)
+  listen l = Select (go (enumerate l) mempty)
+    where
+      go p w = case p of
+        Return () -> Return ()
+        Effect m  -> Effect (do
+          (p', w') <- listen m
+          pure (go p' $! mappend w w') )
+        Step (a :> rest) -> Step ( (a,w) :> go rest w)
+
+  pass l = Select (go (enumerate l) mempty)
+    where
+      --go :: forall m a w. Stream (Of (w, a)) m () -> (w -> w) -> Stream (Of a) m ()
+      go p w = case p of
+        Return () -> Return ()
+        Effect m  -> Effect (do
+          (p', w') <- listen m
+          pure (go p' $! mappend w w'))
+        Step ((b, f) :> rest) -> Effect (pass (return (Step (b :> (go rest (f w))), \_ -> f w) ))
+
+instance (MonadReader i m) => MonadReader i (ListT m) where
+  ask = lift ask
+  {-# INLINE ask #-}
+
+  local f l = Select (local f (enumerate l))
+  {-# INLINE local #-}
+
+  reader f = lift (reader f)
+  {-# INLINE reader #-}
+
+instance (MonadError e m) => MonadError e (ListT m) where
+  throwError e = lift (throwError e)
+  {-# INLINE throwError #-}
+
+  catchError l k = Select (catchError (enumerate l) (\e -> enumerate (k e)))
+  {-# INLINE catchError #-}
+
+{- These instances require a dependency on `exceptions`.
+instance MonadThrow m => MonadThrow (ListT m) where
+  throwM = Select . throwM
+  {-# INLINE throwM #-}
+
+instance MonadCatch m => MonadCatch (ListT m) where
+  catch l k = Select (Control.Monad.Catch.catch (enumerate l) (\e -> enumerate (k e)))
+  {-# INLINE catch #-}
+-}
+
+instance Monad m => MonadZip (ListT m) where
+  mzipWith f = go
+    where
+      go xs ys = Select $ do
+        xres <- lift $ next (enumerate xs)
+        case xres of
+          Left () -> pure ()
+          Right (x, xrest) -> do
+            yres <- lift $ next (enumerate ys)
+            case yres of
+              Left () -> pure ()
+              Right (y, yrest) -> do
+                yield (f x y)
+                enumerate (go (Select xrest) (Select yrest))
+
+-- | Run a self-contained 'ListT' computation
+runListT :: Monad m => ListT m a -> m ()
+runListT l = effects (enumerate (l >> mzero))
+{-# INLINABLE runListT #-}
