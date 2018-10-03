@@ -285,6 +285,7 @@ import Data.Functor.Of
 import Data.Functor.Sum
 import Data.Monoid (Monoid (mappend, mempty))
 import Data.Ord (Ordering (..), comparing)
+import Data.Semigroup (Semigroup((<>)))
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Text.Read (readMaybe)
 import qualified Data.Foldable as Foldable
