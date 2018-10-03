@@ -533,13 +533,13 @@ breaks thus  = loop  where
 120 :> ()
 -}
 
-chain :: Monad m => (a -> m ()) -> Stream (Of a) m r -> Stream (Of a) m r
+chain :: Monad m => (a -> m y) -> Stream (Of a) m r -> Stream (Of a) m r
 chain f = loop where
   loop str = case str of
     Return r -> return r
     Effect mn  -> Effect (fmap loop mn)
     Step (a :> rest) -> Effect $ do
-      f a
+      _ <- f a
       return (Step (a :> loop rest))
 {-# INLINABLE chain #-}
 
