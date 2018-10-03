@@ -1039,7 +1039,7 @@ separate odd_even
 
    Or we can write them to separate files or whatever:
 
->>> runResourceT $ S.writeFile "even.txt" . S.show $ S.writeFile "odd.txt" . S.show $ S.separate odd_even
+>>> S.writeFile "even.txt" . S.show $ S.writeFile "odd.txt" . S.show $ S.separate odd_even
 >>> :! cat even.txt
 2
 4

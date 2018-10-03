@@ -1972,7 +1972,7 @@ subst f s = loop s where
 >>> S.toList $ S.take 3 $ each "with"
 "wit" :> ()
 
->>> runResourceT $ S.stdoutLn $ S.take 3 $ S.readFile "stream.hs"
+>>> S.stdoutLn $ S.take 3 $ S.readFile "stream.hs"
 import Streaming
 import qualified Streaming.Prelude as S
 import Streaming.Prelude (each, next, yield)
@@ -2597,7 +2597,7 @@ sumToCompose x = case x of
     like 'MonadResource'.  Thus I can independently filter and write to one file, but
     nub and write to another, or interact with a database and a logfile and the like:
 
->>> runResourceT $ (S.writeFile "hello2.txt" . S.nubOrd) $ store (S.writeFile "hello.txt" . S.filter (/= "world")) $ each ["hello", "world", "goodbye", "world"]
+>>> (S.writeFile "hello2.txt" . S.nubOrd) $ store (S.writeFile "hello.txt" . S.filter (/= "world")) $ each ["hello", "world", "goodbye", "world"]
 >>> :! cat hello.txt
 hello
 goodbye
