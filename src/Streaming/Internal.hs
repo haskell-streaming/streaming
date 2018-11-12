@@ -726,12 +726,14 @@ takes n = void . splitsAt n
 2
 1
 -}
-chunksOf :: (Monad m, Functor f) => Int -> Stream f m r -> Stream (Stream f m) m r
-chunksOf n0 = loop where
-  loop stream = case stream of
-    Return r  -> Return r
-    Effect m  -> Effect (fmap loop m)
-    Step fs   -> Step (Step (fmap (fmap loop . splitsAt (n0-1)) fs))
+chunksOf :: (Functor f, Monad m, Monad n) => Int -> Stream f m r -> Stream (Stream f m) n r
+chunksOf = go
+  where
+    go !n s = do
+      stage <- yields $ lift . inspect =<< splitsAt n s
+      case stage of
+        Left r -> pure r
+        Right s' -> go n $ wrap s'
 {-# INLINABLE chunksOf #-}        
 
 {- | Make it possible to \'run\' the underlying transformed monad.

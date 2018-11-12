@@ -21,6 +21,9 @@
 
     Add `wrapEffect`.
 
+    Generalized the type of `chunksOf` and made it handle effects better.
+    (Thanks, Torgeir Strand Henriksen.)
+
 - 0.2.1.0
 
     Adding `Semigroup` instances for GHC 8.4.
