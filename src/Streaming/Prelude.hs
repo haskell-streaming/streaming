@@ -138,8 +138,8 @@ module Streaming.Prelude (
     , read
     , show
     , cons
-    , slidingWindow    
-
+    , slidingWindow
+    , wrapEffect
 
     -- * Splitting and inspecting streams of elements
     , next
@@ -769,6 +769,19 @@ effects = loop where
     Effect m         -> m >>= loop
     Step (_ :> rest) -> loop rest
 {-# INLINABLE effects #-}
+
+{-| Before evaluating the monadic action returning the next step in the 'Stream', @wrapEffect@
+    extracts the value in a monadic computation @m a@ and passes it to a computation @a -> m y@.
+
+-}
+wrapEffect :: (Monad m, Functor f) => m a -> (a -> m y) -> Stream f m r -> Stream f m r
+wrapEffect m f = loop where
+  loop stream = do
+    x <- lift m
+    step <- lift $ inspect stream
+    _ <- lift $ f x
+    either pure loop' step
+  loop' stream = wrap (fmap loop stream)
 
 {-| Exhaust a stream remembering only whether @a@ was an element.
 
