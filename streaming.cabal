@@ -186,13 +186,13 @@ description:         This package contains two modules, <http://hackage.haskell.
 license:             BSD3
 license-file:        LICENSE
 author:              michaelt
-maintainer:          andrew.thaddeus@gmail.com, what_is_it_to_do_anything@yahoo.com
+maintainer:          andrew.thaddeus@gmail.com, chessai1996@gmail.com
 stability:           Experimental
 homepage:            https://github.com/haskell-streaming/streaming
 bug-reports:         https://github.com/haskell-streaming/streaming/issues
 category:            Data, Pipes, Streaming
 extra-source-files:  README.md, changelog.md
-tested-with:         GHC ==7.10.3, GHC ==8.0.2, GHC ==8.2.2
+tested-with:         GHC==7.10.3, GHC==8.0.2, GHC==8.2.2, GHC==8.4.4, GHC==8.6.2
 
 source-repository head
     type: git
@@ -213,13 +213,7 @@ library
     , transformers-base < 0.5
     , ghc-prim
     , containers
-  hs-source-dirs:    src
-  default-language:  Haskell2010
-  ghc-options:
-    -Wall
-    -fwarn-name-shadowing
-  if impl(ghc >= 8.0)
-    ghc-options:
-      -Wincomplete-uni-patterns
-      -Wincomplete-record-updates
-      -Wcompat
+  hs-source-dirs:
+    src
+  default-language:
+    Haskell2010
