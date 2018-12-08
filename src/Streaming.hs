@@ -1,6 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
 
-{-# OPTIONS_GHC -Wall #-}
 module Streaming
    (
    -- * An iterable streaming monad transformer
@@ -115,10 +114,10 @@ import Data.Bifunctor
     Some of these are quite abstract and pervade any use of the library,
     e.g.
 
->   maps ::    (forall x . f x -> g x)     -> Stream f m r -> Stream g m r
->   mapped ::  (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
->   hoist ::   (forall x . m x -> n x)     -> Stream f m r -> Stream f n r -- from the MFunctor instance
->   concats :: Stream (Stream f m) m r -> Stream f m r   
+>   maps    :: (forall x . f x -> g x)     -> Stream f m r -> Stream g m r
+>   mapped  :: (forall x . f x -> m (g x)) -> Stream f m r -> Stream g m r
+>   hoist   :: (forall x . m x -> n x)     -> Stream f m r -> Stream f n r -- from the MFunctor instance
+>   concats :: Stream (Stream f m) m r     -> Stream f m r
 
     (assuming here and thoughout that @m@ or @n@ satisfies a @Monad@ constraint, and
     @f@ or @g@ a @Functor@ constraint.)
@@ -128,9 +127,9 @@ import Data.Bifunctor
 >   chunksOf     :: Int -> Stream f m r -> Stream (Stream f m) m r
 >   splitsAt     :: Int -> Stream f m r -> Stream f m (Stream f m r)
 >   zipsWith     :: (forall x y. f x -> g y -> h (x, y))
-                 -> Stream f m r -> Stream g m r -> Stream h m r
+>                -> Stream f m r -> Stream g m r -> Stream h m r
 >   zipsWith'    :: (forall x y p. (x -> y -> p) -> f x -> g y -> h p)
-                 -> Stream f m r -> Stream g m r -> Stream h m r
+>                -> Stream f m r -> Stream g m r -> Stream h m r
 >   intercalates :: Stream f m () -> Stream (Stream f m) m r -> Stream f m r
 >   unzips       :: Stream (Compose f g) m r ->  Stream f (Stream g m) r
 >   separate     :: Stream (Sum f g) m r -> Stream f (Stream g) m r  -- cp. partitionEithers
