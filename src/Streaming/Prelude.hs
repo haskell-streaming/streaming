@@ -2064,7 +2064,7 @@ toList_ = fold_ (\diff a ls -> diff (a: ls)) id (\diff -> diff [])
 
 {-| Convert an effectful 'Stream' into a list alongside the return value
 
->  mapped toList :: Stream (Stream (Of a)) m r -> Stream (Of [a]) m
+>  mapped toList :: Stream (Stream (Of a) m) m r -> Stream (Of [a]) m r
 
     Like 'toList_', 'toList' breaks streaming; unlike 'toList_' it /preserves the return value/
     and thus is frequently useful with e.g. 'mapped'
