@@ -87,6 +87,7 @@ import Control.Applicative
 import Control.Concurrent (threadDelay)
 import Control.Monad
 import Control.Monad.Error.Class
+import Control.Monad.Fail as Fail
 import Control.Monad.Morph
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
@@ -252,9 +253,14 @@ instance (Functor f, Monad m) => Monad (Stream f m) where
       Return r  -> f r
   {-# INLINABLE (>>=) #-}
 
-  fail = lift . fail
+#if !(MIN_VERSION_base(4,13,0))
+  fail = lift . Prelude.fail
   {-# INLINE fail #-}
+#endif
 
+instance (Functor f, MonadFail m) => MonadFail (Stream f m) where
+  fail = lift . Fail.fail
+  {-# INLINE fail #-}
 
 -- _bind
 --     :: (Functor f, Monad m)

@@ -21,6 +21,10 @@
 
     Add `wrapEffect`.
 
+    Compatibility with base 4.13.
+    
+    Provide a MonadFail instance for Stream.
+
 - 0.2.1.0
 
     Adding `Semigroup` instances for GHC 8.4.
