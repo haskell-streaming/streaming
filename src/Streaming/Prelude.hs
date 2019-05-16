@@ -70,6 +70,7 @@ module Streaming.Prelude (
     , repeat
     , repeatM
     , replicate
+    , untilLeft
     , untilRight
     , cycle
     , replicateM
@@ -2139,6 +2140,18 @@ unfoldr step = loop where
       Left r      -> return (Return r)
       Right (a,s) -> return (Step (a :> loop s)))
 {-# INLINABLE unfoldr #-}
+
+-- ---------------------------------------
+-- untilLeft
+-- ---------------------------------------
+untilLeft :: Monad m => m (Either r a) -> Stream (Of a) m r
+untilLeft act = Effect loop where
+  loop = do
+    e <- act
+    case e of
+      Right a -> return (Step (a :> Effect loop))
+      Left r -> return (Return r)
+{-# INLINABLE untilLeft #-}
 
 -- ---------------------------------------
 -- untilRight
