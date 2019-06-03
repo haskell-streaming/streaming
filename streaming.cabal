@@ -216,7 +216,7 @@ library
   if !impl(ghc >= 8.0)
     build-depends:
         fail == 4.9.*
-      , semigroups >= 0.18 && <0.19
+      , semigroups >= 0.18 && <0.20
 
   hs-source-dirs:
     src
