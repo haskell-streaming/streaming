@@ -223,6 +223,14 @@ newtype ShowSWrapper = SS (Int -> ShowS)
 instance Show ShowSWrapper where
   showsPrec p (SS s) = s p
 
+-- | Operates covariantly on the stream result, not on its elements:
+--
+-- @
+-- Stream (Of a) m r
+--         ^    ^
+--         |    `--- This is what `Functor` and `Applicative` use
+--         `--- This is what functions like S.map/S.zipWith use
+-- @
 instance (Functor f, Monad m) => Functor (Stream f m) where
   fmap f = loop where
     loop stream = case stream of
