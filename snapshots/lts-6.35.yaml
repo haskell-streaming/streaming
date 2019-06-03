@@ -1,7 +1,0 @@
-resolver: lts-6.35
-packages: ['..']
-extra-deps:
-- 'transformers-0.5.5.0'
-- 'transformers-compat-0.5.1.4'
-flags: {}
-extra-package-dbs: []
