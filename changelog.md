@@ -25,6 +25,8 @@
     
     Provide a MonadFail instance for Stream.
 
+    Only depend on `semigroups` on old GHCs.
+
 - 0.2.1.0
 
     Adding `Semigroup` instances for GHC 8.4.
