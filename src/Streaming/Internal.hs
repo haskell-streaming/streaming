@@ -227,9 +227,9 @@ instance Show ShowSWrapper where
 --
 -- @
 -- Stream (Of a) m r
---         ^    ^
---         |    `--- This is what `Functor` and `Applicative` use
---         `--- This is what functions like S.map/S.zipWith use
+--            ^    ^
+--            |    `--- This is what `Functor` and `Applicative` use
+--            `--- This is what functions like S.map/S.zipWith use
 -- @
 instance (Functor f, Monad m) => Functor (Stream f m) where
   fmap f = loop where
@@ -531,7 +531,7 @@ mapsM phi = loop where
 
 > mapsPost id = id
 > mapsPost f . mapsPost g = mapsPost (f . g)
-> mapsPost f = mapsPost f
+> mapsPost f = maps f
 
      @mapsPost@ is essentially the same as 'maps', but it imposes a 'Functor' constraint on
      its target functor rather than its source functor. It should be preferred if 'fmap'
