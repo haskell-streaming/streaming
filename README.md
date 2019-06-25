@@ -255,7 +255,7 @@ in place of the standard `FreeT` that we find in the `free` library, which is ap
 
 Rather than wrapping each step in a monadic 'layer', such a layer is put alongside separate 'pure' constructors for a functor 'layer' and a final return value. The maneuver is very friendly to the compiler, but requires a bit of subtlety to protect a sound monad instance. Just such an optimization is adopted internally by the `pipes` library. As in `pipes`, the constructors are here left in an `Internal` module; the main `Streaming` module exporting the type itself and various operations and instances.
 
-I ran a simple [benchmark](https://gist.github.com/michaelt/ee3710c5bab9b7d0892bd552e0eedfd9) (adjusting a [script](https://github.com/jwiegley/streaming-tests) of John Weigly) using a very simple composition of functions:
+I ran a simple [benchmark](https://gist.github.com/michaelt/ee3710c5bab9b7d0892bd552e0eedfd9) (adjusting a [script](https://github.com/jwiegley/streaming-tests) of John Wiegley) using a very simple composition of functions:
 
     toList 
     . filter (\x -> x `mod` 2 == 0) 
