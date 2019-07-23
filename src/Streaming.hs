@@ -132,7 +132,7 @@ import Data.Bifunctor
 >                -> Stream f m r -> Stream g m r -> Stream h m r
 >   intercalates :: Stream f m () -> Stream (Stream f m) m r -> Stream f m r
 >   unzips       :: Stream (Compose f g) m r ->  Stream f (Stream g m) r
->   separate     :: Stream (Sum f g) m r -> Stream f (Stream g) m r  -- cp. partitionEithers
+>   separate     :: Stream (Sum f g) m r -> Stream f (Stream g m) r  -- cp. partitionEithers
 >   unseparate   :: Stream f (Stream g) m r -> Stream (Sum f g) m r
 >   groups       :: Stream (Sum f g) m r -> Stream (Sum (Stream f m) (Stream g m)) m r
 
@@ -167,5 +167,3 @@ import Data.Bifunctor
 > concats :: (Monad m, MonadTrans t, Monad (t m)) => Stream (t m) m a -> t m a
 > concats stream = destroy stream join (join . lift) return
 -}
-
-
