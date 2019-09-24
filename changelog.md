@@ -1,6 +1,23 @@
-- ???
+- 0.2.3.0
+    Add `wrapEffect`.
 
-    Added `nubOrd`, `nubInt`, `nubOrdOn`, `nubIntOn`.
+    Compatibility with base 4.13.
+    
+    Provide a MonadFail instance for Stream.
+
+    Only depend on `semigroups` on old GHCs.
+
+    Add `untilLeft` (counterpart to `untilRight`)
+
+    Add doctests.
+
+    Enable -Wall in cabal file.
+
+    Build with ghc >= 7.10.3.
+
+- 0.2.2.0
+
+    Add `nubOrd`, `nubInt`, `nubOrdOn`, `nubIntOn`.
 
     Fix performance regression in `for`.
     
@@ -18,14 +35,6 @@
     Improve performance of (`*>`), getting rid of the default implementation.
 
     Generalise type signature of `toList_`.
-
-    Add `wrapEffect`.
-
-    Compatibility with base 4.13.
-    
-    Provide a MonadFail instance for Stream.
-
-    Only depend on `semigroups` on old GHCs.
 
 - 0.2.1.0
 
