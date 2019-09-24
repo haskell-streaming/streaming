@@ -1118,11 +1118,11 @@ foldrM step = loop where
 -- | @for@ replaces each element of a stream with an associated stream. Note that the
 -- associated stream may layer any functor.
 for :: (Monad m, Functor f) => Stream (Of a) m r -> (a -> Stream f m x) -> Stream f m r
-for str0 act = loop str0 where
+for str0 f = loop str0 where
   loop str = case str of
     Return r         -> Return r
     Effect m         -> Effect $ fmap loop m
-    Step (a :> rest) -> act a *> loop rest
+    Step (a :> as) -> act f *> loop as
 {-# INLINABLE for #-}
 
 -- -| Group layers of any functor by comparisons on a preliminary annotation
@@ -1370,7 +1370,7 @@ mapM f = loop where
 49 :> ()
 
 -}
-mapM_ :: Monad m => (a -> m b) -> Stream (Of a) m r -> m r
+mapM_ :: Monad m => (a -> m x) -> Stream (Of a) m r -> m r
 mapM_ f = loop where
   loop str = case str of
     Return r -> return r
