@@ -1388,14 +1388,14 @@ mapM_ f = loop where
 mapped :: (forall x. Stream (Of a) IO x -> IO (Of b x)) -> Stream (Stream (Of a) IO) IO r -> Stream (Of b) IO r
 @
 
-     to process groups demarcated in an effectful stream by grouping functions
-     like 'Streaming.Prelude.group', 'Streaming.Prelude.split' or
-     'Streaming.Prelude.breaks'. Summary functions like
-     'Streaming.Prelude.fold', 'Streaming.Prelude.foldM',
+     to process groups which have been demarcated in an effectful, @IO@-based
+     stream by grouping functions like 'Streaming.Prelude.group',
+     'Streaming.Prelude.split' or 'Streaming.Prelude.breaks'. Summary functions
+     like 'Streaming.Prelude.fold', 'Streaming.Prelude.foldM',
      'Streaming.Prelude.mconcat' or 'Streaming.Prelude.toList' are often used
      to define the transformation argument. For example:
 
->>> S.toList_ $ S.mapped S.toList (S.split 'c' (S.each "abcde"))
+>>> S.toList_ $ S.mapped S.toList $ S.split 'c' (S.each "abcde")
 ["ab","de"]
 
      'Streaming.Prelude.maps' and 'Streaming.Prelude.mapped' obey these rules:
