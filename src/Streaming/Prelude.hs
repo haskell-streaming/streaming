@@ -1381,13 +1381,24 @@ mapM_ f = loop where
 
 
 {- | Map layers of one functor to another with a transformation involving the base monad.
-     This could be trivial, e.g.
+ 
+     This function is completely functor-general. It is often useful with the more concrete type
 
-> let noteBeginning text x = putStrLn text >> return text
+@
+mapped :: (forall x. Stream (Of a) IO x -> IO (Of b x)) -> Stream (Stream (Of a) IO) IO r -> Stream (Of b) IO r
+@
 
-     this is completely functor-general
+     to process groups demarcated in an effectful stream by grouping functions
+     like 'Streaming.Prelude.group', 'Streaming.Prelude.split' or
+     'Streaming.Prelude.breaks'. Summary functions like
+     'Streaming.Prelude.fold', 'Streaming.Prelude.foldM',
+     'Streaming.Prelude.mconcat' or 'Streaming.Prelude.toList' are often used
+     to define the transformation argument. For example:
 
-     @maps@ and @mapped@ obey these rules:
+>>> S.toList_ $ S.mapped S.toList (S.split 'c' (S.each "abcde"))
+["ab","de"]
+
+     'Streaming.Prelude.maps' and 'Streaming.Prelude.mapped' obey these rules:
 
 > maps id              = id
 > mapped return        = id
@@ -1396,8 +1407,9 @@ mapM_ f = loop where
 > maps f . mapped g    = mapped (fmap f . g)
 > mapped f . maps g    = mapped (f <=< fmap g)
 
-     @maps@ is more fundamental than @mapped@, which is best understood as a convenience
-     for effecting this frequent composition:
+     'Streaming.Prelude.maps' is more fundamental than
+     'Streaming.Prelude.mapped', which is best understood as a convenience for
+     effecting this frequent composition:
 
 > mapped phi = decompose . maps (Compose . phi)
 
