@@ -1942,7 +1942,7 @@ split t  = loop  where
     @Streaming@ module, but since this module is imported qualified, it can
     usurp a Prelude name. It specializes to:
 
->  splitAt :: (Monad m, Functor f) => Int -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
+>  splitAt :: (Monad m) => Int -> Stream (Of a) m r -> Stream (Of a) m (Stream (Of a) m r)
 
 -}
 splitAt :: (Monad m, Functor f) => Int -> Stream f m r -> Stream f m (Stream f m r)
