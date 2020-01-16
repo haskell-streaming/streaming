@@ -13,6 +13,10 @@ import Data.Functor.Classes
 import Data.Foldable (Foldable)
 import Data.Traversable (Traversable)
 #endif
+#if MIN_VERSION_base(4,10,0)
+import Data.Bifoldable (Bifoldable, bifoldMap)
+import Data.Bitraversable (Bitraversable, bitraverse)
+#endif
 import GHC.Generics (Generic, Generic1)
 
 -- | A left-strict pair; the base functor for streams of individual elements.
@@ -47,6 +51,16 @@ instance Bifunctor Of where
   {-#INLINE first #-}
   second g  (a :> b) = a :> g b
   {-#INLINE second #-}
+#endif
+
+#if MIN_VERSION_base(4,10,0)
+instance Bifoldable Of where
+  bifoldMap f g ~(a :> b) = f a <> g b
+  {-#INLINE bifoldMap #-}
+
+instance Bitraversable Of where
+  bitraverse f g ~(a :> b) = (:>) <$> f a <*> g b
+  {-#INLINE bitraverse #-}
 #endif
 
 instance Monoid a => Applicative (Of a) where
