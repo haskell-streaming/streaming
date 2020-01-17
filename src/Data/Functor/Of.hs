@@ -55,7 +55,7 @@ instance Bifunctor Of where
 
 #if MIN_VERSION_base(4,10,0)
 instance Bifoldable Of where
-  bifoldMap f g ~(a :> b) = f a <> g b
+  bifoldMap f g ~(a :> b) = f a `mappend` g b
   {-#INLINE bifoldMap #-}
 
 instance Bitraversable Of where
