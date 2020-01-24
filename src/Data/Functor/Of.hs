@@ -54,10 +54,12 @@ instance Bifunctor Of where
 #endif
 
 #if MIN_VERSION_base(4,10,0)
+-- | @since 0.2.4.0
 instance Bifoldable Of where
   bifoldMap f g (a :> b) = f a `mappend` g b
   {-#INLINE bifoldMap #-}
 
+-- | @since 0.2.4.0
 instance Bitraversable Of where
   bitraverse f g (a :> b) = (:>) <$> f a <*> g b
   {-#INLINE bitraverse #-}

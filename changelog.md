@@ -1,3 +1,7 @@
+- 0.2.4.0
+
+    Bifoldable and Bitraversable instances for Of.
+
 - 0.2.3.0
     Add `wrapEffect`.
 
