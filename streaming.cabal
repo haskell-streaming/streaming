@@ -222,3 +222,16 @@ library
     src
   default-language:
     Haskell2010
+
+test-suite spec
+  type: exitcode-stdio-1.0
+  hs-source-dirs:
+      test
+  main-is: test.hs
+  build-depends:
+      streaming
+    , QuickCheck >= 2.13
+    , hspec >= 2.7
+    , base >=4.8 && <5
+  default-language:
+    Haskell2010
