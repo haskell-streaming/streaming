@@ -134,6 +134,12 @@ module Streaming.Prelude (
     , show
     , cons
     , slidingWindow
+    , slidingWindowMin
+    , slidingWindowMinBy
+    , slidingWindowMinOn
+    , slidingWindowMax
+    , slidingWindowMaxBy
+    , slidingWindowMaxOn
     , wrapEffect
 
     -- * Splitting and inspecting streams of elements
@@ -272,6 +278,7 @@ import qualified Data.Foldable as Foldable
 import qualified Data.IntSet as IntSet
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
+import Data.Word (Word64)
 import qualified GHC.IO.Exception as G
 import qualified Prelude
 import qualified System.IO as IO
@@ -2870,6 +2877,216 @@ slidingWindow n = setup (max 1 n :: Int) mempty
         Left r ->  yield sequ >> return r
         Right (x,rest) -> setup (m-1) (sequ Seq.|> x) rest
 {-# INLINABLE slidingWindow #-}
+
+-- | 'slidingWindowMin' finds the minimum in every sliding window of @n@
+-- elements of a stream. If within a window there are multiple elements that are
+-- the least, it prefers the first occurrence (if you prefer to have the last
+-- occurrence, use the max version and flip your comparator). It satisfies:
+--
+-- @
+-- 'slidingWindowMin' n s = 'map' 'Foldable.minimum' ('slidingWindow' n s)
+-- @
+--
+-- Except that it is far more efficient, especially when the window size is
+-- large: it calls 'compare' /O(m)/ times overall where /m/ is the total number
+-- of elements in the stream.
+slidingWindowMin :: (Monad m, Ord a) => Int -> Stream (Of a) m b -> Stream (Of a) m b
+slidingWindowMin = slidingWindowMinBy compare
+{-# INLINE slidingWindowMin #-}
+
+-- | 'slidingWindowMax' finds the maximum in every sliding window of @n@
+-- elements of a stream. If within a window there are multiple elements that are
+-- the largest, it prefers the last occurrence (if you prefer to have the first
+-- occurrence, use the min version and flip your comparator). It satisfies:
+--
+-- @
+-- 'slidingWindowMax' n s = 'map' 'Foldable.maximum' ('slidingWindow' n s)
+-- @
+--
+-- Except that it is far more efficient, especially when the window size is
+-- large: it calls 'compare' /O(m)/ times overall where /m/ is the total number
+-- of elements in the stream.
+slidingWindowMax :: (Monad m, Ord a) => Int -> Stream (Of a) m b -> Stream (Of a) m b
+slidingWindowMax = slidingWindowMaxBy compare
+{-# INLINE slidingWindowMax #-}
+
+-- | 'slidingWindowMinBy' finds the minimum in every sliding window of @n@
+-- elements of a stream according to the given comparison function (which should
+-- define a total ordering). See notes above about elements that are equal. It
+-- satisfies:
+--
+-- @
+-- 'slidingWindowMinBy' f n s = 'map' ('Foldable.minimumBy' f) ('slidingWindow' n s)
+-- @
+--
+-- Except that it is far more efficient, especially when the window size is
+-- large: it calls the comparison function /O(m)/ times overall where /m/ is the
+-- total number of elements in the stream.
+slidingWindowMinBy :: Monad m => (a -> a -> Ordering) -> Int -> Stream (Of a) m b -> Stream (Of a) m b
+slidingWindowMinBy cmp = slidingWindowOrd id (\a b -> cmp a b == GT)
+{-# INLINE slidingWindowMinBy #-}
+
+-- | 'slidingWindowMaxBy' finds the maximum in every sliding window of @n@
+-- elements of a stream according to the given comparison function (which should
+-- define a total ordering). See notes above about elements that are equal. It
+-- satisfies:
+--
+-- @
+-- 'slidingWindowMaxBy' f n s = 'map' ('Foldable.maximumBy' f) ('slidingWindow' n s)
+-- @
+--
+-- Except that it is far more efficient, especially when the window size is
+-- large: it calls the comparison function /O(m)/ times overall where /m/ is the
+-- total number of elements in the stream.
+slidingWindowMaxBy :: Monad m => (a -> a -> Ordering) -> Int -> Stream (Of a) m b -> Stream (Of a) m b
+slidingWindowMaxBy cmp = slidingWindowOrd id (\a b -> cmp a b /= GT)
+{-# INLINE slidingWindowMaxBy #-}
+
+-- | 'slidingWindowMinOn' finds the minimum in every sliding window of @n@
+-- elements of a stream according to the given projection function. See notes
+-- above about elements that are equal. It satisfies:
+--
+-- @
+-- 'slidingWindowMinOn' f n s = 'map' ('Foldable.minimumOn' ('comparing' f)) ('slidingWindow' n s)
+-- @
+--
+-- Except that it is far more efficient, especially when the window size is
+-- large: it calls 'compare' on the projected value /O(m)/ times overall where
+-- /m/ is the total number of elements in the stream, and it calls the
+-- projection function exactly /m/ times.
+slidingWindowMinOn :: (Monad m, Ord p) => (a -> p) -> Int -> Stream (Of a) m b -> Stream (Of a) m b
+slidingWindowMinOn proj = slidingWindowOrd proj (\a b -> compare a b == GT)
+{-# INLINE slidingWindowMinOn #-}
+
+-- | 'slidingWindowMaxOn' finds the maximum in every sliding window of @n@
+-- elements of a stream according to the given projection function. See notes
+-- above about elements that are equal. It satisfies:
+--
+-- @
+-- 'slidingWindowMaxOn' f n s = 'map' ('Foldable.maximumOn' ('comparing' f)) ('slidingWindow' n s)
+-- @
+--
+-- Except that it is far more efficient, especially when the window size is
+-- large: it calls 'compare' on the projected value /O(m)/ times overall where
+-- /m/ is the total number of elements in the stream, and it calls the
+-- projection function exactly /m/ times.
+slidingWindowMaxOn :: (Monad m, Ord p) => (a -> p) -> Int -> Stream (Of a) m b -> Stream (Of a) m b
+slidingWindowMaxOn proj = slidingWindowOrd proj (\a b -> compare a b /= GT)
+{-# INLINE slidingWindowMaxOn #-}
+
+-- IMPLEMENTATION NOTE [the slidingWindow{Min,Max} functions]
+--
+-- When one wishes to compute the minimum (or maximum; without loss of
+-- generality we will only discuss the minimum case) of a sliding window of a
+-- stream, the naive method is to collect all such sliding windows, and then run
+-- 'Foldable.minimum' over each window. The issue is that this algorithm is very
+-- inefficient: if the stream has $n$ elements, and the sliding window has $k$
+-- elements, then there are $n-k+1$ windows, and computing the minimum in each
+-- window requires $k-1$ comparisons. So a total of $(k-1)*(n-k+1)$ comparisons
+-- are needed, or simply $O(nk)$ when $k$ is much smaller than $n$.
+--
+-- We can motivate an improvement as follows. Suppose the window size is 3 and
+-- the current sliding window has numbers 4, 6, 8; if the next element happens
+-- to be 5, there would then be no need to keep the numbers 6 and 8 in the
+-- window. Because in the next window we have 6, 8, 5 so 5 will be yielded. In
+-- the window after the next we have 8, 5, x so either 5 or x will be yielded.
+-- So 6 and 8 will never be yielded.
+--
+-- This leads to the idea that we can keep a window that is a subsequence of the
+-- actual window. But immediately the next problem is, if we don't keep a window
+-- of the original window size, there would be no way for us to tell which
+-- elements are out of the window. So the idea is to also keep an index of the
+-- item along with the item itself. We then have several important invariants:
+--
+-- (a) The window is sorted according to the index.
+-- (b) The window is sorted according to the item itself.
+-- (c) The size of the window never has more elements than $k$.
+--
+-- The window is initially empty. The three-step algorithm to update the window
+-- maintains these invariants.
+--
+-- The overall asymptotic complexity is great. Comparisons only happen in the
+-- first part of the update. Each comparison either results in an element being
+-- removed from the window (so there can be at most $O(n)$ such comparisons); or
+-- that comparison does not result in an element being removed, but such
+-- comparisons happen at most once for each element being inserted, which is
+-- also $O(n)$. This means an overall $O(n)$ number of comparisons needed.
+--
+-- I did not invent this algorithm; it's pretty well-known. I'm not sure the
+-- algorithm has a name.
+slidingWindowOrd :: Monad m => (a -> p) -> (p -> p -> Bool) -> Int -> Stream (Of a) m b -> Stream (Of a) m b
+slidingWindowOrd proj f n =
+  dropButRetainAtLeastOne (k-1) . catMaybes . scan update initial extract
+  -- The use of dropButRetainAtLeastOne is to gracefully handle edge cases where
+  -- the window size is bigger than the length of the entire sequence.
+  where
+    k = max 1 n -- window size
+    initial = SlidingWindowOrdState 0 mempty
+    -- All three invariants are satisfied initially. The window is trivially
+    -- sorted because it is empty. Its size, zero, is also less than the window
+    -- size.
+    update (SlidingWindowOrdState i w0) a =
+      let projected = proj a
+          w1 = Seq.dropWhileR (\(SlidingWindowOrdElement _ _ p) -> f p projected) w0
+      -- Step 1: pop all elements at the back greater than the current one,
+      -- because they will never be yielded: the current element will always be
+      -- yielded until those popped elements go out of the window. This is
+      -- extracting a subsequence of the window, so invariants (a) and (b)
+      -- remain satisfied. Since this operation deletes elements, invariant (c)
+      -- is maintained.
+          w2 = w1 Seq.|> SlidingWindowOrdElement i a projected
+      -- Step 2: add the current element to the back. Since the current index is
+      -- greater than all previous indices, invariant (a) is satisfied.
+      -- Invariant (b) is also satisfied because in step 1 we popped elements
+      -- greater than the current, so either the window is empty or the back of
+      -- the window is smaller than the current one. Invariant (c) may be
+      -- violated, but this is fixed below.
+          w3 = Seq.dropWhileL (\(SlidingWindowOrdElement j _ _) -> j + fromIntegral k <= i) w2
+      -- Step 3: remove elements that are out of the window. Again this is
+      -- extracting a subsequence so invariants (a) and (b) are maintained.
+      -- Invariant (c) is maintained because the least index still possibly in
+      -- the window is i+1-k, in which case we have k elements.
+      in SlidingWindowOrdState (i + 1) w3
+    -- Extract the front.
+    extract (SlidingWindowOrdState _ w) =
+        case Seq.viewl w of
+          SlidingWindowOrdElement _ m _ Seq.:< _ -> Just m
+          _ -> Nothing
+{-# INLINABLE slidingWindowOrd #-}
+
+-- | A 'SlidingWindowOrdState' keeps track of the current sliding window state
+-- in 'slidingWindowOrd'. It keeps track of the current index of the item from
+-- the stream as well as a 'Seq.Seq' of the current window. See comments above
+-- for properties satisfied by the window.
+data SlidingWindowOrdState a p =
+  SlidingWindowOrdState !Word64
+                        !(Seq.Seq (SlidingWindowOrdElement a p))
+
+-- | A 'SlidingWindowOrdElement' is an element with a 'Word64'-based index as
+-- well as the projection used for comparison. It is used in the sliding window
+-- functions to associate an item with their index and the projected element in
+-- the stream.
+data SlidingWindowOrdElement a p = SlidingWindowOrdElement !Word64 a p
+
+-- | Similar to 'drop', except that if the input stream doesn't have enough
+-- elements, the last one will be yielded. However, if there's none to begin
+-- with, this function will also produce none.
+dropButRetainAtLeastOne :: Monad m => Int -> Stream (Of a) m r -> Stream (Of a) m r
+dropButRetainAtLeastOne 0 = id
+dropButRetainAtLeastOne n = loop Nothing n
+  where
+    loop (Just final) (-1) str = yield final >> str
+    loop final m str = do
+      e <- lift (next str)
+      case e of
+        Left r -> do
+          case final of
+            Nothing -> pure ()
+            Just l -> yield l
+          return r
+        Right (x, rest) -> loop (Just x) (m - 1) rest
+{-# INLINABLE dropButRetainAtLeastOne #-}
+
 
 -- | Map monadically over a stream, producing a new stream
 --   only containing the 'Just' values.
