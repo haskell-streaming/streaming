@@ -2888,7 +2888,8 @@ slidingWindow n = setup (max 1 n :: Int) mempty
 -- @
 --
 -- Except that it is far more efficient, especially when the window size is
--- large: it calls 'compare' /O(n)/ times overall.
+-- large: it calls 'compare' /O(m)/ times overall where /m/ is the total number
+-- of elements in the stream.
 slidingWindowMin :: (Monad m, Ord a) => Int -> Stream (Of a) m b -> Stream (Of a) m b
 slidingWindowMin = slidingWindowMinBy compare
 {-# INLINE slidingWindowMin #-}
@@ -2903,7 +2904,8 @@ slidingWindowMin = slidingWindowMinBy compare
 -- @
 --
 -- Except that it is far more efficient, especially when the window size is
--- large: it calls 'compare' /O(n)/ times overall.
+-- large: it calls 'compare' /O(m)/ times overall where /m/ is the total number
+-- of elements in the stream.
 slidingWindowMax :: (Monad m, Ord a) => Int -> Stream (Of a) m b -> Stream (Of a) m b
 slidingWindowMax = slidingWindowMaxBy compare
 {-# INLINE slidingWindowMax #-}
@@ -2918,7 +2920,8 @@ slidingWindowMax = slidingWindowMaxBy compare
 -- @
 --
 -- Except that it is far more efficient, especially when the window size is
--- large: it calls the comparison function /O(n)/ times overall.
+-- large: it calls the comparison function /O(m)/ times overall where /m/ is the
+-- total number of elements in the stream.
 slidingWindowMinBy :: Monad m => (a -> a -> Ordering) -> Int -> Stream (Of a) m b -> Stream (Of a) m b
 slidingWindowMinBy cmp = slidingWindowOrd id (\a b -> cmp a b == GT)
 {-# INLINE slidingWindowMinBy #-}
@@ -2933,7 +2936,8 @@ slidingWindowMinBy cmp = slidingWindowOrd id (\a b -> cmp a b == GT)
 -- @
 --
 -- Except that it is far more efficient, especially when the window size is
--- large: it calls the comparison function /O(n)/ times overall.
+-- large: it calls the comparison function /O(m)/ times overall where /m/ is the
+-- total number of elements in the stream.
 slidingWindowMaxBy :: Monad m => (a -> a -> Ordering) -> Int -> Stream (Of a) m b -> Stream (Of a) m b
 slidingWindowMaxBy cmp = slidingWindowOrd id (\a b -> cmp a b /= GT)
 {-# INLINE slidingWindowMaxBy #-}
@@ -2947,8 +2951,9 @@ slidingWindowMaxBy cmp = slidingWindowOrd id (\a b -> cmp a b /= GT)
 -- @
 --
 -- Except that it is far more efficient, especially when the window size is
--- large: it calls 'compare' on the projected value /O(n)/ times overall, and it
--- calls the projection function exactly /n/ times.
+-- large: it calls 'compare' on the projected value /O(m)/ times overall where
+-- /m/ is the total number of elements in the stream, and it calls the
+-- projection function exactly /m/ times.
 slidingWindowMinOn :: (Monad m, Ord p) => (a -> p) -> Int -> Stream (Of a) m b -> Stream (Of a) m b
 slidingWindowMinOn proj = slidingWindowOrd proj (\a b -> compare a b == GT)
 {-# INLINE slidingWindowMinOn #-}
@@ -2962,8 +2967,9 @@ slidingWindowMinOn proj = slidingWindowOrd proj (\a b -> compare a b == GT)
 -- @
 --
 -- Except that it is far more efficient, especially when the window size is
--- large: it calls 'compare' on the projected value /O(n)/ times overall, and it
--- calls the projection function exactly /n/ times.
+-- large: it calls 'compare' on the projected value /O(m)/ times overall where
+-- /m/ is the total number of elements in the stream, and it calls the
+-- projection function exactly /m/ times.
 slidingWindowMaxOn :: (Monad m, Ord p) => (a -> p) -> Int -> Stream (Of a) m b -> Stream (Of a) m b
 slidingWindowMaxOn proj = slidingWindowOrd proj (\a b -> compare a b /= GT)
 {-# INLINE slidingWindowMaxOn #-}
