@@ -832,19 +832,21 @@ elem_ a' = loop False where
 
 {-| An infinite stream of enumerable values, starting from a given value.
     It is the same as @S.iterate succ@.
-   Because their return type is polymorphic, @enumFrom@, @enumFromThen@
-   and @iterate@ are useful for example with @zip@
-   and @zipWith@, which require the same return type in the zipped streams.
-   With @each [1..]@ the following bit of connect-and-resume would be impossible:
+    Because their return type is polymorphic, @enumFrom@, @enumFromThen@
+    and @iterate@ are useful with functions like @zip@ and @zipWith@, which
+    require the zipped streams to have the same return type. 
 
->>> rest <- S.print $ S.zip (S.enumFrom 'a') $ S.splitAt 3 $ S.enumFrom 1
-('a',1)
-('b',2)
-('c',3)
+    For example, with
+    @each [1..]@ the following bit of connect-and-resume would not compile:
+
+>>> rest <- S.print $ S.zip (S.enumFrom 1) $ S.splitAt 3 $ S.each ['a'..'z']
+(1,'a')
+(2,'b')
+(3,'c')
 >>>  S.print $ S.take 3 rest
-4
-5
-6
+'d'
+'e'
+'f'
 
 -}
 enumFrom :: (Monad m, Enum n) => n -> Stream (Of n) m r
