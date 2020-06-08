@@ -204,8 +204,7 @@ library
     , Streaming.Prelude
     , Streaming.Internal
     , Data.Functor.Of
-  other-modules:
-      Data.AnnotatedQueue
+    , Data.AnnotatedQueue
   build-depends:
       base >=4.8 && <5
     , mtl >=2.1 && <2.3
