@@ -2655,7 +2655,7 @@ two
 @copy@ can be considered a special case of 'expand':
 
 @
-  copy = 'expand' $ \p (a :> as) -> a :> p (a :> as)
+  copy = 'expand' $ \\p (a :> as) -> a :> p (a :> as)
 @
 
 If 'Of' were an instance of 'Control.Comonad.Comonad', then one could write
@@ -2731,8 +2731,8 @@ S.toList $ S.unzip $ S.each xs
 'unzip' can be considered a special case of either 'unzips' or 'expand':
 
 @
-  unzip = 'unzips' . 'maps' (\((a,b) :> x) -> Compose (a :> b :> x))
-  unzip = 'expand' $ \p ((a,b) :> abs) -> b :> p (a :> abs)
+  unzip = 'unzips' . 'maps' (\\((a,b) :> x) -> Compose (a :> b :> x))
+  unzip = 'expand' $ \\p ((a,b) :> abs) -> b :> p (a :> abs)
 @
 -}
 unzip :: Monad m =>  Stream (Of (a,b)) m r -> Stream (Of a) (Stream (Of b) m) r
