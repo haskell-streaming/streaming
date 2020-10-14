@@ -141,6 +141,7 @@ module Streaming.Prelude (
     , slidingWindowMaxBy
     , slidingWindowMaxOn
     , wrapEffect
+    , metamorph
 
     -- * Splitting and inspecting streams of elements
     , next
@@ -3102,3 +3103,53 @@ mapMaybeM phi = loop where
         Nothing -> loop snext
         Just b -> Step (b :> loop snext)
 {-# INLINABLE mapMaybeM #-}
+
+{- | Convert from one data representation to another.
+
+This is a very general operation that can insert, remove, and transform elements
+of a stream while using some internal state. 
+
+Conceptually, @metamorph f g s = unfoldr f . foldl g s@.
+
+You can think of @f@ as a producer and @g@ as a consumer: If @f@ can produce an
+element from the current state, this element is added to the stream and the
+state is updated accordingly; otherwise, if @g@ can consume an element from the
+input stream, this element is removed and the state is updated accordingly. This
+process continues until the state can not be used to produce any more elements
+and the input is exhausted.
+
+The following example uses `metamorph` to implement stateful filtering:
+
+>>> let consumerA (n, xs) x = if x > n then (x, (x:xs)) else (n, xs)
+>>> let producerA (n, xs) = if null xs then Nothing else Just (head xs, (n, tail xs))
+>>> let ascending = metamorph producerA consumerA (0, [])
+>>> S.print $ ascending $ S.each [5,4,3,2,1,6,7,5,8,8]
+5
+6
+7
+8
+
+We can also use `metamorph` to implement a simple line-wrapping algorithm:
+
+>>> let maxLine n xs = last $ filter ((<n) . length . fst) $ zip (map unwords $ inits xs) (tails xs)
+>>> let producerW n xs = if null xs then Nothing else Just (maxLine n xs)
+>>> let consumerW xs a = xs ++ words a
+>>> let wrap n = metamorph (producerW n) consumerW []
+>>> S.stdoutLn $ wrap 13 $ S.stdinLn
+I have eaten the plums that were in the icebox<Enter>
+I have eaten
+the plums
+that were in
+the icebox
+
+-}
+metamorph :: Monad m => (s -> Maybe (b, s)) -> (s -> a -> s) -> s -> Stream (Of a) m r -> Stream (Of b) m r
+metamorph f g = loop
+  where
+    loop !s stream = case f s of
+      Just (b, s') -> Step (b :> loop s' stream)
+      Nothing -> case stream of
+        Return r -> Return r
+        Effect m -> Effect (liftM (loop s) m)
+        Step (a :> rest) -> loop (g s a) rest
+{-# INLINABLE metamorph #-}
