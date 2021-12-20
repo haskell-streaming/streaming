@@ -1,6 +1,9 @@
 - 0.2.4.0
-
     Bifoldable and Bitraversable instances for Of.
+
+    Various documentation fixes.
+
+    Bump `mmorph` upper bounds: [1.0, 1.2) -> [1.0, 1.3)
 
 - 0.2.3.0
     Add `wrapEffect`.
