@@ -207,7 +207,7 @@ library
   build-depends:
       base >=4.8 && <5
     , mtl >=2.1 && <2.3
-    , mmorph >=1.0 && <1.2
+    , mmorph >=1.0 && <1.3
     , transformers >=0.4 && <0.6
     , transformers-base < 0.5
     , ghc-prim
