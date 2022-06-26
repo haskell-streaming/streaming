@@ -194,21 +194,26 @@ instance (Monad m, Functor f, Ord1 m, Ord1 f) => Ord1 (Stream f m) where
 -- like producing @m String@, except that a @ShowSWrapper@ can be
 -- shown at any precedence. So the 'Show' instance for @m@ can show
 -- the contents at the correct precedence.
-instance (Monad m, Show r, Show (m ShowSWrapper), Show (f (Stream f m r)))
+instance (Monad m, Functor f, Show (m ShowSWrapper), Show (f ShowSWrapper), Show r)
          => Show (Stream f m r) where
-  showsPrec p xs = showParen (p > 10) $
-                     showString "Effect " . (showsPrec 11 $
-    flip fmap (inspect xs) $ \front ->
-      SS $ \d -> showParen (d > 10) $
-        case front of
-          Left  r -> showString "Return " . showsPrec 11 r
-          Right f -> showString "Step "   . showsPrec 11 f)
+  showsPrec = liftShowsPrec' showsPrec showList
 
 #if MIN_VERSION_base(4,9,0)
 
 instance (Monad m, Functor f, Show (m ShowSWrapper), Show (f ShowSWrapper))
          => Show1 (Stream f m) where
-  liftShowsPrec sp sl p xs = showParen (p > 10) $
+  liftShowsPrec = liftShowsPrec'
+
+#endif
+
+liftShowsPrec'
+  :: (Monad m, Functor f, Show (m ShowSWrapper), Show (f ShowSWrapper))
+  => (Int -> a -> ShowS)
+  -> ([a] -> ShowS)
+  -> Int
+  -> Stream f m a
+  -> ShowS
+liftShowsPrec' sp sl p xs = showParen (p > 10) $
                      showString "Effect " . (showsPrec 11 $
     flip fmap (inspect xs) $ \front ->
       SS $ \d -> showParen (d > 10) $
@@ -216,8 +221,6 @@ instance (Monad m, Functor f, Show (m ShowSWrapper), Show (f ShowSWrapper))
           Left  r -> showString "Return " . sp 11 r
           Right f -> showString "Step "   .
                      showsPrec 11 (fmap (SS . (\str i -> liftShowsPrec sp sl i str)) f))
-
-#endif
 
 newtype ShowSWrapper = SS (Int -> ShowS)
 instance Show ShowSWrapper where
