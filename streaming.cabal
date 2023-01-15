@@ -206,9 +206,9 @@ library
     , Data.Functor.Of
   build-depends:
       base >=4.8 && <5
-    , mtl >=2.1 && <2.3
+    , mtl >=2.1 && <2.4
     , mmorph >=1.0 && <1.3
-    , transformers >=0.4 && <0.6
+    , transformers >=0.4 && <0.7
     , transformers-base < 0.5
     , ghc-prim
     , containers
