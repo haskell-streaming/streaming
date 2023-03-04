@@ -1706,11 +1706,8 @@ two<Enter>
 -}
 
 repeatM :: Monad m => m a -> Stream (Of a) m r
-repeatM ma = loop where
-  loop = do
-    a <- lift ma
-    yield a
-    loop
+repeatM ma = forever (lift ma >>= yield)
+
 {-# INLINABLE repeatM #-}
 
 -- ---------------
