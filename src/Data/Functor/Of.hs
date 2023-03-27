@@ -78,7 +78,7 @@ instance Monoid a => Applicative (Of a) where
 instance Monoid a => Monad (Of a) where
   return = pure
   {-#INLINE return #-}
-  (m :> _) >> (m' :> y) = mappend m m' :> y
+  (>>) = (*>)
   {-#INLINE (>>) #-}
   (m :> x) >>= f = let m' :> y = f x in mappend m m' :> y
   {-#INLINE (>>=) #-}
