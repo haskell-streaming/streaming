@@ -86,6 +86,7 @@ module Streaming.Internal (
 import Control.Applicative
 import Control.Concurrent (threadDelay)
 import Control.Monad
+import Control.Monad.Catch (MonadThrow (..), MonadCatch (..))
 import Control.Monad.Error.Class
 import Control.Monad.Fail as Fail
 import Control.Monad.Morph
@@ -380,6 +381,19 @@ instance (Functor f, MonadState s m) => MonadState s (Stream f m) where
   state f = lift (state f)
   {-# INLINE state #-}
 #endif
+
+instance (Functor f, MonadThrow m) => MonadThrow (Stream f m) where
+  throwM = lift . throwM
+  {-# INLINE throwM #-}
+
+instance (Functor f, MonadCatch m) => MonadCatch (Stream f m) where
+  catch str f = loop str
+    where
+    loop x = case x of
+      Return r -> Return r
+      Effect m -> Effect $ fmap loop m `catch` (return . f)
+      Step   g -> Step (fmap loop g)
+  {-# INLINABLE catch #-}
 
 instance (Functor f, MonadError e m) => MonadError e (Stream f m) where
   throwError = lift . throwError
