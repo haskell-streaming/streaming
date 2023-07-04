@@ -763,7 +763,7 @@ distribute :: (Monad m, Functor f, MonadTrans t, MFunctor t, Monad (t (Stream f 
            => Stream f (t m) r -> t (Stream f m) r
 distribute = loop where
   loop stream = case stream of
-    Return r     -> lift (Return r)
+    Return r     -> return r
     Effect tmstr -> hoist lift tmstr >>= loop
     Step fstr    -> join (lift (Step (fmap (Return . loop) fstr)))
 {-# INLINABLE distribute #-}
