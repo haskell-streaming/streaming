@@ -1,4 +1,7 @@
 - 0.2.4.0
+    Build on GHC 9.6.
+
+- 0.2.3.1
     Bifoldable and Bitraversable instances for Of.
 
     Various documentation fixes.
