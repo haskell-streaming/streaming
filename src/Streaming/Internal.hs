@@ -86,6 +86,7 @@ module Streaming.Internal (
 import Control.Applicative
 import Control.Concurrent (threadDelay)
 import Control.Monad
+import Control.Monad.Catch (MonadThrow (..), MonadCatch (..))
 import Control.Monad.Error.Class
 import Control.Monad.Fail as Fail
 import Control.Monad.Morph
@@ -380,6 +381,49 @@ instance (Functor f, MonadState s m) => MonadState s (Stream f m) where
   state f = lift (state f)
   {-# INLINE state #-}
 #endif
+
+-- | The 'throwM' method can be used to throw an exception in the underlying
+-- @m@ monad. That is, @throwM e@ in a 'Stream' simply lifts the
+-- @throwM@ method from the @MonadThrow m@ instance into the stream.
+--
+-- @
+-- throwM = 'lift' . 'throwM'
+-- @
+instance (Functor f, MonadThrow m) => MonadThrow (Stream f m) where
+  throwM = lift . throwM
+  {-# INLINE throwM #-}
+
+-- | Normally, an exception thrown from an action embedded in a stream aborts
+-- the whole stream. The 'catch' method lets you handle such exceptions by
+-- returning an alternative continuation of the stream instead.
+--
+-- For example, the 'Control.Monad.Catch.try' function, which is defined as
+--
+-- > try x = catch (fmap Right x) (pure . Left)
+--
+-- can be interpreted as follows when applied to a 'Stream': @try stream@
+-- either returns @stream@ (with the stream result wrapped in 'Right') if no
+-- exception occurs, or otherwise returns the exception-free prefix of @stream@
+-- (i.e. all the elements that could be produced without throwing an exception)
+-- followed by a stream result containing the exception (wrapped in 'Left').
+--
+-- Similarly,
+--
+-- > catch (S.map Right stream) (S.yield . Left)
+-- >   :: MonadCatch m =>
+-- >      Stream (Of a) m () -> Stream (Of (Either SomeException a)) m ()
+--
+-- is a stream that yields all the elements of @stream@ wrapped in 'Right',
+-- followed by one (optional) 'Left' element containing the
+-- 'Control.Monad.Catch.SomeException' that was thrown, if any.
+instance (Functor f, MonadCatch m) => MonadCatch (Stream f m) where
+  catch str f = loop str
+    where
+    loop x = case x of
+      Return r -> Return r
+      Effect m -> Effect $ fmap loop m `catch` (return . f)
+      Step   g -> Step (fmap loop g)
+  {-# INLINABLE catch #-}
 
 instance (Functor f, MonadError e m) => MonadError e (Stream f m) where
   throwError = lift . throwError
