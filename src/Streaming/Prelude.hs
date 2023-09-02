@@ -130,6 +130,7 @@ module Streaming.Prelude (
     , scan
     , scanM
     , scanned
+    , mapAccum
     , read
     , show
     , cons
@@ -1854,6 +1855,34 @@ scanned step begin done = loop Nothing' begin
 {-# INLINABLE scanned #-}
 
 data Maybe' a = Just' a | Nothing'
+
+
+{-| 
+    Map a stream while passing an accumulating parameter, and return the final value of the 
+    accumulator along with the stream's result. 
+    
+    Emitted values are a function of the current accumulator and of the current input, 
+    like with a Mealy machine. 
+
+>>> S.print $ S.mapAccum (\acc c -> (c : acc) :> (c `elem` acc)) "" $ S.each "abba"
+False
+False
+True
+True
+
+-}
+mapAccum :: Monad m => (x -> a -> Of x b) -> x -> Stream (Of a) m r -> Stream (Of b) m (Of x r)
+mapAccum step begin str = loop begin str
+  where
+  loop !acc stream =
+    case stream of
+      Return r -> Return (acc :> r)
+      Effect m -> Effect (fmap (loop acc) m)
+      Step (a :> rest) ->
+        let acc' :> b = step acc a
+        in Step (b :> loop acc' rest)
+{-# INLINABLE mapAccum #-}
+
 
 -- ---------------
 -- sequence
