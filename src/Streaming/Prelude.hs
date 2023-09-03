@@ -134,6 +134,7 @@ module Streaming.Prelude (
     , show
     , cons
     , slidingWindow
+    , slidingWindowSum
     , slidingWindowMin
     , slidingWindowMinBy
     , slidingWindowMinOn
@@ -272,8 +273,10 @@ import Data.Functor.Of
 import Data.Functor.Sum
 import Data.Monoid (Monoid (mappend, mempty))
 import Data.Ord (Ordering (..), comparing)
+import Data.Semigroup (Semigroup (..))
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Text.Read (readMaybe)
+import qualified Data.AnnotatedQueue as AQ
 import qualified Data.Foldable as Foldable
 import qualified Data.IntSet as IntSet
 import qualified Data.Sequence as Seq
@@ -2846,7 +2849,7 @@ mapMaybe phi = loop where
 {-# INLINABLE mapMaybe #-}
 
 {-| 'slidingWindow' accumulates the first @n@ elements of a stream,
-     update thereafter to form a sliding window of length @n@.
+     updating thereafter to form a sliding window of length @n@.
      It follows the behavior of the slidingWindow function in
      <https://hackage.haskell.org/package/conduit-combinators-1.0.4/docs/Data-Conduit-Combinators.html#v:slidingWindow conduit-combinators>.
 
@@ -2879,6 +2882,33 @@ slidingWindow n = setup (max 1 n :: Int) mempty
         Left r ->  yield sequ >> return r
         Right (x,rest) -> setup (m-1) (sequ Seq.|> x) rest
 {-# INLINABLE slidingWindow #-}
+
+{-| 'slidingWindowSum' accumulates the first @n@ elements of a stream
+    with elements in some 'Semigroup',
+    updating thereafter to form a sliding window of length @n@.
+-}
+slidingWindowSum :: (Monad m, Semigroup a)
+  => Int
+  -> Stream (Of a) m b
+  -> Stream (Of a) m b
+slidingWindowSum n = setup (max 1 n) AQ.empty
+  where
+    window !qu str = do
+      case AQ.measure qu of
+        Just s -> yield s
+        Nothing -> pure ()
+      e <- lift (next str)
+      case e of
+        Left r -> return r
+        Right (a,rest) ->
+          window (AQ.drop1 $ qu `AQ.snoc` a) rest
+    setup 0 !qu str = window qu str
+    setup m !qu str = do
+      e <- lift $ next str
+      case e of
+        Left r -> window qu (return r)
+        Right (x,rest) -> setup (m-1) (qu `AQ.snoc` x) rest
+{-# INLINABLE slidingWindowSum #-}
 
 -- | 'slidingWindowMin' finds the minimum in every sliding window of @n@
 -- elements of a stream. If within a window there are multiple elements that are
