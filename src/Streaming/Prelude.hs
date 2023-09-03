@@ -834,7 +834,7 @@ elem_ a' = loop False where
     It is the same as @S.iterate succ@.
     Because their return type is polymorphic, @enumFrom@, @enumFromThen@
     and @iterate@ are useful with functions like @zip@ and @zipWith@, which
-    require the zipped streams to have the same return type. 
+    require the zipped streams to have the same return type.
 
     For example, with
     @each [1..]@ the following bit of connect-and-resume would not compile:
@@ -1390,7 +1390,7 @@ mapM_ f = loop where
 
 
 {- | Map layers of one functor to another with a transformation involving the base monad.
- 
+
      This function is completely functor-general. It is often useful with the more concrete type
 
 @
@@ -1706,11 +1706,8 @@ two<Enter>
 -}
 
 repeatM :: Monad m => m a -> Stream (Of a) m r
-repeatM ma = loop where
-  loop = do
-    a <- lift ma
-    yield a
-    loop
+repeatM ma = forever (lift ma >>= yield)
+
 {-# INLINABLE repeatM #-}
 
 -- ---------------
