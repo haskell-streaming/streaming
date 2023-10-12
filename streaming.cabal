@@ -4,9 +4,9 @@ cabal-version:       >=1.10
 build-type:          Simple
 synopsis:            an elementary streaming prelude and general stream type.
 
-description:         This package contains two modules, <http://hackage.haskell.org/package/streaming/docs/Streaming.html Streaming>
-                     and <http://hackage.haskell.org/package/streaming/docs/Streaming-Prelude.html Streaming.Prelude>.
-                     The principal module, <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming-Prelude.html Streaming.Prelude>, exports an elementary streaming prelude focused on
+description:         This package contains two modules, <https://hackage.haskell.org/package/streaming/docs/Streaming.html Streaming>
+                     and <https://hackage.haskell.org/package/streaming/docs/Streaming-Prelude.html Streaming.Prelude>.
+                     The principal module, <https://hackage.haskell.org/package/streaming/docs/Streaming-Prelude.html Streaming.Prelude>, exports an elementary streaming prelude focused on
                      a simple \"source\" or \"producer\" type, namely @Stream (Of a) m r@.
                      This is a sort of effectful version of
                      @([a],r)@ in which successive elements of type @a@ arise from some sort of monadic
@@ -70,7 +70,7 @@ description:         This package contains two modules, <http://hackage.haskell.
                      under certain conditions! But @unsafePerformIO@ also makes sense under
                      certain conditions.
                      .
-                     The <http://hackage.haskell.org/package/streaming-0.1.4.3/docs/Streaming.html Streaming> module exports the general type,
+                     The <https://hackage.haskell.org/package/streaming/docs/Streaming.html Streaming> module exports the general type,
                      @Stream f m r@, which can be used to stream successive distinct
                      steps characterized by /any/
                      functor @f@, though we are mostly interested in organizing computations
@@ -137,21 +137,21 @@ description:         This package contains two modules, <http://hackage.haskell.
                      (the package understands itself as part of the pipes \'ecosystem\'.)
                      .
                      The simplest form of interoperation with
-                     <http://hackage.haskell.org/package/pipes pipes>
+                     <https://hackage.haskell.org/package/pipes pipes>
                      is accomplished with this isomorphism:
                      .
                      > Pipes.unfoldr Streaming.next        :: Stream (Of a) m r   -> Producer a m r
                      > Streaming.unfoldr Pipes.next        :: Producer a m r      -> Stream (Of a) m r
                      .
                      Interoperation with
-                     <http://hackage.haskell.org/package/io-streams io-streams>
+                     <https://hackage.haskell.org/package/io-streams io-streams>
                      is thus:
                      .
                      > Streaming.reread IOStreams.read     :: InputStream a       -> Stream (Of a) IO ()
                      > IOStreams.unfoldM Streaming.uncons  :: Stream (Of a) IO () -> IO (InputStream a)
                      .
                      With
-                     <http://hackage.haskell.org/package/conduit conduit>
+                     <https://hackage.haskell.org/package/conduit conduit>
                      one might use, e.g.:
                      .
                      > Conduit.unfoldM Streaming.uncons                        :: Stream (Of a) m () -> Source m a
