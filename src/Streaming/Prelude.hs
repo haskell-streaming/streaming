@@ -85,6 +85,7 @@ module Streaming.Prelude (
     , stdoutLn
     , stdoutLn'
     , mapM_
+    , forM_
     , print
     , toHandle
     , writeFile
@@ -97,6 +98,7 @@ module Streaming.Prelude (
     -- $pipes
     , map
     , mapM
+    , forM
     , maps
     , mapsPost
     , mapped
@@ -263,7 +265,7 @@ import Streaming.Internal
 import Control.Applicative (Applicative (..))
 import Control.Concurrent (threadDelay)
 import Control.Exception (throwIO, try)
-import Control.Monad hiding (filterM, mapM, mapM_, foldM, foldM_, replicateM, sequence)
+import Control.Monad hiding (filterM, mapM, mapM_, foldM, foldM_, replicateM, sequence, forM, forM_)
 import Control.Monad.Trans
 import Data.Functor (Functor (..), (<$))
 import Data.Functor.Compose
@@ -834,7 +836,7 @@ elem_ a' = loop False where
     It is the same as @S.iterate succ@.
     Because their return type is polymorphic, @enumFrom@, @enumFromThen@
     and @iterate@ are useful with functions like @zip@ and @zipWith@, which
-    require the zipped streams to have the same return type. 
+    require the zipped streams to have the same return type.
 
     For example, with
     @each [1..]@ the following bit of connect-and-resume would not compile:
@@ -1361,8 +1363,6 @@ mapM f = loop where
       return (Step (a' :> loop as) )
 {-# INLINABLE mapM #-}
 
-
-
 {-| Reduce a stream to its return value with a monadic action.
 
 >>> S.mapM_ Prelude.print $ each [1..3]
@@ -1387,10 +1387,40 @@ mapM_ f = loop where
     Step (a :> as) -> f a *> loop as
 {-# INLINABLE mapM_ #-}
 
+{-| Replace each element of a stream with the result of a monadic action
 
+>>> S.print $ S.forM (each [1..6]) $ \i -> pure i
+100
+200
+300
+400
+500
+600
+-}
+forM :: Monad m => Stream (Of a) m r -> (a -> m b) -> Stream (Of b) m r
+forM = flip mapM
+{-# INLINABLE forM #-}
+
+{-| Reduce a stream to its return value with a monadic action.
+
+>>> S.forM_ (each [1..3]) Prelude.print
+1
+2
+3
+
+>>> rest <- S.forM_ (S.splitAt 3 $ each [1..10]) Prelude.print
+1
+2
+3
+>>> S.sum rest
+49 :> ()
+-}
+forM_ :: Monad m => Stream (Of a) m r -> (a -> m x) -> m r
+forM_ = flip mapM_
+{-# INLINABLE forM_ #-}
 
 {- | Map layers of one functor to another with a transformation involving the base monad.
- 
+
      This function is completely functor-general. It is often useful with the more concrete type
 
 @
